@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1">
+<meta name="theme-color" content="#1c1c22">
+<title>Punkromantik</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='25,5 75,5 100,50 75,95 25,95 0,50' fill='%23ff2bd6'/%3E%3Cpolygon points='35,22 65,22 80,50 65,78 35,78 20,50' fill='%2322f3ff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div class="logo">PUNK<span>ROMANTIK</span></div>
+    <div class="score-box" id="score-box">
+      <div class="score" id="score">0</div>
+      <div class="score-label">recorde <b id="best">0</b></div>
+    </div>
+    <div class="icon-btns">
+      <button id="btn-help" class="icon" title="Ajuda">?</button>
+      <button id="btn-sound" class="icon" title="Som">🔊</button>
+      <button id="btn-menu" class="icon menu" title="Menu / sair">☰</button>
+    </div>
+  </div>
+
+  <div id="banners" class="banners"></div>
+  <div class="quests-wrap">
+    <div id="quests-title" class="quests-title hidden"><span class="ic-slot" data-icon="flag" data-size="12"></span> missões · toque para ler</div>
+    <div id="quests" class="quests"></div>
+  </div>
+
+  <div class="hud-bottom">
+    <div id="stack-area" class="stack-area" title="Peças restantes — a que paira é a próxima">
+      <div id="stack-count" class="stack-count"><span class="ic-slot" data-icon="tile" data-size="16"></span><span class="num"><span>0</span></span></div>
+    </div>
+    <div class="tile-controls">
+      <button id="rot-l" class="round" title="Girar (Q)">⟲</button>
+      <div id="current-area" class="current-area" title="Peça atual — toque/role para girar"></div>
+      <button id="rot-r" class="round" title="Girar (R)">⟳</button>
+    </div>
+    <div class="action-col">
+      <button id="btn-place" class="place" disabled>Colocar</button>
+      <div class="mini-row">
+        <button id="btn-undo" class="ghost-btn mini" title="Desfazer a última peça (Z)" disabled><span class="ic-slot" data-icon="undo" data-size="20"></span></button>
+        <button id="btn-hint" class="ghost-btn mini" title="Dica (H)"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="qlabels"></div>
+<div id="signs"></div>
+<div id="grain"></div>
+<div id="popups"></div>
+<canvas id="confetti"></canvas>
+<div id="toast"></div>
+
+<!-- TELA INICIAL -->
+<div id="overlay-start" class="overlay">
+  <div class="card">
+    <div class="title">PUNK<span>ROMANTIK</span></div>
+    <p class="tagline">Um quebra-cabeça calmo de paisagens poly: cidades neon, selvas solarpunk, montanhas, trens-bala e esgotos radioativos flutuando no escuro.</p>
+    <div class="legend">
+      <div><i style="background:#141626;box-shadow:0 0 0 2px #ff2bd6 inset"></i><b>Cidade Neon</b><small>torres, pagodas, drones</small></div>
+      <div><i style="background:#2d8f4a"></i><b>Selva Solarpunk</b><small>palmeiras, trepadeiras, luzes</small></div>
+      <div><i style="background:#8c5a33;box-shadow:0 0 0 2px #ff9a3c inset"></i><b>Montanha</b><small>picos, minas, veios de âmbar</small></div>
+      <div><i style="background:#0c5a4a;box-shadow:0 0 0 2px #2dffb8 inset"></i><b>Esgoto Radioativo</b><small>canais, bacias, lagoas</small></div>
+      <div><i style="background:#7a7d8f;box-shadow:0 0 0 2px #d5d9e6 inset"></i><b>Trem-bala</b><small>precisa continuar</small></div>
+      <div><i style="background:#2b2e42;box-shadow:0 0 0 2px #ffe36a inset"></i><b>Rodovia</b><small>precisa continuar</small></div>
+      <div><i style="background:#cfe3ee;box-shadow:0 0 0 2px #9ff5ff inset"></i><b>Gelo</b><small>cristais e neve</small></div>
+      <div><i style="background:#7dc24a;box-shadow:0 0 0 2px #b8ff5c inset"></i><b>Baldio</b><small>gramado vazio, respiro</small></div>
+    </div>
+    <ul class="rules">
+      <li><b>+10</b> por lado encaixado com o mesmo terreno · <b>6 lados</b> = <b>+60</b> e <b>+1 peça</b>.</li>
+      <li>Peças com <b>bandeira</b> trazem missões: o balão mostra <b>quanto falta</b>. Cumpriu → peças extras. Cercou ou passou do número → missão some.</li>
+      <li>Esgoto, trilhos e rodovias <b>não podem ser interrompidos</b>; eles <b>bifurcam</b> e têm <b>pontos finais</b> (fechar uma linha vale +1 peça).</li>
+      <li>Errou? <b>Desfazer</b> (Z) devolve a última peça à mão — só a última.</li>
+    </ul>
+    <button id="btn-start" class="primary">Jogar</button>
+    <button id="btn-rank" class="ghost-btn">🏆 Ranking</button>
+    <p class="hint-text">Toque na casa (ou em <b>Colocar</b>) para fixar. No PC a <b>roda do mouse gira a peça</b> (Ctrl+roda = zoom). Arraste para mover a câmera, pinça para zoom, botão direito ou dois dedos para orbitar.</p>
+  </div>
+</div>
+
+<!-- AJUDA -->
+<div id="overlay-help" class="overlay hidden">
+  <div class="card small">
+    <h2>Como jogar</h2>
+    <ul class="rules">
+      <li><b>Prever:</b> toque numa casa livre (anel branco). No PC, basta passar o mouse. Tudo que se liga à peça <b>brilha</b> na cor do terreno.</li>
+      <li><b>Colocar:</b> toque de novo na casa, <b>Colocar</b> ou <kbd>Espaço</kbd>. <b>Desfazer:</b> ↶ ou <kbd>Z</kbd> (só a última peça).</li>
+      <li><b>Girar:</b> roda do mouse, ⟲ ⟳, <kbd>Q</kbd>/<kbd>R</kbd>, ou clique direito.</li>
+      <li><b>Câmera:</b> arraste = mover · <kbd>Ctrl</kbd>+roda ou pinça = zoom · botão direito / dois dedos = orbitar · <kbd>WASD</kbd>.</li>
+      <li><b>Missões:</b> o balão sobre a bandeira mostra <b>quanto falta</b>; toque no cartão para ler os detalhes. Cidade com número exato de prédios: passou, perdeu.</li>
+      <li><b>Pilha</b> (esquerda): o número é quanto resta; a peça que paira é a próxima e dá para espiar a seguinte. Recompensas caem nela.</li>
+      <li><b>Dica</b> 💡: melhor encaixe — 5 por partida.</li>
+    </ul>
+    <button class="primary close-overlay">Voltar</button>
+  </div>
+</div>
+
+<!-- MENU -->
+<div id="overlay-menu" class="overlay hidden">
+  <div class="card small">
+    <h2>Menu</h2>
+    <button id="menu-continue" class="primary">Continuar jogando</button>
+    <button id="menu-restart" class="ghost-btn">Reiniciar partida</button>
+    <button id="menu-rank" class="ghost-btn">🏆 Ranking</button>
+    <button id="menu-home" class="ghost-btn danger">Sair para a tela inicial</button>
+    <div class="toggles">
+      <button id="tg-bloom" class="ghost-btn">Brilho neon: ligado</button>
+      <button id="tg-lens" class="ghost-btn">Efeito de lente: ligado</button>
+      <button id="tg-grain" class="ghost-btn">Granulação: ligada</button>
+      <button id="tg-sound" class="ghost-btn">Som: ligado</button>
+    </div>
+    <p class="hint-text">Se o jogo estiver lento no celular, desligue o brilho neon e o efeito de lente.</p>
+  </div>
+</div>
+
+<!-- RANKING -->
+<div id="overlay-rank" class="overlay hidden">
+  <div class="card small">
+    <h2>🏆 Ranking</h2>
+    <p id="rank-total" class="rank-total"></p>
+    <ol id="rank-list-all" class="rank-list"></ol>
+    <button class="primary to-start">Voltar</button>
+  </div>
+</div>
+
+<!-- FIM -->
+<div id="overlay-end" class="overlay hidden">
+  <div class="card small">
+    <h2>Acabaram as peças</h2>
+    <div class="final"><span id="end-score">0</span><small>pontos · recorde <b id="end-best">0</b></small></div>
+    <div id="end-stats" class="stats"></div>
+    <form id="rank-form" class="rank-form" autocomplete="off">
+      <input id="rank-name" type="text" maxlength="16" placeholder="Seu nome no ranking" required>
+      <button id="rank-submit" class="primary" type="submit">Salvar</button>
+    </form>
+    <div id="rank-status" class="rank-status"></div>
+    <ol id="rank-list" class="rank-list"></ol>
+    <button id="btn-restart" class="primary">Jogar de novo</button>
+    <button id="btn-look" class="ghost-btn">Continuar admirando a paisagem</button>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/CopyShader.js"></script>
+<script src="vendor/LuminosityHighPassShader.js"></script>
+<script src="vendor/EffectComposer.js"></script>
+<script src="vendor/RenderPass.js"></script>
+<script src="vendor/ShaderPass.js"></script>
+<script src="vendor/MaskPass.js"></script>
+<script src="vendor/UnrealBloomPass.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
