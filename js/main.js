@@ -147,7 +147,21 @@ const ringSel = {
   bad: new THREE.MeshBasicMaterial({ color: 0xff5c7a, transparent: true, opacity: 0.95, depthWrite: false }),
   none: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }),
 };
+const EDGE_COLORS = { plain: 0x6fd2f5, grass: 0xffd98a, cyber: 0xff2bd6, solar: 0x7dff4a, rock: 0xff9a3c, pool: 0x2dffb8, sewage: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x3a1f4f, transparent: true, opacity: 0.22, depthWrite: false });
+// Casas proibidas para a peça na mão (nenhuma rotação cabe: um conector bateria num lado que não é
+// conector, ou vice-versa) ficam escurecidas com contorno vermelho apagado e um X; casas onde a peça
+// CONTINUA uma rede aberta ganham contorno na cor do conector, pulsando. Ensina sem texto onde a
+// estrada/trilho/esgoto pode ir — como no Dorfromantik, que nem deixa tentar a casa errada.
+const slotBlockedRing = new THREE.MeshBasicMaterial({ color: 0xff3b5c, transparent: true, opacity: 0.16, depthWrite: false });
+const slotBlockedFill = new THREE.MeshBasicMaterial({ color: 0x07040d, transparent: true, opacity: 0.55, depthWrite: false });
+const slotCrossMat = new THREE.MeshBasicMaterial({ color: 0xff3b5c, transparent: true, opacity: 0.5, depthWrite: false });
+const slotLinkRing = {}, slotLinkFill = {};
+for (const t of ['sewage', 'rail', 'road']) {
+  slotLinkRing[t] = new THREE.MeshBasicMaterial({ color: EDGE_COLORS[t], transparent: true, opacity: 0.7, depthWrite: false });
+  slotLinkFill[t] = new THREE.MeshBasicMaterial({ color: EDGE_COLORS[t], transparent: true, opacity: 0.1, depthWrite: false });
+}
+const crossBarGeo = new THREE.BoxGeometry(0.7, 0.004, 0.09);
 
 const BLOOM = 1, bloomLayer = new THREE.Layers(); bloomLayer.set(BLOOM);
 const boardGroup = new THREE.Group(), slotGroup = new THREE.Group(), ghostGroup = new THREE.Group(), fxGroup = new THREE.Group();
@@ -155,7 +169,6 @@ scene.add(boardGroup, slotGroup, ghostGroup, fxGroup);
 const ghostShadow = new THREE.Mesh(discGeo, shadowMat); ghostShadow.position.y = TILE_H + 0.008; ghostShadow.visible = false; scene.add(ghostShadow);
 // Indicadores de encaixe: em cada lado compatível, o friso do hexágono brilha/vibra na cor do terreno
 // e um flash vertical da mesma cor pulsa na lateral (na junta com a peça vizinha).
-const EDGE_COLORS = { plain: 0x6fd2f5, grass: 0xffd98a, cyber: 0xff2bd6, solar: 0x7dff4a, rock: 0xff9a3c, pool: 0x2dffb8, sewage: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
 const GROUP_HEX = { plain: 0x6fd2f5, grass: 0xffd98a, cyber: 0xff2bd6, solar: 0x7dff4a, rock: 0xff9a3c, toxic: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
 const stripGeo = new THREE.BoxGeometry(0.86, 0.014, 0.07);
 const flashGeo = new THREE.PlaneGeometry(0.92, 0.3);
@@ -653,17 +666,21 @@ function refreshSlots() {
   const wanted = new Map();
   for (const t of S.tiles.values())
     for (const d of DIRS) { const q = t.q + d[0], r = t.r + d[1], k = key(q, r); if (!S.tiles.has(k) && !wanted.has(k)) wanted.set(k, { q, r }); }
-  for (const [k, s] of S.slots) if (!wanted.has(k)) { slotGroup.remove(s.mesh); S.slots.delete(k); }
+  for (const [k, s] of S.slots) if (!wanted.has(k)) { slotGroup.remove(s.mesh, s.fill, s.cross); S.slots.delete(k); }
   for (const [k, c] of wanted) if (!S.slots.has(k)) {
     const m = new THREE.Mesh(ringGeo, ringMat), w = toWorld(c.q, c.r);
     m.position.set(w.x, TILE_H + 0.006, w.z);
-    slotGroup.add(m); S.slots.set(k, { q: c.q, r: c.r, mesh: m });
+    const fill = new THREE.Mesh(discGeo, slotBlockedFill); fill.position.set(w.x, TILE_H + 0.004, w.z); fill.visible = false;
+    const cross = new THREE.Group(); cross.position.set(w.x, TILE_H + 0.008, w.z); cross.visible = false;
+    for (const a of [Math.PI / 4, -Math.PI / 4]) { const bar = new THREE.Mesh(crossBarGeo, slotCrossMat); bar.rotation.y = a; cross.add(bar); }
+    slotGroup.add(m, fill, cross); S.slots.set(k, { q: c.q, r: c.r, mesh: m, fill, cross, status: 'ok' });
   }
+  slotCache = '';
   if (S.selected && !S.slots.has(key(S.selected.q, S.selected.r))) S.selected = null;
 }
 function clearBoard() {
   for (const t of S.tiles.values()) boardGroup.remove(t.group);
-  for (const s of S.slots.values()) slotGroup.remove(s.mesh);
+  for (const s of S.slots.values()) slotGroup.remove(s.mesh, s.fill, s.cross);
   for (const p of particles) fxGroup.remove(p.m);
   while (fauna.length) dropFlock(fauna.length - 1);
   S.tiles.clear(); S.slots.clear(); S.tileList = []; vehicles.length = 0; clearTrains(); particles.length = 0; anims.length = 0; fx.sides = 0; hoverFx.k = 0; hoverFx.target = 0;
@@ -711,15 +728,51 @@ function updateGhost() {
   bp.innerHTML = ev.legal ? `Colocar <b>+${basePts}</b>${ev.perfect ? ' ★' : ''}${bonus.shut ? ' ⬢' : ''}${bonus.harmony ? ' ✺' : ''}` : `${icon('x', 16)} Bloqueado`;
   bp.classList.toggle('perfect', ev.legal && ev.perfect);
 }
-function setSlotMaterials(ev) {
-  for (const [k, s] of S.slots) {
-    if (S.selected && k === key(S.selected.q, S.selected.r) && ev)
-      s.mesh.material = !ev.legal ? ringSel.bad : ev.matches === ev.neighbors ? ringSel.ok : ev.matches > 0 ? ringSel.partial : ringSel.none;
-    else s.mesh.material = ringMat;
+// Para a peça na mão: 'blocked' (nenhuma rotação cabe), 'link' (alguma rotação liga o conector da
+// peça numa ponta aberta do tabuleiro) ou 'ok'. Recalcula só quando a peça ou o tabuleiro mudam.
+let slotCache = '';
+function updateSlotStatus() {
+  const t = S.current, ck = t ? `${t.id}:${S.tiles.size}:${S.slots.size}` : '';
+  if (ck === slotCache) return; slotCache = ck;
+  const types = t ? [t.conn, t.conn2].filter(Boolean).map((c) => c.type) : [];
+  for (const s of S.slots.values()) {
+    s.status = 'ok'; s.link = null;
+    if (!t) continue;
+    let legal = false;
+    for (let rot = 0; rot < 6; rot++) {
+      const ev = evalPlacement(s.q, s.r, t, rot); if (!ev.legal) continue;
+      legal = true;
+      const lt = ev.matchedTypes.find((x) => types.includes(x));
+      if (lt) { s.link = lt; break; }
+    }
+    s.status = !legal ? 'blocked' : s.link ? 'link' : 'ok';
   }
+}
+function slotBlocked(cell) { const s = S.slots.get(key(cell.q, cell.r)); return !!(s && s.status === 'blocked'); }
+function setSlotMaterials(ev) {
+  updateSlotStatus();
+  for (const [k, s] of S.slots) {
+    const sel = S.selected && k === key(S.selected.q, S.selected.r) && ev;
+    if (sel) s.mesh.material = !ev.legal ? ringSel.bad : ev.matches === ev.neighbors ? ringSel.ok : ev.matches > 0 ? ringSel.partial : ringSel.none;
+    else s.mesh.material = s.status === 'blocked' ? slotBlockedRing : s.status === 'link' ? slotLinkRing[s.link] : ringMat;
+    if (!s.fill) continue;
+    s.fill.visible = !sel && s.status !== 'ok';
+    s.fill.material = s.status === 'link' ? slotLinkFill[s.link] : slotBlockedFill;
+    s.cross.visible = !sel && s.status === 'blocked';
+  }
+}
+function updateSlotFx(now) { // a casa que continua a rede respira na cor do conector
+  const k = 0.5 + 0.5 * Math.sin(now * 0.005);
+  for (const t in slotLinkRing) { slotLinkRing[t].opacity = 0.45 + 0.4 * k; slotLinkFill[t].opacity = 0.06 + 0.1 * k; }
+  slotCrossMat.opacity = 0.42 + 0.12 * k;
+}
+function nudgeBlocked(cell) { // tocou numa casa proibida: tranco no X, som de erro
+  const s = S.slots.get(key(cell.q, cell.r)); if (!s) return;
+  play('bad'); anims.push({ obj: s.cross, prop: 'nudge', t: 0, dur: 0.35 });
 }
 function selectSlot(cell, silent) {
   if (!cell || S.over || !S.current) return;
+  if (slotBlocked(cell)) { if (!silent) nudgeBlocked(cell); return; } // casa proibida para esta peça: nem o fantasma vai
   if (S.selected && S.selected.q === cell.q && S.selected.r === cell.r) return;
   S.selected = { q: cell.q, r: cell.r };
   S.ghostSolid = true;
@@ -2144,6 +2197,7 @@ function loop(now) {
     const a = anims[i]; a.t += dt;
     const p = Math.min(1, a.t / a.dur), e = 1 - Math.pow(1 - p, 3);
     if (a.prop === 'y') a.obj.position.y = a.from + (a.to - a.from) * e;
+    else if (a.prop === 'nudge') { const k = (1 - p) * Math.sin(p * Math.PI * 6); a.obj.rotation.y = k * 0.35; a.obj.scale.setScalar(1 + 0.35 * (1 - p)); if (p >= 1) { a.obj.rotation.y = 0; a.obj.scale.setScalar(1); anims.splice(i, 1); continue; } }
     else if (a.prop === 'settle') { if (a.t >= 0) a.obj.position.y = -a.amp * Math.sin(Math.PI * p); if (p >= 1) a.obj.position.y = 0; }
     else if (a.prop === 'undo') { // antecipação (afunda um tiquinho) -> sobe acelerando, gira e encolhe
       const o = a.obj;
@@ -2201,7 +2255,7 @@ function loop(now) {
   }
   updateVehicles(dt);
   updateTrains(dt, now);
-  updateHarmonyFx(dt, now); updateRelic(dt, now);
+  updateHarmonyFx(dt, now); updateRelic(dt, now); updateSlotFx(now);
   updateFauna(dt);
   for (let i = 0; i < DUST_N; i++) {
     const d = dustVel[i]; let x = dustPos[i * 3], y = dustPos[i * 3 + 1] + d.vy * dt, z = dustPos[i * 3 + 2];

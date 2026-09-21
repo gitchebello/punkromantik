@@ -132,7 +132,7 @@ export function starterTile(rng) {
   };
 }
 
-export const DUAL_CHANCE = 0.07; // das peças com conector: ~1 cruzamento a cada 35 peças
+export const DUAL_CHANCE = 0.02; // das peças com conector: ~1 cruzamento a cada ~120 peças (era 0.07; o usuário quer raro de verdade)
 export function makeStack(rng, n) {
   const out = [];
   // primeiras peças simples; bifurcações e pontos finais só depois que o jogador já viu conectores comuns
