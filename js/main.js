@@ -12,16 +12,16 @@ const $ = (id) => document.getElementById(id);
 const prefs = { bloom: localStorage.getItem('pr_bloom') !== '0', lens: localStorage.getItem('pr_lens') !== '0', grain: localStorage.getItem('pr_grain') !== '0' };
 
 // ---------- ícones (SVG inline: a HUD fala por números e símbolos, não por texto) ----------
-// Detalhe é RECORTE (fill-rule evenodd), nunca sobreposição branca: no cartão o ícone já é branco e
-// no balão é tinta escura — o furo mostra o fundo nos dois casos, a sobreposição sumia num deles.
+// Ícones de missão: o conjunto de 07/10, restaurado a pedido do usuário em 09/10 (as duas reformas
+// seguintes — "fofos" com recortes e silhuetas — foram rejeitadas). Não redesenhar sem ele pedir.
 const ICON_PATHS = {
-  cyber: '<path fill-rule="evenodd" d="M2 23V10.5L4.5 9H6.6V23ZM3.4 12.6h1.9v1.4H3.4ZM3.4 16.4h1.9v1.4H3.4Z"/><path fill-rule="evenodd" d="M8 23V7.5L10 5.5H11.2V1.6H12.8V5.5H14L16 7.5V23ZM9.6 9.8h4.8v1.5H9.6ZM9.6 13.5h4.8v1.5H9.6ZM9.6 17.2h4.8v1.5H9.6Z"/><path fill-rule="evenodd" d="M17.2 4.2h4.3v10.3h-4.3ZM18.5 6h1.7v2h-1.7ZM18.5 9.8h1.7v2h-1.7Z"/><path d="M16 6h1.2v1.2H16ZM16 11.8h1.2v1.2H16Z"/><path fill-rule="evenodd" d="M17.2 16.4h5.3V23h-5.3ZM18.6 18.4h2.5v1.4h-2.5Z"/>', // torres com faixas de neon e letreiro vertical pendurado
-  city: '<path fill-rule="evenodd" d="M5.5 21.5V8a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v13.5ZM8.7 7.5h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM13.9 7.5h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM8.7 11h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM13.9 11h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM8.7 14.5h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM13.9 14.5h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM10.4 21.5v-2.3a1.6 1.6 0 0 1 3.2 0v2.3Z"/><path d="M11.2 5.2V2.6h1.6v2.6z"/><path fill-rule="evenodd" d="M10.7 2.2a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0Z"/><path fill-rule="evenodd" d="M3.6 21h16.8a1.1 1.1 0 0 1 1.1 1.1v0a1.1 1.1 0 0 1 -1.1 1.1h-16.8a1.1 1.1 0 0 1 -1.1 -1.1v0a1.1 1.1 0 0 1 1.1 -1.1Z"/>', // um prédio só (a missão conta prédios)
-  solar: '<path d="M12 23V12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/><path d="M12 14.5C8.5 14 3 12 2 3.5c6.5.6 10 5 10 11z"/><path d="M12 13c3.5-.5 9-2.5 10-11-6.5.6-10 5-10 11z"/><path d="M11 13 4.5 6.5M13 11.5 19.5 5" stroke="#fff" stroke-width="1" opacity=".5" fill="none"/>', // broto de duas folhas (o desenho antigo — o girassol de 08/10 virava borrão no tamanho do cartão)
-  rock: '<path d="M15.6 5.6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z"/><path fill-rule="evenodd" d="M2 23V18.5H5V14H8.5V9.5H10.5V6.5H13.5V9.5H15.5V14H19V18.5H22V23ZM10.6 23v-2.3a1.4 1.4 0 0 1 2.8 0V23ZM11.3 9.5V8.1a.7.7 0 0 1 1.4 0V9.5Z"/>', // zigurate de três degraus, portal na base e o sol do deserto
-  toxic: '<path d="M12 2s7 8 7 13a7 7 0 0 1-14 0c0-5 7-13 7-13z"/><circle cx="9.4" cy="15" r="1.7" fill="#fff" opacity=".6"/>', // gota (o desenho antigo, de volta a pedido)
-  rail: '<path fill-rule="evenodd" d="M0.8 17V12.4Q0.8 11.2 2 11.2H9V17ZM2 12.7h1.7v1.6H2ZM4.6 12.7h1.7v1.6H4.6ZM7.2 12.7h1.2v1.6H7.2Z"/><path d="M9 15h1v1H9Z"/><path fill-rule="evenodd" d="M10 17V11.2H14.6C18.1 11.2 21.3 13.2 23.2 17ZM11.2 12.7h1.7v1.6h-1.7ZM13.8 12.7h1.7v1.6h-1.7ZM16.5 12.7C17.9 13 19.1 13.6 20 14.3H16.5Z"/><path d="M11.8 11.2 13.2 8.7H16.2V9.6H13.8L12.8 11.2Z"/><path d="M0.5 18.4h23v1.4H0.5ZM2.4 19.8h1.3v1.7H2.4ZM7.7 19.8h1.3v1.7H7.7ZM13 19.8h1.3v1.7H13ZM18.3 19.8h1.3v1.7h-1.3Z"/>', // trem-bala de perfil: dois vagões, janelas, bico afilado, pantógrafo, trilho
-  road: '<path fill-rule="evenodd" d="M2.5 15.3v-2.4c0-1.1.7-1.8 1.8-2l3-.6 2.1-3.2C10 6.2 10.8 5.8 11.9 5.8h3.6c1.1 0 1.9.4 2.5 1.3l2.1 3.3c1.1.3 1.6 1 1.6 2.2v2.7c0 .8-.5 1.2-1.2 1.2H3.7c-.8 0-1.2-.4-1.2-1.2ZM10.2 10.2l1.5-2.4h1.9v2.4ZM15 10.2V7.8h1.4l1.5 2.4ZM19.55 12.5a0.75 0.75 0 1 0 1.5 0a0.75 0.75 0 1 0 -1.5 0Z"/><path fill-rule="evenodd" d="M4.8 16.4a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0ZM6.3 16.4a0.9 0.9 0 1 0 1.8 0a0.9 0.9 0 1 0 -1.8 0Z"/><path fill-rule="evenodd" d="M14.4 16.4a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0ZM15.9 16.4a0.9 0.9 0 1 0 1.8 0a0.9 0.9 0 1 0 -1.8 0Z"/><path fill-rule="evenodd" d="M1.6 21h3.6a0.8 0.8 0 0 1 0.8 0.8v0a0.8 0.8 0 0 1 -0.8 0.8h-3.6a0.8 0.8 0 0 1 -0.8 -0.8v0a0.8 0.8 0 0 1 0.8 -0.8ZM10.2 21h3.6a0.8 0.8 0 0 1 0.8 0.8v0a0.8 0.8 0 0 1 -0.8 0.8h-3.6a0.8 0.8 0 0 1 -0.8 -0.8v0a0.8 0.8 0 0 1 0.8 -0.8ZM18.8 21h3.6a0.8 0.8 0 0 1 0.8 0.8v0a0.8 0.8 0 0 1 -0.8 0.8h-3.6a0.8 0.8 0 0 1 -0.8 -0.8v0a0.8 0.8 0 0 1 0.8 -0.8Z"/>', // carrinho na faixa tracejada
+  cyber: '<path d="M2 22V11h4V6h5v4h4v3h4v9z"/><path fill="#fff" opacity=".6" d="M4 13h1.6v2H4zm0 3.5h1.6v2H4zM8 8h1.6v2H8zm0 3.5h1.6v2H8zm0 3.5h1.6v2H8zm4 0h1.6v2H12zm4 3h1.6v2H16z"/>',
+  city: '<path d="M4 22V4h16v18z"/><path fill="#fff" opacity=".75" d="M6.5 6.5h2.4v2.4H6.5zm4.3 0h2.4v2.4h-2.4zm4.3 0h2.4v2.4h-2.4zM6.5 10.8h2.4v2.4H6.5zm4.3 0h2.4v2.4h-2.4zm4.3 0h2.4v2.4h-2.4zM6.5 15.1h2.4v2.4H6.5zm4.3 0h2.4v2.4h-2.4zm4.3 0h2.4v2.4h-2.4z"/><path d="M2 22h20v1.5H2z"/>',
+  solar: '<path d="M12 23V12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/><path d="M12 14.5C8.5 14 3 12 2 3.5c6.5.6 10 5 10 11z"/><path d="M12 13c3.5-.5 9-2.5 10-11-6.5.6-10 5-10 11z"/><path d="M11 13 4.5 6.5M13 11.5 19.5 5" stroke="#fff" stroke-width="1" opacity=".5" fill="none"/>',
+  rock: '<path d="M1.5 21.5h21V19h-21zM4 19h16v-2.6H4zM6.6 16.4h10.8v-2.6H6.6zM9.2 13.8h5.6v-2.6H9.2zM10.8 11.2h2.4V8.4h-2.4z"/><path fill="#fff" opacity=".55" d="M4 18.4h16v.7H4zM6.6 15.8h10.8v.7H6.6zM9.2 13.2h5.6v.7H9.2z"/>',
+  toxic: '<path d="M12 2s7 8 7 13a7 7 0 0 1-14 0c0-5 7-13 7-13z"/><circle cx="9.4" cy="15" r="1.7" fill="#fff" opacity=".6"/>',
+  rail: '<path d="M2 16V9a5 5 0 0 1 5-5h8c4.5 0 8 3.5 9 8v4z"/><path fill="#fff" opacity=".65" d="M5 8h4v4H5zm6 0h4v4h-4z"/><circle cx="7" cy="19.5" r="2.2"/><circle cx="17" cy="19.5" r="2.2"/>',
+  road: '<path d="M8.5 2h7l6 20H2.5z"/><path d="M12 4v3.5M12 10v4M12 16.5v5" stroke="#fff" stroke-width="1.9" stroke-linecap="round" opacity=".85" fill="none"/>',
   plain: '<path d="M12 2l2 6 6-2-4 5 4 5-6-2-2 6-2-6-6 2 4-5-4-5 6 2z"/>',
   grass: '<path d="M4 21c0-6 3-10 8-12-2 4-2 8-1 12zM12 21c-1-7 3-12 9-13-3 4-5 8-5 13z"/>',
   tile: '<path d="M12 2l8.66 5v10L12 22l-8.66-5V7z"/>',
@@ -1021,14 +1021,14 @@ function updateHarmonyFx(dt, now) {
 // ganha os pontos do lado). Antes de ativar, o encaixe com ela fica "?" — friso branco, sem prévia de
 // pontos, e a dica não sabe a resposta. Quando o tabuleiro principal se LIGA a ela, rende pontos e
 // peças. Pode haver até RELIC_MAX esperando ao mesmo tempo, espalhados como faróis: dão um norte.
-const RELIC_FROM = 18, RELIC_PTS = 80, RELIC_MAX = 3, RELIC_BEAM = 0xc8ccd6;
+const RELIC_FROM = 18, RELIC_PTS = 80, RELIC_MAX = 2, RELIC_BEAM = 0xc8ccd6;
 const relicTiles = () => (questLevel(S.placed) < 4 ? 2 : 1); // como as missões: no fim da partida o achado paga menos peças
 const hexDist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
 const relicBeamGeo = new THREE.CylinderGeometry(0.06, 0.32, 9, 14, 1, true);
 const relicAt = (k) => S.relics.find((R) => R.k === k);
 function spawnRelic(force) {
   const waiting = S.relics.filter((R) => !R.claimed).length;
-  if (!force && (waiting >= RELIC_MAX || S.placed < RELIC_FROM || S.stack.length < 6 || ++S.sinceRelic < 5 || !S.rng.chance(0.35))) return false;
+  if (!force && (waiting >= RELIC_MAX || S.placed < RELIC_FROM || S.stack.length < 6 || ++S.sinceRelic < 9 || !S.rng.chance(0.25))) return false;
   const list = S.tileList, opts = ['cyber', 'solar', 'rock', 'plain'];
   for (let tries = 0; tries < 120; tries++) {
     const base = list[S.rng.int(list.length)], d = S.rng.int(6), dist = 5 + S.rng.int(3), side = S.rng.chance(0.5) ? DIRS[(d + 1) % 6] : [0, 0];
