@@ -1,12 +1,14 @@
 import { RNG } from './rng.js';
 
-// Terrenos. Regiões preenchem setores; conectores atravessam a peça de uma
+// Terrenos. Cada bioma é uma vertente -punk da mesma proposta estética (é daí que vem o nome
+// do jogo): Cyberpunk, Solarpunk, Sandpunk e Snowpunk. Regiões preenchem setores; conectores atravessam a peça de uma
 // aresta a outra e SÃO obrigados a casar (como rios/trilhos no Dorfromantik).
 export const TERRAIN = {
-  plain:  { id: 'plain',  name: 'Gelo (terreno livre)', color: '#bfe9ff', group: 'plain' },
-  cyber:  { id: 'cyber',  name: 'Cidade Neon',        color: '#ff2bd6', group: 'cyber' },
-  solar:  { id: 'solar',  name: 'Selva Solarpunk',    color: '#5cc46f', group: 'solar' },
-  rock:   { id: 'rock',   name: 'Montanha',           color: '#ff9a3c', group: 'rock' },
+  plain:  { id: 'plain',  name: 'Snowpunk',           color: '#bfe9ff', group: 'plain' },
+  grass:  { id: 'grass',  name: 'Baldio',             color: '#ffd98a', group: 'grass' },
+  cyber:  { id: 'cyber',  name: 'Cyberpunk',          color: '#ff2bd6', group: 'cyber' },
+  solar:  { id: 'solar',  name: 'Solarpunk',          color: '#7dff4a', group: 'solar' },
+  rock:   { id: 'rock',   name: 'Sandpunk',           color: '#ff9a3c', group: 'rock' },
   pool:   { id: 'pool',   name: 'Lagoa Tóxica',       color: '#2dffb8', group: 'toxic' },
   sewage: { id: 'sewage', name: 'Esgoto Radioativo',  color: '#2dffb8', group: 'toxic', connector: true },
   rail:   { id: 'rail',   name: 'Trem-bala',          color: '#dfe3ee', group: 'rail',  connector: true },
@@ -14,10 +16,11 @@ export const TERRAIN = {
 };
 
 export const GROUP_INFO = {
-  plain: { name: 'Gelo',            color: '#bfe9ff' },
-  cyber: { name: 'Cidade Neon',     color: '#ff2bd6' },
-  solar: { name: 'Selva Solarpunk', color: '#58d68d' },
-  rock:  { name: 'Montanha',        color: '#ff9a3c' },
+  plain: { name: 'Snowpunk',        color: '#bfe9ff' },
+  grass: { name: 'Baldio',          color: '#ffd98a' },
+  cyber: { name: 'Cyberpunk',       color: '#ff2bd6' },
+  solar: { name: 'Solarpunk',       color: '#7dff4a' },
+  rock:  { name: 'Sandpunk',        color: '#ff9a3c' },
   toxic: { name: 'Rede de Esgoto',  color: '#2dffb8' },
   rail:  { name: 'Linha de Trem',   color: '#7fd3ff' },
   road:  { name: 'Rodovia',         color: '#ffe36a' },
@@ -25,16 +28,26 @@ export const GROUP_INFO = {
 
 export const isConnector = (t) => !!TERRAIN[t].connector;
 export const groupOf = (t) => TERRAIN[t].group;
+// Peça com conector tem DUAS qualidades em cada lado de saída: o conector e o bioma do chão.
+// A rodovia que atravessa a cidade é rodovia E cidade — conta para a rede e para a região.
+export function sideGroups(tile, i) {
+  const a = groupOf(tile.edges[i]), b = groupOf(tile.ground[i]);
+  return a === b ? [a] : [a, b];
+}
 
 // Arestas compatíveis: iguais, ou esgoto desaguando numa lagoa.
 export function compatible(a, b) {
   return a === b || groupOf(a) === groupOf(b);
 }
 
-const REGION_WEIGHTS = [['plain', 0.19], ['cyber', 0.27], ['solar', 0.27], ['rock', 0.19], ['pool', 0.08]];
+const REGION_WEIGHTS = [['plain', 0.15], ['grass', 0.12], ['cyber', 0.25], ['solar', 0.25], ['rock', 0.16], ['pool', 0.07]];
 // Bioma único das peças com conector (nunca lagoa: o conector já ocupa o centro)
-const CONN_GROUND_WEIGHTS = [['plain', 0.22], ['cyber', 0.28], ['solar', 0.28], ['rock', 0.22]];
+const CONN_GROUND_WEIGHTS = [['plain', 0.18], ['grass', 0.2], ['cyber', 0.24], ['solar', 0.22], ['rock', 0.16]];
+const EMPTY_LOT_CHANCE = 0.09; // peça inteira de baldio: respiro para o tabuleiro e para o jogador
 const CONN_WEIGHTS = [['sewage', 0.38], ['rail', 0.34], ['road', 0.28]];
+// Cruzamento de dois meios (nunca os três): o de cima passa num viaduto. Ordem de baixo para
+// cima: esgoto, trilho, rodovia — então a rodovia é sempre o viaduto quando aparece.
+const DUAL_PAIRS = [['sewage', 'rail'], ['sewage', 'road'], ['rail', 'road']];
 
 function splitSix(rng, n) {
   if (n === 1) return [6];
@@ -44,13 +57,17 @@ function splitSix(rng, n) {
 
 let tileCounter = 0;
 
-// Saídas do conector: 2 (reta/curva), 3 (bifurcação) ou 1 (ponto final)
+// Saídas do conector: 2 (reta/curva), 3 (bifurcação), 4 (cruzamento) ou 1 (ponto final)
 function connectorExits(rng, opts) {
   const a = rng.int(6);
   const kind = rng.weighted([['line', opts.forkChance != null ? 1 - opts.forkChance - (opts.endChance || 0) : 0.72], ['fork', opts.forkChance ?? 0.17], ['end', opts.endChance ?? 0.11]]);
   if (kind === 'end') return [a];
   if (kind === 'fork') {
-    const shape = rng.weighted([['Y', 0.5], ['T1', 0.25], ['T2', 0.25]]);
+    if (rng.chance(opts.crossChance ?? 0)) { // cruzamento: uma via se abre em três (4 saídas)
+      const shape = rng.weighted([['X1', 0.4], ['X2', 0.4], ['fan', 0.2]]);
+      return shape === 'X1' ? [a, (a + 1) % 6, (a + 3) % 6, (a + 4) % 6] : shape === 'X2' ? [a, (a + 2) % 6, (a + 3) % 6, (a + 5) % 6] : [a, (a + 1) % 6, (a + 2) % 6, (a + 4) % 6];
+    }
+    const shape = rng.weighted([['Y', 0.5], ['T1', 0.25], ['T2', 0.25]]); // bifurcação: uma via se abre em duas (3 saídas)
     return shape === 'Y' ? [a, (a + 2) % 6, (a + 4) % 6] : shape === 'T1' ? [a, (a + 3) % 6, (a + 1) % 6] : [a, (a + 3) % 6, (a + 5) % 6];
   }
   const shape = rng.weighted([['straight', 0.46], ['left', 0.27], ['right', 0.27]]);
@@ -59,18 +76,23 @@ function connectorExits(rng, opts) {
 
 export function genTile(rng, opts = {}) {
   const connChance = opts.simple ? 0 : (opts.connChance ?? 0.4);
-  const hasConn = rng.chance(connChance);
+  const hasConn = !!opts.forceConn || rng.chance(connChance);
   const ground = new Array(6);
   if (hasConn) { // peças com estrada/trilho/esgoto têm sempre um único bioma
-    const t = rng.weighted(CONN_GROUND_WEIGHTS);
+    const t = opts.ground || rng.weighted(CONN_GROUND_WEIGHTS);
     ground.fill(t);
+  } else if (!opts.simple && rng.chance(EMPTY_LOT_CHANCE)) {
+    ground.fill('grass');
   } else {
     const nRegions = opts.simple ? rng.weighted([[1, 0.4], [2, 0.6]]) : rng.weighted([[1, 0.3], [2, 0.48], [3, 0.22]]);
     const sizes = splitSix(rng, nRegions), types = [];
     let idx = rng.int(6);
     for (const s of sizes) {
       let t, guard = 0;
-      do { t = rng.weighted(REGION_WEIGHTS); guard++; } while ((types.includes(t) || (opts.simple && t === 'pool') || (s >= 4 && t === 'pool')) && guard < 20);
+      // Lagoa só em 2 ou 3 fatias: uma fatia sozinha de lagoa casava com esgoto e virava um beco
+      // sem saída para a rede (o fim de linha do esgoto agora é a peça-terminal, com vários estilos).
+      do { t = rng.weighted(REGION_WEIGHTS); guard++; } while ((types.includes(t) || (t === 'pool' && (opts.simple || s >= 4 || s === 1))) && guard < 20);
+      if (t === 'pool' && s === 1) t = ['plain', 'grass', 'solar', 'rock', 'cyber'].find((x) => !types.includes(x));
       types.push(t);
       for (let k = 0; k < s; k++) ground[(idx + k) % 6] = t;
       idx += s;
@@ -78,9 +100,23 @@ export function genTile(rng, opts = {}) {
   }
   const edges = ground.slice();
   let conn = null;
+  // Peça rara de cruzamento: duas retas de meios diferentes que se cruzam no centro. Salva jogadas
+  // em que duas redes diferentes se encontram na mesma casa vazia.
+  const dualChance = opts.dualChance ?? DUAL_CHANCE; // peças de recompensa também podem vir em cruzamento
+  if (hasConn && !opts.forceConn && dualChance && rng.chance(dualChance)) {
+    const [lo, hi] = rng.pick(DUAL_PAIRS), a = rng.int(6), b = (a + (rng.chance(0.5) ? 1 : 2)) % 6;
+    conn = { type: lo, exits: [a, (a + 3) % 6] };
+    const conn2 = { type: hi, exits: [b, (b + 3) % 6] };
+    for (const e of conn.exits) edges[e] = lo;
+    for (const e of conn2.exits) edges[e] = hi;
+    return { id: ++tileCounter, ground, edges, conn, conn2, quest: null, seed: rng.int(2 ** 31) };
+  }
   if (hasConn) {
-    const type = rng.weighted(CONN_WEIGHTS);
-    const exits = connectorExits(rng, { forkChance: opts.forkChance, endChance: opts.endChance });
+    const type = opts.forceConn || rng.weighted(CONN_WEIGHTS);
+    // Esgoto bifurca bem menos e nunca vira cruzamento de 4 saídas: canal que se abre em tudo
+    // quanto é lado enchia o tabuleiro de pontas de esgoto impossíveis de fechar.
+    const sew = type === 'sewage';
+    const exits = connectorExits(rng, { forkChance: sew ? (opts.forkChance ?? 0.17) * 0.45 : opts.forkChance, endChance: opts.endChance, crossChance: sew ? 0 : opts.crossChance });
     for (const e of exits) edges[e] = type;
     conn = { type, exits };
   }
@@ -96,29 +132,78 @@ export function starterTile(rng) {
   };
 }
 
+export const DUAL_CHANCE = 0.07; // das peças com conector: ~1 cruzamento a cada 35 peças
 export function makeStack(rng, n) {
   const out = [];
   // primeiras peças simples; bifurcações e pontos finais só depois que o jogador já viu conectores comuns
-  for (let i = 0; i < n; i++) out.push(genTile(rng, { simple: i < 4, connChance: i < 8 ? 0.25 : 0.4, forkChance: i < 10 ? 0 : 0.17, endChance: i < 12 ? 0 : 0.11 }));
+  for (let i = 0; i < n; i++) out.push(genTile(rng, { simple: i < 4, connChance: i < 8 ? 0.25 : 0.4, forkChance: i < 10 ? 0 : 0.2, endChance: i < 12 ? 0 : 0.14, crossChance: i < 14 ? 0 : 0.35, dualChance: i < 16 ? 0 : DUAL_CHANCE }));
   return out;
 }
 
-export const isTerminal = (tile) => !!(tile.conn && tile.conn.exits.length === 1);
-export const isFork = (tile) => !!(tile.conn && tile.conn.exits.length === 3);
+// Peça que CONTINUA uma ponta aberta do tabuleiro: mesmo conector, quase sempre reta/curva
+// (às vezes bifurca), nunca ponto final — sem isso as redes de trilho/rodovia ficavam em
+// pedaços de uma peça só e o trem nem tinha por onde andar. `ground` é o bioma ao redor da ponta.
+export function continuationTile(rng, type, ground) {
+  const fork = type === 'sewage' ? 0.06 : 0.16;
+  return genTile(rng, { forceConn: type, ground: ground && ground !== 'pool' ? ground : undefined, forkChance: fork, endChance: 0, crossChance: 0 });
+}
 
-// Grupos que uma peça pode "puxar" numa missão (nunca baldio)
+export const isTerminal = (tile) => !!(tile.conn && tile.conn.exits.length === 1);
+export const isFork = (tile) => !!(tile.conn && tile.conn.exits.length >= 3);
+
+// Grupos que uma peça pode "puxar" numa missão (nunca gelo nem baldio)
 export function questCandidates(tile) {
   const set = new Set();
-  for (const t of tile.edges) { const g = groupOf(t); if (g !== 'plain') set.add(g); }
+  for (const t of [...tile.edges, ...tile.ground]) { const g = groupOf(t); if (g !== 'plain' && g !== 'grass') set.add(g); }
   return [...set];
 }
 
-const QUEST_BASE = { cyber: 6, solar: 6, rock: 5, toxic: 5, rail: 5, road: 5 };
+// conectores dependem de peças certas aparecerem: alvo menor que o das regiões
+const QUEST_BASE = { cyber: 6, solar: 6, rock: 5, toxic: 4, rail: 3, road: 3 };
+// quanto a missão pede para CRESCER além da maior formação que o grupo já tem no tabuleiro
+const QUEST_GROW = { cyber: 3, solar: 3, rock: 3, toxic: 2, rail: 2, road: 2 };
 
-export function makeQuest(rng, tile) {
+// Progressão: o nível sobe a cada QUEST_LEVEL_EVERY peças colocadas. Sem isso o jogo virava
+// infinito no fim: a missão "ligue 3+ trilhos" caía numa malha de 10 e cumpria na hora, pagando
+// 3 peças — e as missões respondiam por ~93% das peças extras de uma partida. Agora:
+//  - o alvo é RELATIVO ao que o jogador já tem: maior formação do grupo + crescimento, e o
+//    crescimento sobe com o nível. Ligar a bandeira à rede grande continua valendo (regra "N+"),
+//    mas só cumpre quando ela passar do tamanho de hoje;
+//  - a recompensa em PEÇAS encolhe com o nível (no fim, 1 peça por missão), enquanto os PONTOS
+//    sobem: quem joga bem continua sendo premiado, mas no placar, e a partida termina.
+export const QUEST_LEVEL_EVERY = 15;
+export const questLevel = (placed) => Math.floor(placed / QUEST_LEVEL_EVERY);
+const rewardTiles = (grow, level) => Math.max(1, Math.min(3, 1 + Math.floor(grow / 3)) - Math.floor(level / 2));
+
+// Dois tipos de missão:
+//  - 'region': conecte `target` peças do grupo a partir da bandeira (progress = peças ligadas).
+//    Sempre "N+": ligar a formação a uma rede que já passou do número CUMPRE a missão — o jogador
+//    fez a malha se conectar, e isso precisa ser recompensado, não punido.
+//  - 'city':   a cidade ligada à bandeira deve somar `target` prédios (progress = prédios somados).
+//    Também é sempre "N+": cidade não tem teto de prédios. Passar de 22 para 25 CUMPRE a missão;
+//    ela só se perde quando a formação fica cercada e não tem mais como crescer.
+//    `buildings` é quantos prédios a própria peça da bandeira tem (vem da geometria).
+// `weights` (opcional): quanto cada grupo está "vivo" na borda do tabuleiro — a missão puxa
+// o grupo que o jogador tem como crescer, em vez de um que vai empacar com progresso 1.
+// `ctx` (opcional): { level, have: {grupo: maior formação}, city: prédios da maior cidade }.
+export function makeQuest(rng, tile, buildings = 0, weights = null, ctx = null) {
   const cands = questCandidates(tile);
   if (!cands.length) return null;
-  const group = rng.pick(cands);
-  const target = QUEST_BASE[group] + rng.int(3) - 1;
-  return { group, target, progress: 1, reward: { tiles: 2 + Math.floor(target / 3), points: target * 15 } };
+  const group = weights ? rng.weighted(cands.map((g) => [g, 1 + (weights[g] || 0)])) : rng.pick(cands);
+  const q = makeQuestFor(rng, group, buildings, ctx || { level: 0, have: {}, city: 0 });
+  if (rng.chance(Math.max(0.1, 0.3 - 0.04 * (ctx ? ctx.level : 0)))) q.reward.hints = 1; // às vezes a missão também devolve uma dica
+  return q;
 }
+function makeQuestFor(rng, group, buildings, ctx) {
+  const L = ctx.level, mult = 1 + 0.2 * L; // pontos sobem com o nível
+  if (group === 'cyber' && buildings > 0 && rng.chance(0.55)) {
+    const grow = 9 + rng.int(9) + 3 * L; // prédios além da maior cidade (uma peça cheia de cidade tem ~8-11)
+    const target = Math.max(buildings, ctx.city || 0) + grow;
+    return { kind: 'city', exact: false, group, target, progress: buildings, reward: { tiles: rewardTiles(Math.round(grow / 4), L), points: Math.round(grow * 10 * mult) } };
+  }
+  const grow = QUEST_GROW[group] + rng.int(2) + L;
+  const target = Math.max(QUEST_BASE[group] + rng.int(3) - 1, (ctx.have[group] || 0) + grow);
+  return { kind: 'region', exact: false, group, target, progress: 1, reward: { tiles: rewardTiles(grow, L), points: Math.round(Math.max(grow, target / 2) * 20 * mult) } };
+}
+// "8+" (pelo menos); `exact` ficou só por compatibilidade com o HUD
+export const questGoal = (q) => `${q.target}${q.exact ? '' : '+'}`;

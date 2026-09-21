@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, edgeAngle } from './hex.js';
-import { RNG } from './rng.js';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, genTile, starterTile, makeStack, makeQuest, isTerminal } from './tilegen.js';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVehicleGeometry, buildDroneGeometry, buildHighlight, pathLength, pointAt, TILE_H } from './tilemesh.js';
-import { initAudio, play, setMuted, isMuted } from './audio.js';
-import { CameraRig, attachInput } from './controls.js';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011f';
+import { RNG } from './rng.js?v=20261011f';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011f';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011f';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011f';
+import { CameraRig, attachInput } from './controls.js?v=20261011f';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -12,11 +12,13 @@ const $ = (id) => document.getElementById(id);
 const prefs = { bloom: localStorage.getItem('pr_bloom') !== '0', lens: localStorage.getItem('pr_lens') !== '0', grain: localStorage.getItem('pr_grain') !== '0' };
 
 // ---------- ícones (SVG inline: a HUD fala por números e símbolos, não por texto) ----------
+// Ícones de missão: o conjunto de 07/10, restaurado a pedido do usuário em 09/10 (as duas reformas
+// seguintes — "fofos" com recortes e silhuetas — foram rejeitadas). Não redesenhar sem ele pedir.
 const ICON_PATHS = {
   cyber: '<path d="M2 22V11h4V6h5v4h4v3h4v9z"/><path fill="#fff" opacity=".6" d="M4 13h1.6v2H4zm0 3.5h1.6v2H4zM8 8h1.6v2H8zm0 3.5h1.6v2H8zm0 3.5h1.6v2H8zm4 0h1.6v2H12zm4 3h1.6v2H16z"/>',
-  city: '<path d="M5 22V3h14v19z"/><path fill="#fff" opacity=".7" d="M8 6h2.2v2.2H8zm5.8 0H16v2.2h-2.2zM8 10.2h2.2v2.2H8zm5.8 0H16v2.2h-2.2zM8 14.4h2.2v2.2H8zm5.8 0H16v2.2h-2.2zM10.6 22v-3.4h2.8V22z"/>',
-  solar: '<path d="M12 22c0-7 3-13 10-16-1 8-5 13-10 16z"/><path d="M12 22C12 15 9 9 2 6c1 8 5 13 10 16z"/><path d="M12 22V9" stroke="#fff" stroke-width="1.4" opacity=".6" fill="none"/>',
-  rock: '<path d="M1 21L9 6l3.2 5.6L15 8l8 13z"/><path fill="#fff" opacity=".9" d="M9 6l2.1 3.7-1.5 1.7L8 9.9 6.9 10.2z"/>',
+  city: '<path d="M4 22V4h16v18z"/><path fill="#fff" opacity=".75" d="M6.5 6.5h2.4v2.4H6.5zm4.3 0h2.4v2.4h-2.4zm4.3 0h2.4v2.4h-2.4zM6.5 10.8h2.4v2.4H6.5zm4.3 0h2.4v2.4h-2.4zm4.3 0h2.4v2.4h-2.4zM6.5 15.1h2.4v2.4H6.5zm4.3 0h2.4v2.4h-2.4zm4.3 0h2.4v2.4h-2.4z"/><path d="M2 22h20v1.5H2z"/>',
+  solar: '<path d="M12 23V12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/><path d="M12 14.5C8.5 14 3 12 2 3.5c6.5.6 10 5 10 11z"/><path d="M12 13c3.5-.5 9-2.5 10-11-6.5.6-10 5-10 11z"/><path d="M11 13 4.5 6.5M13 11.5 19.5 5" stroke="#fff" stroke-width="1" opacity=".5" fill="none"/>',
+  rock: '<path d="M1.5 21.5h21V19h-21zM4 19h16v-2.6H4zM6.6 16.4h10.8v-2.6H6.6zM9.2 13.8h5.6v-2.6H9.2zM10.8 11.2h2.4V8.4h-2.4z"/><path fill="#fff" opacity=".55" d="M4 18.4h16v.7H4zM6.6 15.8h10.8v.7H6.6zM9.2 13.2h5.6v.7H9.2z"/>',
   toxic: '<path d="M12 2s7 8 7 13a7 7 0 0 1-14 0c0-5 7-13 7-13z"/><circle cx="9.4" cy="15" r="1.7" fill="#fff" opacity=".6"/>',
   rail: '<path d="M2 16V9a5 5 0 0 1 5-5h8c4.5 0 8 3.5 9 8v4z"/><path fill="#fff" opacity=".65" d="M5 8h4v4H5zm6 0h4v4h-4z"/><circle cx="7" cy="19.5" r="2.2"/><circle cx="17" cy="19.5" r="2.2"/>',
   road: '<path d="M8.5 2h7l6 20H2.5z"/><path d="M12 4v3.5M12 10v4M12 16.5v5" stroke="#fff" stroke-width="1.9" stroke-linecap="round" opacity=".85" fill="none"/>',
@@ -33,7 +35,7 @@ const ICON_PATHS = {
 };
 const icon = (name, size = 18, color = 'currentColor', cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="${color}" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
 const questIcon = (q) => (q.kind === 'city' ? 'city' : q.group);
-const questLeft = (q) => q.target - q.progress;
+const questLeft = (q) => Math.max(0, q.target - q.progress);
 
 // ---------- cena ----------
 const canvas = $('scene');
@@ -70,6 +72,14 @@ const litMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
 const ghostLit = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.5 });
 const ghostGlow = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5 });
+// Achado oculto: a peça inteira em cinza, "desligada". Dessatura mantendo o claro/escuro, então a
+// silhueta continua legível — a cor o jogador deduz pelo ambiente ao redor, e só vê ao encostar nela.
+function greyed(mat, lift, k) {
+  mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>\n  diffuseColor.rgb = vec3(${lift.toFixed(2)} + ${k.toFixed(2)} * dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)));`); };
+  return mat;
+}
+const hiddenLit = greyed(new THREE.MeshLambertMaterial({ vertexColors: true }), 0.3, 0.45);
+const hiddenGlow = greyed(new THREE.MeshBasicMaterial({ vertexColors: true }), 0.22, 0.2);
 // Água do esgoto: ondulações procedurais escuras com linhas neon
 const WATER_VS = `varying vec3 vWorld;
 #include <fog_pars_vertex>
@@ -102,9 +112,33 @@ function makeWaterMat(opacity) {
   });
 }
 const waterMat = makeWaterMat(1), waterGhost = makeWaterMat(0.5);
+// Aurora: folha aditiva que clareia na barra de baixo e esmaece para cima, com raios verticais
+// correndo devagar e a cortina ondulando de lado. Três paletas (verde→ciano, verde→violeta, ciano→rosa).
+const AURORA_VS = `attribute vec2 perp; attribute float aph; uniform float time; varying vec2 vUv; varying float ph;
+void main(){ vUv = uv; ph = aph; vec3 p = position;
+  float w = sin(uv.x * 9.0 + time * 0.7 + ph) * 0.025 + sin(uv.x * 3.1 - time * 0.45 + ph * 2.0) * 0.03;
+  p.xz += perp * w * (0.35 + uv.y);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`;
+const AURORA_FS = `uniform float time; varying float ph; uniform vec3 c0; uniform vec3 c1; varying vec2 vUv;
+float hash(float n){ return fract(sin(n) * 43758.5453); }
+float noise(float x){ float i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(hash(i), hash(i + 1.0), f); }
+void main(){
+  float u = vUv.x, v = vUv.y;
+  float rays = 0.45 + 0.55 * noise(u * 34.0 + time * 0.6 + ph * 5.0) * noise(u * 11.0 - time * 0.35 + ph);
+  float edge = smoothstep(0.0, 0.16, u) * smoothstep(1.0, 0.84, u);
+  float a = smoothstep(0.0, 0.07, v) * pow(1.0 - v, 1.6) * edge * rays;
+  float hem = smoothstep(0.0, 0.05, v) * (1.0 - smoothstep(0.05, 0.22, v)); // barra de baixo, mais viva
+  vec3 col = mix(c0, c1, smoothstep(0.15, 0.95, v)) * (0.8 + hem * 1.1);
+  gl_FragColor = vec4(col, min(1.0, a * 1.25));
+}`;
+const AURORA_COLS = [['#38ff9b', '#22f3ff'], ['#38ff9b', '#b66bff'], ['#22f3ff', '#ff5fd2']];
+const auroraMats = AURORA_COLS.map((_, hue) => new THREE.ShaderMaterial({
+    uniforms: { time: { value: 0 }, c0: { value: new THREE.Color(AURORA_COLS[hue][0]) }, c1: { value: new THREE.Color(AURORA_COLS[hue][1]) } },
+    vertexShader: AURORA_VS, fragmentShader: AURORA_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  }));
 const boltMats = {};
 const boltMat = (c) => boltMats[c] || (boltMats[c] = new THREE.MeshBasicMaterial({ color: c }));
-const ringGeo = buildSlotRing(), discGeo = buildHexDisc(), rotorGeo = buildRotorGeometry();
+const ringGeo = buildSlotRing(), discGeo = buildHexDisc(), rotorGeo = buildRotorGeometry(), vaxRotorGeo = buildVaxRotorGeometry();
 const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, depthWrite: false });
 const ringSel = {
   ok: new THREE.MeshBasicMaterial({ color: 0x7dff9a, transparent: true, opacity: 0.95, depthWrite: false }),
@@ -112,7 +146,22 @@ const ringSel = {
   bad: new THREE.MeshBasicMaterial({ color: 0xff5c7a, transparent: true, opacity: 0.95, depthWrite: false }),
   none: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }),
 };
+const EDGE_COLORS = { plain: 0x6fd2f5, grass: 0xffd98a, cyber: 0xff2bd6, solar: 0x7dff4a, rock: 0xff9a3c, pool: 0x2dffb8, sewage: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x3a1f4f, transparent: true, opacity: 0.22, depthWrite: false });
+// Conector só encosta em conector do mesmo tipo (estrada com estrada, trilho com trilho...): casa onde
+// nenhuma rotação cabe é proibida e fica sutil — escurecida, com uma marquinha vermelha curta só na(s)
+// borda(s) que causam o conflito (nada de X nem anel vermelho, que poluíam o tabuleiro); o fantasma não
+// vai até ela. O convite continua: casas onde a peça na mão CONTINUA uma rede aberta ganham contorno na
+// cor do conector, pulsando, e continuar a rede vale bônus (LINK_PTS).
+const slotBlockedRing = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, depthWrite: false }); // contorno quase sumido (faded)
+const slotBlockedFill = new THREE.MeshBasicMaterial({ color: 0x07040d, transparent: true, opacity: 0.5, depthWrite: false });
+const slotTickMat = new THREE.MeshBasicMaterial({ color: 0xff3b5c, transparent: true, opacity: 0.55, depthWrite: false });
+const tickGeo = new THREE.BoxGeometry(0.36, 0.006, 0.07);
+const slotLinkRing = {}, slotLinkFill = {};
+for (const t of ['sewage', 'rail', 'road']) {
+  slotLinkRing[t] = new THREE.MeshBasicMaterial({ color: EDGE_COLORS[t], transparent: true, opacity: 0.7, depthWrite: false });
+  slotLinkFill[t] = new THREE.MeshBasicMaterial({ color: EDGE_COLORS[t], transparent: true, opacity: 0.1, depthWrite: false });
+}
 
 const BLOOM = 1, bloomLayer = new THREE.Layers(); bloomLayer.set(BLOOM);
 const boardGroup = new THREE.Group(), slotGroup = new THREE.Group(), ghostGroup = new THREE.Group(), fxGroup = new THREE.Group();
@@ -120,8 +169,7 @@ scene.add(boardGroup, slotGroup, ghostGroup, fxGroup);
 const ghostShadow = new THREE.Mesh(discGeo, shadowMat); ghostShadow.position.y = TILE_H + 0.008; ghostShadow.visible = false; scene.add(ghostShadow);
 // Indicadores de encaixe: em cada lado compatível, o friso do hexágono brilha/vibra na cor do terreno
 // e um flash vertical da mesma cor pulsa na lateral (na junta com a peça vizinha).
-const EDGE_COLORS = { plain: 0x6fd2f5, grass: 0xb8ff5c, cyber: 0xff2bd6, solar: 0x6cf04a, rock: 0xff9a3c, pool: 0x2dffb8, sewage: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
-const GROUP_HEX = { plain: 0x6fd2f5, grass: 0xb8ff5c, cyber: 0xff2bd6, solar: 0x6cf04a, rock: 0xff9a3c, toxic: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
+const GROUP_HEX = { plain: 0x6fd2f5, grass: 0xffd98a, cyber: 0xff2bd6, solar: 0x7dff4a, rock: 0xff9a3c, toxic: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
 const stripGeo = new THREE.BoxGeometry(0.86, 0.014, 0.07);
 const flashGeo = new THREE.PlaneGeometry(0.92, 0.3);
 function makeSeamSet() {
@@ -146,9 +194,9 @@ const seamGhost = makeSeamSet(), seamPlaced = makeSeamSet();
 function setSeamStates(set, ev) {
   ev.sides.forEach((st, i) => {
     const it = set.items[i]; it.st = st;
-    const hex = st === -1 ? 0xff3b5c : st === 2 ? 0x55506a : (EDGE_COLORS[ev.types[i]] || 0xffffff);
+    const hex = st === -1 ? 0xff3b5c : st === 2 ? 0x55506a : st === 3 ? 0xdfe3ee : (EDGE_COLORS[ev.types[i]] || 0xffffff);
     it.base.setHex(hex);
-    it.strip.visible = st !== 0; it.mirror.visible = st === 1 || st === -1; it.flash.visible = st === 1 || st === -1;
+    it.strip.visible = st !== 0; it.mirror.visible = st === 1; it.flash.visible = st === 1;
   });
   set.group.visible = true;
 }
@@ -167,10 +215,10 @@ function updateSeams(set, now, dt) {
       it.flash.material.opacity = Math.min(1, f) * fade;
       it.flash.position.y = it.y0 + (Math.random() - 0.5) * 0.012; it.flash.scale.set(1 + 0.04 * Math.sin(t * 31 + it.ph), 1 + 0.1 * Math.sin(t * 23 + it.ph), 1);
       it.strip.scale.y = 1 + 1.5 * Math.abs(Math.sin(t * 13 + it.ph)); it.mirror.scale.y = it.strip.scale.y;
-    } else if (it.st === -1) { // proibido: estrobo vermelho
-      const on = Math.sin(t * 40) > 0 ? 1 : 0.15;
-      it.strip.material.color.copy(it.base).multiplyScalar(on * 1.3); it.strip.material.opacity = fade;
-      it.flash.material.color.copy(it.base); it.flash.material.opacity = on * 0.9 * fade; it.flash.position.y = it.y0;
+    } else if (it.st === -1) { // lado que não cabe: vermelho baixo respirando devagar (sem estrobo, sem flash)
+      it.strip.material.color.copy(it.base).multiplyScalar(0.6 + 0.25 * Math.sin(t * 3 + it.ph)); it.strip.material.opacity = 0.7 * fade; it.strip.scale.y = 1;
+    } else if (it.st === 3) { // encosta num achado oculto: friso branco respirando devagar, sem resposta
+      it.strip.material.color.copy(it.base).multiplyScalar(0.55 + 0.45 * Math.sin(t * 2.4 + it.ph)); it.strip.material.opacity = 0.85 * fade; it.strip.scale.y = 1;
     } else { // não casa: friso apagado
       it.strip.material.color.copy(it.base); it.strip.material.opacity = 0.5 * fade; it.strip.scale.y = 1;
     }
@@ -201,15 +249,17 @@ function placeHi(m, t, group) {
   m.position.set(w.x, TILE_H + 0.012, w.z); m.rotation.y = (-t.rot * Math.PI) / 3; m.userData.group = group;
 }
 // grupos de formação que a peça na casa (q,r) com esta avaliação tocaria, e as casas de cada um
-function formationGroups(q, r, ev) {
+function formationGroups(q, r, ev, tile = S.current, rot = S.rot, all = false) { // `all`: inclui Snowpunk/Baldio (prévia de missão)
   const byGroup = new Map();
   for (let i = 0; i < 6; i++) {
     if (ev.sides[i] !== 1) continue;
-    const g = groupOf(ev.types[i]);
-    if (g === 'plain' || g === 'grass') continue; // gelo e baldio não formam "formação": não vale realçar meio tabuleiro
-    const nk = key(q + DIRS[i][0], r + DIRS[i][1]);
-    let set = byGroup.get(g); if (!set) { set = new Set(); byGroup.set(g, set); }
-    if (!set.has(nk)) for (const k of regionKeys(nk, g)) set.add(k);
+    const nk = key(q + DIRS[i][0], r + DIRS[i][1]), nb = S.tiles.get(nk);
+    for (const g of sideGroups(tile, local(i, rot))) { // a estrada na cidade liga a rede E a cidade
+      if (!all && (g === 'plain' || g === 'grass')) continue; // no REALCE, gelo e baldio ficam de fora (acenderia meio tabuleiro); nas missões contam
+      if (!nb || !sideHas(nb, opp(i), g)) continue;
+      let set = byGroup.get(g); if (!set) { set = new Set(); byGroup.set(g, set); }
+      if (!set.has(nk)) for (const k of regionKeys(nk, g)) set.add(k);
+    }
   }
   return byGroup;
 }
@@ -223,16 +273,15 @@ function showFormation(q, r, ev) {
 function hideFormation() { releaseHi(hiHover); ghostHi.clear(); formation.groups = []; }
 function sealFormation(q, r, ev) { // ao colocar: a formação inteira (com a peça nova) dá um clarão e apaga
   releaseHi(hiSealed);
-  const byGroup = formationGroups(q, r, ev);
-  for (const [g, keys] of byGroup) for (const k of keys) { const t = S.tiles.get(k); if (!t) continue; const m = takeHi(); placeHi(m, t, g); hiSealed.push(m); }
-  const t = S.tiles.get(key(q, r));
+  const t = S.tiles.get(key(q, r)), byGroup = t ? formationGroups(q, r, ev, t.tile, t.rot) : new Map();
+  for (const [g, keys] of byGroup) for (const k of keys) { const t2 = S.tiles.get(k); if (!t2) continue; const m = takeHi(); placeHi(m, t2, g); hiSealed.push(m); }
   if (t) for (const g of byGroup.keys()) { const m = takeHi(); placeHi(m, t, g); hiSealed.push(m); }
   formation.seal = byGroup.size ? 0 : -1;
   hideFormation();
 }
 function updateFormation(now, dt) {
   const t = now * 0.001;
-  const hoverK = 0.16 + 0.1 * Math.sin(t * 5.5) + 0.03 * Math.sin(t * 17);
+  const hoverK = 0.11 + 0.07 * Math.sin(t * 5.5) + 0.02 * Math.sin(t * 17);
   const sealK = formation.seal >= 0 ? Math.max(0, 1 - formation.seal / 0.8) : 0;
   if (formation.seal >= 0) { formation.seal += dt; if (sealK <= 0) { formation.seal = -1; releaseHi(hiSealed); } }
   for (const g in hiMats) hiMats[g].opacity = Math.max(hoverK, sealK * 0.6);
@@ -293,15 +342,16 @@ function setupPost() {
   finalComposer = new THREE.EffectComposer(renderer);
   finalComposer.addPass(rp); finalComposer.addPass(mixPass); finalComposer.addPass(lensPass);
 }
+const unbloomed = []; // sprites que não podem brilhar (névoa): somem só durante o passe do bloom
 function renderFrame() {
   renderer.autoClear = true;
   if (!finalComposer) { renderer.render(scene, camera); return; }
   mixPass.enabled = prefs.bloom; lensPass.enabled = prefs.lens || prefs.grain;
   if (prefs.bloom) {
-    scene.traverse((o) => { if ((o.isMesh || o.isPoints) && !bloomLayer.test(o.layers)) { swapped.set(o, o.material); o.material = darkMat; } });
+    scene.traverse((o) => { if ((o.isMesh || o.isPoints) && !bloomLayer.test(o.layers)) { swapped.set(o, o.material); o.material = darkMat; } else if (o.userData.noBloom && o.visible) { o.visible = false; unbloomed.push(o); } });
     scene.background = BLACK; scene.fog.color = BLACK;
     bloomComposer.render();
-    for (const [o, m] of swapped) o.material = m; swapped.clear();
+    for (const [o, m] of swapped) o.material = m; swapped.clear(); for (const o of unbloomed) o.visible = true; unbloomed.length = 0;
     scene.background = BG_TEX; scene.fog.color = FOGC;
   }
   if (lensPass.enabled) { // quanto mais perto das peças, mais evidente a lente
@@ -336,7 +386,7 @@ function makeHalo(scale) {
   sp.scale.set(scale, scale, 1); sp.renderOrder = -10;
   return sp;
 }
-const stackHalo = makeHalo(4.2), curHalo = makeHalo(3.0);
+const stackHalo = makeHalo(3.0), curHalo = makeHalo(3.0);
 uiScene.add(stackHalo, curHalo); curHalo.position.set(50 - 1.0, 0.1, -1.0); // atrás da peça, do ponto de vista da câmera
 let stackTopY = 0, stackCamY = 0, curTileGroup = null, stackTopGroup = null;
 const uiAnims = [];
@@ -366,8 +416,13 @@ function liftTopOfStack() {
   stackRoot.remove(top); uiScene.add(top); stackTopGroup = null;
   uiAnims.push({ obj: top, from: top.position.y, to: top.position.y + 1.4, t: 0, dur: 0.38, kind: 'lift' });
 }
+function setBadge(id, tile) {
+  const el = $(id), n = tile ? buildingsOf(tile) : 0;
+  el.hidden = !n; if (n) el.innerHTML = `${icon('city', 13)}${n}`;
+}
 function refreshCurrentPreview() {
   curRoot.clear(); curTileGroup = null;
+  setBadge('cur-bld', S.current); setBadge('next-bld', S.stack[0]);
   if (!S.current) return;
   curTileGroup = makeTileGroup(S.current, litMat, glowMat, false);
   curTileGroup.rotation.y = (-S.rot * Math.PI) / 3;
@@ -386,10 +441,10 @@ function renderUI() {
   };
   stackCamY += (stackTopY - stackCamY) * 0.12;
   // câmera enquadra a peça que paira inteira (com os arranha-céus) e ainda mostra a seguinte por baixo
-  stackCam.position.set(3.3, stackCamY + 3.5, 3.3); stackCam.lookAt(0, stackCamY + FLOAT_H + 0.22, 0);
-  stackHalo.position.set(-1.0, stackCamY + 0.35, -1.0);
+  stackCam.position.set(3.3, stackCamY + 3.6, 3.3); stackCam.lookAt(0, stackCamY + FLOAT_H + 0.34, 0);
+  stackHalo.position.set(-0.9, stackCamY + FLOAT_H + 0.1, -0.9);
   curCam.position.set(50 + 2.4, 2.9, 2.4); curCam.lookAt(50, 0.36, 0);
-  draw($('stack-area'), stackCam, 34, 30); draw($('current-area'), curCam, 33, 26);
+  draw($('stack-area'), stackCam, 40, 30); draw($('current-area'), curCam, 33, 26);
   renderer.setScissorTest(false); renderer.setViewport(0, 0, W, Hh); renderer.autoClear = true;
 }
 // Anéis radiais saindo do centro do hexágono: chamam a atenção para uma peça com missão (pilha, mão e tabuleiro)
@@ -397,8 +452,8 @@ const ringPulseGeo = (() => { const g = new THREE.RingGeometry(0.9, 1.0, 6, 1); 
 const ringPulses = [];
 let ringAcc = 0;
 function spawnRingPulse(parent, x, y, z, color, bloom = false) {
-  const m = new THREE.Mesh(ringPulseGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
-  m.position.set(x, y, z); m.scale.setScalar(0.25); if (bloom) m.layers.enable(BLOOM);
+  const m = new THREE.Mesh(ringPulseGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+  m.position.set(x, y, z); m.scale.setScalar(0.25); m.renderOrder = 5; if (bloom) m.layers.enable(BLOOM);
   parent.add(m); ringPulses.push({ m, parent, t: 0, dur: 1.15 });
 }
 function updateRingPulses(dt) {
@@ -440,9 +495,12 @@ const dust = (() => {
 const S = {
   tiles: new Map(), slots: new Map(), stack: [], current: null, rot: 0, selected: null, ghostSolid: true,
   score: 0, placed: 0, perfects: 0, questsDone: 0, questsLost: 0, quests: [], over: false, started: false, rng: new RNG(Date.now() >>> 0),
-  best: +(localStorage.getItem('pr_best') || 0), tips: new Set(), lowWarned: false, tileList: [], hints: 5, undo: null, sinceQuest: 0, pendingGain: 0,
+  best: +(localStorage.getItem('pr_best') || 0), tips: new Set(), coached: 0, lowWarned: false, tileList: [], hints: 5, undo: null, sinceQuest: 0, pendingGain: 0, relics: [], sinceRelic: 0, gains: {},
 };
 const HINTS_PER_GAME = 5, QUEST_CAP = 4;
+// no começo menos missões abertas ao mesmo tempo (3 nas primeiras 40 peças, depois 4): o jogador sente que dá conta
+const questCap = () => (questLevel(S.placed) < 2 ? 3 : QUEST_CAP);
+const gain = (src, n = 1) => { S.gains[src] = (S.gains[src] || 0) + n; }; // de onde vêm as peças extras (balanceamento)
 const anims = [], particles = [], vehicles = [];
 let ghostAnim = null, ambAcc = 0;
 const particleGeo = new THREE.BoxGeometry(0.07, 0.07, 0.07);
@@ -460,7 +518,7 @@ function makeVehicleMesh(type, color, lit, glow) {
 }
 function placeVehicle(v, route) {
   const p = pointAt(route.pts, v.s), nx = -Math.sin(p.a), nz = Math.cos(p.a), off = v.type === 'car' ? 0.078 * v.dir : 0;
-  v.mesh.position.set(p.x + nx * off, TILE_H, p.z + nz * off);
+  v.mesh.position.set(p.x + nx * off, TILE_H + routeLift(route, p.x, p.z), p.z + nz * off);
   v.mesh.rotation.y = -(v.dir > 0 ? p.a : p.a + Math.PI);
 }
 // Raio elétrico: fita em zigue-zague regenerada a cada poucos frames
@@ -495,17 +553,21 @@ function makeTileGroup(tile, lit, glow, live) {
     if (a.type === 'rotor') {
       const pivot = new THREE.Group(); pivot.position.set(a.x, a.y, a.z);
       if (a.axis === 'y') pivot.rotation.z = Math.PI / 2; else pivot.rotation.y = -a.a;
-      const rotor = new THREE.Mesh(rotorGeo, lit); rotor.userData.speed = a.speed; rotor.rotation.x = Math.random() * 6; rotor.scale.setScalar(a.scale || 1);
+      const rotor = new THREE.Mesh(a.geo === 'vax' ? vaxRotorGeo : rotorGeo, lit); rotor.userData.speed = a.speed; rotor.rotation.x = Math.random() * 6; rotor.scale.setScalar(a.scale || 1);
       pivot.add(rotor); g.add(pivot); g.userData.rotors.push(rotor);
     } else if (a.type === 'bolt') {
       const m = makeBolt(a, boltMat(a.color)); g.add(m); g.userData.bolts.push(m);
     } else if (a.type === 'drone') {
-      const dg = droneGeos[a.color] || (droneGeos[a.color] = buildDroneGeometry(a.color));
+      const gk = (a.geo || 'drone') + a.color, dg = droneGeos[gk] || (droneGeos[gk] = a.geo === 'glyph' ? buildGlyphGeometry(a.color) : buildDroneGeometry(a.color));
       const dm = new THREE.Group(); const dgl = new THREE.Mesh(dg.glow, glow); dgl.layers.enable(BLOOM); dm.add(new THREE.Mesh(dg.lit, lit), dgl);
       dm.position.set(a.x + a.r, a.y, a.z); g.add(dm); g.userData.drones.push({ mesh: dm, a, ph: Math.random() * 6.28 });
-    } else if (geo.routes && geo.routes.length) {
-      const ri = (carIdx + (a.type === 'train' ? 0 : 1)) % geo.routes.length, route = geo.routes[ri], L = route.L, mesh = makeVehicleMesh(a.type, a.color, lit, glow);
-      const v = { type: a.type, mesh, route: ri, dir: a.dir, speed: a.type === 'train' ? 1.5 : 0.75, s: a.type === 'train' ? L * 0.5 : L * (0.3 + 0.4 * (carIdx++ % 2)), wait: 0 };
+    } else if (a.type === 'aurora') {
+      const am = new THREE.Mesh(a._geo || (a._geo = buildAuroraGeometry(a)), auroraMats[a.hue]); am.layers.enable(BLOOM); am.renderOrder = 3; g.add(am);
+      am.userData.aurora = true;
+    } else if (geo.routes && geo.routes.some((r) => r.type === 'road')) {
+      const roadIdx = geo.routes.map((r, i) => (r.type === 'road' ? i : -1)).filter((i) => i >= 0);
+      const ri = roadIdx[(carIdx + 1) % roadIdx.length], route = geo.routes[ri], L = route.L, mesh = makeVehicleMesh(a.type, a.color, lit, glow);
+      const v = { type: a.type, mesh, route: ri, dir: a.dir, speed: 0.75, s: L * (0.3 + 0.4 * (carIdx++ % 2)), wait: 0 };
       placeVehicle(v, route); g.add(mesh);
       if (live) { v.tileKey = null; g.userData.vehicles = g.userData.vehicles || []; g.userData.vehicles.push(v); }
     }
@@ -514,8 +576,10 @@ function makeTileGroup(tile, lit, glow, live) {
 }
 
 // ---------- regras ----------
-function evalPlacement(q, r, tile, rot) {
-  let matches = 0, neighbors = 0, legal = true;
+// `peek`: só na hora de colocar de verdade. Antes disso, o lado que dá para um achado oculto fica
+// em aberto (estado 3): sem prévia de pontos nem friso colorido — senão a prévia entregava o bioma.
+function evalPlacement(q, r, tile, rot, peek = false) {
+  let matches = 0, neighbors = 0, links = 0, legal = true;
   const matchedTypes = [], sides = [], types = [];
   for (let i = 0; i < 6; i++) {
     const nb = S.tiles.get(key(q + DIRS[i][0], r + DIRS[i][1]));
@@ -523,22 +587,29 @@ function evalPlacement(q, r, tile, rot) {
     if (!nb) { sides.push(0); continue; }
     neighbors++;
     const mine = edgeAt(tile, rot, i), theirs = edgeAt(nb.tile, nb.rot, opp(i));
-    if (compatible(mine, theirs)) { matches++; matchedTypes.push(mine); sides.push(1); }
-    else if (isConnector(mine) || isConnector(theirs)) { legal = false; sides.push(-1); }
+    if (nb.tile.hidden && !peek) { if (isConnector(mine)) { legal = false; sides.push(-1); } else sides.push(3); continue; }
+    if (compatible(mine, theirs)) { matches++; matchedTypes.push(mine); sides.push(1); if (isConnector(mine) && isConnector(theirs)) links++; } // rede só continua em rede (esgoto na lagoa encaixa, mas não é "rede continua")
+    else if (isConnector(mine) || isConnector(theirs)) { legal = false; sides.push(-1); } // conector interrompido: proibido (friso vermelho baixo)
     else sides.push(2);
   }
-  return { legal, matches, neighbors, matchedTypes, sides, types, perfect: neighbors === 6 && matches === 6 };
+  // `links` = conectores que a peça continua
+  return { legal, matches, neighbors, links, matchedTypes, sides, types, perfect: neighbors === 6 && matches === 6 };
 }
+// lado local de uma aresta do mundo
+const local = (i, rot) => (((i - rot) % 6) + 6) % 6;
+// o lado `i` (do mundo) da peça colocada pertence ao grupo? Numa peça com conector, o lado de saída
+// tem as DUAS qualidades: a estrada que cruza a cidade conta para a rodovia e para a cidade.
+const sideHas = (t, i, group) => sideGroups(t.tile, local(i, t.rot)).includes(group);
 // casas ligadas a `startKey` pelo grupo (região ou rede de conectores)
 function regionKeys(startKey, group) {
   const seen = new Set([startKey]), stack = [startKey];
   while (stack.length) {
     const k = stack.pop(), t = S.tiles.get(k); if (!t) continue;
     for (let i = 0; i < 6; i++) {
-      if (groupOf(edgeAt(t.tile, t.rot, i)) !== group) continue;
+      if (!sideHas(t, i, group)) continue;
       const nk = key(t.q + DIRS[i][0], t.r + DIRS[i][1]), nb = S.tiles.get(nk);
       if (!nb || seen.has(nk)) continue;
-      if (groupOf(edgeAt(nb.tile, nb.rot, opp(i))) !== group) continue;
+      if (!sideHas(nb, opp(i), group)) continue;
       seen.add(nk); stack.push(nk);
     }
   }
@@ -548,7 +619,7 @@ function regionKeys(startKey, group) {
 function regionOpen(keys, group) {
   for (const k of keys) {
     const t = S.tiles.get(k);
-    for (let i = 0; i < 6; i++) if (groupOf(edgeAt(t.tile, t.rot, i)) === group && !S.tiles.has(key(t.q + DIRS[i][0], t.r + DIRS[i][1]))) return true;
+    for (let i = 0; i < 6; i++) if (sideHas(t, i, group) && !S.tiles.has(key(t.q + DIRS[i][0], t.r + DIRS[i][1]))) return true;
   }
   return false;
 }
@@ -558,7 +629,7 @@ function bestPlacement(tile, cells) {
     for (let rot = 0; rot < 6; rot++) {
       const ev = evalPlacement(cell.q, cell.r, tile, rot);
       if (!ev.legal) continue;
-      const score = ev.matches * 10 + (ev.perfect ? 60 : 0) + (ev.matches === ev.neighbors ? 3 : 0) + S.rng.float();
+      const score = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + (ev.matches === ev.neighbors ? 3 : 0) + Math.random(); // desempate FORA do S.rng: dica/pré-posição não podem mudar a pilha (desafio diário)
       if (!best || score > best.score) best = { q: cell.q, r: cell.r, rot, score, ev };
     }
   }
@@ -567,7 +638,13 @@ function bestPlacement(tile, cells) {
 
 // ---------- tabuleiro ----------
 function addTile(q, r, tile, rot, animate, ev) {
-  const group = makeTileGroup(tile, litMat, glowMat, true);
+  const group = makeTileGroup(tile, tile.hidden ? hiddenLit : litMat, tile.hidden ? hiddenGlow : glowMat, true);
+  if (tile.hidden) { // nada de água colorida, aurora, raio nem bloom: tudo apagado até alguém encostar
+    const drop = [];
+    group.traverse((m) => { if (!m.isMesh) return; m.layers.disable(BLOOM); if (m.material === waterMat) m.material = hiddenLit; else if (m.userData.aurora || m.userData.bolt) drop.push(m); });
+    for (const m of drop) m.parent.remove(m);
+    group.userData.bolts = [];
+  }
   const w = toWorld(q, r), k = key(q, r);
   group.position.set(w.x, animate ? ghostGroup.position.y : 0, w.z);
   group.rotation.y = (-rot * Math.PI) / 3;
@@ -576,41 +653,54 @@ function addTile(q, r, tile, rot, animate, ev) {
   S.tileList = [...S.tiles.values()];
   for (const v of group.userData.vehicles || []) { v.tileKey = k; vehicles.push(v); }
   if (animate) anims.push({ obj: group, prop: 'drop', t: 0, dur: 0.46, y0: ghostGroup.position.y, w, ev, impact: false });
+  if (!tile.hidden) spawnFauna(k);
 }
 function removeTile(k) {
   const t = S.tiles.get(k); if (!t) return null;
   boardGroup.remove(t.group); S.tiles.delete(k); S.tileList = [...S.tiles.values()];
   for (let i = vehicles.length - 1; i >= 0; i--) if (vehicles[i].tileKey === k) vehicles.splice(i, 1);
+  for (let i = trains.length - 1; i >= 0; i--) if (trains[i].tileKey === k) removeTrain(i);
+  for (let i = fauna.length - 1; i >= 0; i--) if (fauna[i].k === k) dropFlock(i);
   return t;
 }
 function refreshSlots() {
   const wanted = new Map();
   for (const t of S.tiles.values())
     for (const d of DIRS) { const q = t.q + d[0], r = t.r + d[1], k = key(q, r); if (!S.tiles.has(k) && !wanted.has(k)) wanted.set(k, { q, r }); }
-  for (const [k, s] of S.slots) if (!wanted.has(k)) { slotGroup.remove(s.mesh); S.slots.delete(k); }
+  for (const [k, s] of S.slots) if (!wanted.has(k)) { slotGroup.remove(s.mesh, s.fill, s.ticks); S.slots.delete(k); }
   for (const [k, c] of wanted) if (!S.slots.has(k)) {
     const m = new THREE.Mesh(ringGeo, ringMat), w = toWorld(c.q, c.r);
     m.position.set(w.x, TILE_H + 0.006, w.z);
-    slotGroup.add(m); S.slots.set(k, { q: c.q, r: c.r, mesh: m });
+    const fill = new THREE.Mesh(discGeo, slotLinkFill.road); fill.position.set(w.x, TILE_H + 0.004, w.z); fill.visible = false;
+    const ticks = new THREE.Group(); ticks.position.set(w.x, TILE_H + 0.008, w.z); ticks.visible = false;
+    for (let i = 0; i < 6; i++) { // marquinha curta no meio de cada borda; só as do conflito aparecem
+      const a = edgeAngle(i), tk = new THREE.Mesh(tickGeo, slotTickMat);
+      tk.position.set(Math.cos(a) * 0.74, 0, Math.sin(a) * 0.74); tk.rotation.y = -(a + Math.PI / 2); ticks.add(tk);
+    }
+    slotGroup.add(m, fill, ticks); S.slots.set(k, { q: c.q, r: c.r, mesh: m, fill, ticks, status: 'ok', bad: [] });
   }
+  slotCache = '';
   if (S.selected && !S.slots.has(key(S.selected.q, S.selected.r))) S.selected = null;
 }
 function clearBoard() {
   for (const t of S.tiles.values()) boardGroup.remove(t.group);
-  for (const s of S.slots.values()) slotGroup.remove(s.mesh);
+  for (const s of S.slots.values()) slotGroup.remove(s.mesh, s.fill, s.ticks);
   for (const p of particles) fxGroup.remove(p.m);
-  S.tiles.clear(); S.slots.clear(); S.tileList = []; vehicles.length = 0; particles.length = 0; anims.length = 0; fx.sides = 0; hoverFx.k = 0; hoverFx.target = 0;
+  while (fauna.length) dropFlock(fauna.length - 1);
+  S.tiles.clear(); S.slots.clear(); S.tileList = []; vehicles.length = 0; clearTrains(); particles.length = 0; anims.length = 0; fx.sides = 0; hoverFx.k = 0; hoverFx.target = 0;
   ghostGroup.clear(); ghostShadow.visible = false; seamGhost.group.visible = false; seamPlaced.group.visible = false; seamPlaced.seal = -1; ghostAnim = null;
   hideFormation(); releaseHi(hiSealed); formation.seal = -1;
   for (const p of ringPulses) p.parent.remove(p.m); ringPulses.length = 0;
   stackRoot.clear(); curRoot.clear(); curTileGroup = null; stackTopGroup = null; uiAnims.length = 0;
-  S.selected = null; S.undo = null; S.pendingGain = 0; $('qlabels').innerHTML = ''; document.querySelectorAll('.flyhex').forEach((e) => e.remove());
+  for (const hk of [...harmonyFx.keys()]) removeHarmonyFx(hk);
+  for (const R of S.relics) fxGroup.remove(R.beam); S.relics = []; S.sinceRelic = 0;
+  S.selected = null; S.undo = null; S.pendingGain = 0; $('qlabels').innerHTML = ''; document.querySelectorAll('.flyhex').forEach((e) => { e.getAnimations().forEach((a) => a.cancel()); e.remove(); });
 }
 
 // ---------- peça atual / fantasma ----------
 function setGhost(tile) {
   ghostGroup.clear();
-  if (!tile) { ghostGroup.visible = false; ghostShadow.visible = false; hideFormation(); return; }
+  if (!tile) { S.selected = null; updateGhost(); ghostGroup.visible = false; ghostShadow.visible = false; hideFormation(); return; } // fim de jogo: botão, frisos e faixas apagam
   ghostGroup.add(makeTileGroup(tile, ghostLit, ghostGlow, false), ghostHi);
   updateGhost();
 }
@@ -630,25 +720,66 @@ function updateGhost() {
   const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot);
   setSeamStates(seamGhost, ev); seamGhost.boost = ev.perfect ? 0.6 : 0;
   if (ev.legal && ev.matches) showFormation(S.selected.q, S.selected.r, ev); else hideFormation();
-  hoverFx.cols = !ev.legal ? ['#ff3b5c'] : ev.sides.map((st, i) => (st === 1 ? hexCss(EDGE_COLORS[ev.types[i]] || 0xffffff) : null)).filter(Boolean);
-  hoverFx.target = hoverFx.cols.length ? (!ev.legal ? 0.5 : ev.perfect ? 1.0 : 0.5 + 0.1 * ev.matches) : 0;
+  previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true) : new Map());
+  previewPendingGoal(ev);
+  hoverFx.cols = ev.sides.map((st, i) => (st === 1 ? hexCss(EDGE_COLORS[ev.types[i]] || 0xffffff) : null)).filter(Boolean);
+  hoverFx.target = hoverFx.cols.length ? (ev.perfect ? 1.0 : 0.5 + 0.1 * ev.matches) : 0;
   if (ghostPos.x.target !== w.x || ghostPos.z.target !== w.z) { ghostPos.x.target = w.x; ghostPos.z.target = w.z; ghostPos.arc = 1; }
-  const tint = ev.legal ? 0xffffff : 0xff7f92;
-  ghostLit.color.setHex(tint); ghostGlow.color.setHex(tint);
+  ghostLit.color.setHex(0xffffff); ghostGlow.color.setHex(0xffffff);
   setSlotMaterials(ev);
-  bp.disabled = !ev.legal;
-  bp.innerHTML = ev.legal ? (ev.perfect ? `Colocar <b>+${ev.matches * 10 + 60}</b> ★` : ev.matches ? `Colocar <b>+${ev.matches * 10}</b>` : 'Colocar <b>+0</b>') : `${icon('x', 16)} Bloqueado`;
+  bp.disabled = !ev.legal; // nesta rotação o conector bateria em outra coisa: só gira (o lado ruim fica com friso vermelho baixo)
+  const bonus = ev.legal ? previewBonus(S.selected.q, S.selected.r, S.current, S.rot) : { shut: 0, harmony: 0, terminal: 0, relic: 0 }, basePts = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + bonus.shut + bonus.harmony + bonus.terminal + bonus.relic;
+  bp.innerHTML = ev.legal ? `Colocar <b>+${basePts}</b>${ev.links ? ' ⇢' : ''}${ev.perfect ? ' ★' : ''}${bonus.shut ? ' ⬢' : ''}${bonus.harmony ? ' ✺' : ''}` : 'Gire a peça';
   bp.classList.toggle('perfect', ev.legal && ev.perfect);
 }
-function setSlotMaterials(ev) {
-  for (const [k, s] of S.slots) {
-    if (S.selected && k === key(S.selected.q, S.selected.r) && ev)
-      s.mesh.material = !ev.legal ? ringSel.bad : ev.matches === ev.neighbors ? ringSel.ok : ev.matches > 0 ? ringSel.partial : ringSel.none;
-    else s.mesh.material = ringMat;
+// Para a peça na mão: 'blocked' (nenhuma rotação cabe — escurecida + marquinha nas bordas do conflito), 'link' (alguma rotação
+// liga o conector da peça numa ponta aberta do tabuleiro) ou 'ok'. Recalcula só quando a peça ou o tabuleiro mudam.
+let slotCache = '';
+function updateSlotStatus() {
+  const t = S.current, ck = t ? `${t.id}:${S.tiles.size}:${S.slots.size}` : '';
+  if (ck === slotCache) return; slotCache = ck;
+  const types = t ? [t.conn, t.conn2].filter(Boolean).map((c) => c.type) : [];
+  for (const s of S.slots.values()) {
+    s.status = 'ok'; s.link = null; s.bad = [];
+    if (!t) continue;
+    let legal = false, fewest = 7;
+    for (let rot = 0; rot < 6; rot++) {
+      const ev = evalPlacement(s.q, s.r, t, rot);
+      if (!ev.legal) { // guarda a rotação que erra menos: as bordas dela são "onde não cabe"
+        const bad = ev.sides.map((st, i) => (st === -1 ? i : -1)).filter((i) => i >= 0);
+        if (bad.length < fewest) { fewest = bad.length; s.bad = bad; }
+        continue;
+      }
+      legal = true;
+      const lt = ev.matchedTypes.find((x) => types.includes(x));
+      if (lt) { s.link = lt; break; }
+    }
+    if (legal) s.bad = [];
+    s.status = !legal ? 'blocked' : s.link ? 'link' : 'ok';
   }
+}
+function slotBlocked(cell) { const s = S.slots.get(key(cell.q, cell.r)); return !!(s && s.status === 'blocked'); }
+function setSlotMaterials(ev) {
+  updateSlotStatus();
+  for (const [k, s] of S.slots) {
+    const sel = S.selected && k === key(S.selected.q, S.selected.r) && ev;
+    if (sel) s.mesh.material = !ev.legal ? ringSel.none : ev.matches === ev.neighbors ? ringSel.ok : ev.matches > 0 ? ringSel.partial : ringSel.none;
+    else s.mesh.material = s.status === 'link' ? slotLinkRing[s.link] : s.status === 'blocked' ? slotBlockedRing : ringMat;
+    if (!s.fill) continue;
+    s.fill.visible = !sel && s.status !== 'ok';
+    s.fill.material = s.status === 'link' ? slotLinkFill[s.link] : slotBlockedFill;
+    s.ticks.visible = !sel && s.status === 'blocked';
+    s.ticks.children.forEach((tk, i) => (tk.visible = s.bad.includes(i)));
+  }
+}
+function updateSlotFx(now) { // a casa que continua a rede respira na cor do conector
+  const k = 0.5 + 0.5 * Math.sin(now * 0.005);
+  for (const t in slotLinkRing) { slotLinkRing[t].opacity = 0.45 + 0.4 * k; slotLinkFill[t].opacity = 0.06 + 0.1 * k; }
+  slotTickMat.opacity = 0.6 + 0.2 * k;
 }
 function selectSlot(cell, silent) {
   if (!cell || S.over || !S.current) return;
+  if (slotBlocked(cell)) { if (!silent) play('bad'); return; } // casa proibida para esta peça: o fantasma não vai (som de erro; a casa já está escurecida)
   if (S.selected && S.selected.q === cell.q && S.selected.r === cell.r) return;
   S.selected = { q: cell.q, r: cell.r };
   S.ghostSolid = true;
@@ -670,7 +801,7 @@ function autoPreview(from) {
   let b = cands.length ? bestPlacement(S.current, cands) : null;
   if (!b) b = bestPlacement(S.current);
   if (!b) return;
-  S.selected = { q: b.q, r: b.r }; S.rot = b.rot; S.ghostSolid = false;
+  S.selected = { q: b.q, r: b.r }; S.rot = b.rot; S.ghostSolid = true; // sólida desde o início: translúcida atrapalhava ler o encaixe
   updateGhost();
   ghostAnim = { t: -0.26 };
   ghostGroup.scale.setScalar(0.01);
@@ -679,19 +810,55 @@ function autoPreview(from) {
   play('appear');
 }
 
+// Borda do tabuleiro: quantos lados livres cada grupo tem (onde ainda dá para crescer) e as pontas
+// de conector abertas. Alimenta a escolha do grupo das missões e as peças de continuação.
+function frontier() {
+  const groups = {}, ends = [];
+  for (const t of S.tiles.values()) for (let i = 0; i < 6; i++) {
+    if (t.tile.hidden || S.tiles.has(key(t.q + DIRS[i][0], t.r + DIRS[i][1]))) continue; // achado oculto não conta (entregaria o bioma)
+    const e = edgeAt(t.tile, t.rot, i), g = groupOf(e);
+    groups[g] = (groups[g] || 0) + 1;
+    if (isConnector(e)) ends.push({ type: e, ground: t.tile.ground[0] });
+  }
+  return { groups, ends };
+}
+// Às vezes troca a 3ª peça da pilha (ainda escondida: só as duas primeiras aparecem) por uma que
+// continua uma ponta aberta de trilho/rodovia/esgoto. Sem isso as redes ficavam em pedaços de uma
+// peça e as missões de conector empacavam com progresso 1.
+const STEER_CHANCE = 0.38;
+function steerStack() {
+  const t = S.stack[2]; if (!t || t.quest || t._steered) return;
+  const { ends } = frontier(); if (!ends.length || !S.rng.chance(STEER_CHANCE)) return;
+  const e = S.rng.pick(ends), nt = continuationTile(S.rng, e.type, e.ground); nt._steered = true;
+  if (S.undo) S.undo.steer = { from: S.stack[2], to: nt }; // o desfazer devolve a peça original
+  S.stack[2] = nt;
+}
+
+// O alvo da missão NÃO olha mais a maior formação do tabuleiro inteiro (dava "142 prédios" para
+// uma bandeira longe da cidade grande): ele se ajusta à formação em que a bandeira entra (rebaseQuest).
+const questContext = () => ({ level: questLevel(S.placed) });
+// Progresso de uma missão sobre um conjunto de casas: cidade conta PRÉDIOS (soma por peça), o resto conta peças.
+const sumBuildings = (keys) => { let n = 0; for (const k of keys) n += buildingsOf(S.tiles.get(k).tile); return n; };
+const questProgress = (qst, keys) => (qst.kind === 'city' ? sumBuildings(keys) : keys.size);
+// A bandeira acabou de entrar no tabuleiro: se ela caiu numa formação que já existia, o alvo passa a
+// ser no mínimo (tamanho dela + o crescimento pedido). Ligar à rede grande vale, mas não cumpre de graça.
+function rebaseQuest(qst) {
+  const p = questProgress(qst, regionKeys(qst.tileKey, qst.group));
+  qst.target = Math.max(qst.target, p + (qst.grow || 0)); qst.progress = p;
+}
 // ---------- missões: nascem na peça que está no topo da pilha (o jogador vê chegando) ----------
 function maybeAssignQuest() {
   const tile = S.stack[0]; if (!tile || tile.quest || S.placed < 2) return;
   S.sinceQuest++;
   const starving = S.quests.length === 0 && (S.sinceQuest >= 5 || S.stack.length <= 8);
-  if (S.quests.length >= QUEST_CAP) return;
+  if (S.quests.length >= questCap()) return;
   if (!(S.rng.chance(0.26) || S.sinceQuest >= 7 || starving)) return;
-  const q = makeQuest(S.rng, tile, buildingsOf(tile));
+  const q = makeQuest(S.rng, tile, buildingsOf(tile), frontier().groups, questContext());
   if (!q) return;
   q.color = GROUP_INFO[q.group].color; tile.quest = q; tile._geo = null; tile._slab = null; tile._hi = null;
   if (q.kind === 'city') q.progress = buildingsOf(tile);
+  if (S.undo) S.undo.questTile = tile; // o desfazer tira a bandeira que nasceu neste saque
   S.sinceQuest = 0;
-  banner(`${icon(questIcon(q), 22, q.color)} <b>Missão à vista</b>`, `${icon('tile', 13)} próxima peça · vale +${q.reward.tiles} ${icon('tile', 13)}`, 'quest', 3200);
 }
 
 // ---------- turno ----------
@@ -700,55 +867,73 @@ function drawNext(from, silentStack) {
   S.current = S.stack.shift() || null;
   S.rot = 0;
   if (!S.current) { setGhost(null); refreshCurrentPreview(); rebuildStack(); updateHUD(); gameOver(); return; }
-  maybeAssignQuest();
+  // extras do saque: se um deles falhar, o turno NÃO pode parar no meio (o fantasma ficava com a
+  // peça antiga em cima da recém-colocada e a peça real na mão era outra — 10/10)
+  safely(steerStack); safely(maybeAssignQuest);
+  if (S.started && S.tileList.length) safely(spawnRelic);
   setGhost(S.current); refreshCurrentPreview(); rebuildStack(0, true); updateHUD();
   ghostGroup.rotation.y = 0; if (curTileGroup) curTileGroup.rotation.y = 0;
   autoPreview(from);
-  const q = S.current.quest;
-  if (q) {
-    if (!S.tips.has('quest')) { S.tips.add('quest'); banner(`${icon(questIcon(q), 22, q.color)} <b>Missão nesta peça</b>`, q.kind === 'city' ? `cidade com <b>exatamente ${q.target}</b> prédios a partir da bandeira` : `ligue <b>${q.target}</b> peças de ${GROUP_INFO[q.group].name} à bandeira`, 'quest', 5200); }
-    else banner(`${icon(questIcon(q), 22, q.color)} <b>${q.kind === 'city' ? `${q.target} prédios` : `${q.target} × ${GROUP_INFO[q.group].name}`}</b>`, `+${q.reward.points} pts · +${q.reward.tiles} ${icon('tile', 13)}`, 'quest', 2600);
-  } else if (S.current.conn && !S.tips.has('conn')) {
-    S.tips.add('conn');
-    banner(`${icon(groupOf(S.current.conn.type), 22)} <b>Conector</b>`, 'continua em outro igual ou fica aberto — nunca contra outro terreno', 'info', 4200);
-  } else if (isTerminal(S.current) && !S.tips.has('end')) {
-    S.tips.add('end');
-    banner(`${icon(groupOf(S.current.conn.type), 22)} <b>Ponto final</b>`, `fecha uma linha aberta: +20 pts e +1 ${icon('tile', 13)}`, 'info', 4200);
-  }
+  renderQuests(); // a missão da peça na mão aparece como card pendente (sem texto no meio da tela)
 }
+function safely(fn) { try { fn(); } catch (err) { console.error('[punkromantik]', fn.name, err); } }
 const ORD = ['', '', 'DUPLO', 'TRIPLO', 'QUÁDRUPLO', 'QUÍNTUPLO', 'SÊXTUPLO'];
+// Clique duplo em "Colocar" ou espaço segurado colocavam a peça seguinte sem o jogador vê-la (ela já
+// chega sólida numa casa válida). Os comandos do JOGADOR passam por aqui; PR.commitPlacement (bot/auto) não.
+let lastCommit = 0;
+function playerCommit() { const now = performance.now(); if (now - lastCommit < 450) return; lastCommit = now; commitPlacement(); }
 function commitPlacement() {
   if (!S.current || !S.selected || S.over) return;
   const { q, r } = S.selected, tile = S.current, rot = S.rot;
-  const ev = evalPlacement(q, r, tile, rot);
-  if (!ev.legal) { play('bad'); toast('Conectores precisam continuar: esgoto com esgoto, trilho com trilho, rodovia com rodovia.'); return; }
+  const ev = evalPlacement(q, r, tile, rot, true);
+  if (!ev.legal) { play('bad'); return; }
   // instantâneo para o único "desfazer" permitido
-  S.undo = { q, r, tile, rot, score: S.score, placed: S.placed, perfects: S.perfects, questsDone: S.questsDone, questsLost: S.questsLost, quests: S.quests.map((x) => ({ ...x })), gained: 0, sinceQuest: S.sinceQuest, lowWarned: S.lowWarned };
+  S.undo = { q, r, tile, rot, score: S.score, placed: S.placed, perfects: S.perfects, questsDone: S.questsDone, questsLost: S.questsLost, quests: S.quests.map((x) => ({ ...x })), gained: 0, sinceQuest: S.sinceQuest, lowWarned: S.lowWarned, hintGain: 0, best: S.best, sinceRelic: S.sinceRelic, gains: { ...S.gains }, rng: S.rng.state };
   addTile(q, r, tile, rot, true, ev);
   S.placed++;
   const w = toWorld(q, r);
-  let pts = ev.matches * 10, gained = 0;
-  if (ev.perfect) { pts += 60; S.perfects++; S.stack.push(genTile(S.rng)); gained++; }
+  let pts = ev.matches * 10 + ev.links * LINK_PTS, gained = 0; // continuar trilho/rodovia/esgoto vale extra
+  if (ev.perfect) { pts += 60; S.perfects++; S.stack.push(genTile(S.rng)); gained++; gain('perfect'); }
   let closed = false;
-  if (isTerminal(tile) && ev.sides[(tile.conn.exits[0] + rot) % 6] === 1) { pts += 20; S.stack.push(genTile(S.rng)); gained++; closed = true; } // fechou uma linha: sensação de "ponto final"
+  if (isTerminal(tile) && ev.sides[(tile.conn.exits[0] + rot) % 6] === 1) { pts += 20; S.stack.push(genTile(S.rng)); gained++; closed = true; gain('terminal'); } // fechou uma linha: sensação de "ponto final"
+  const shut = closedRegions(q, r, tile, rot); // regiões que esta peça acabou de cercar por completo
+  for (const c of shut) { pts += c.points; if (c.tiles) { for (let i = 0; i < c.tiles; i++) S.stack.push(genTile(S.rng)); gained += c.tiles; gain('closed', c.tiles); } }
+  const harm = newHarmonies(q, r); // peças que acabaram de ficar perfeitamente cercadas pelo mesmo ambiente
+  for (const h of harm) { pts += HARMONY_PTS; S.tiles.get(h.k).harmony = h.g; addHarmonyFx(h.k, h.g); }
+  S.undo.harmony = harm.map((h) => h.k);
+  let relicHit = null;
+  S.undo.revealed = revealAround(q, r); // achado oculto ao lado acende (o encaixe com ele já contou de verdade em `ev`)
+  S.undo.relics = [];
+  for (const R of S.relics) if (!R.claimed && relicConnected(R)) { // ligou o tabuleiro ao achado distante
+    relicHit = relicHit || R; R.claimed = true; S.undo.relics.push(R);
+    const rt = relicTiles(); relicHit._tiles = rt; pts += RELIC_PTS; for (let i = 0; i < rt; i++) S.stack.push(genTile(S.rng)); gained += rt; gain('relic', rt);
+  }
   S.score += pts;
   play('place', ev.matches);
-  if (pts > 0) scoreSign(pts, ev.perfect ? 'perfect' : ev.matches >= 3 ? 'good' : ev.matches >= 2 ? 'ok' : '', ev.perfect ? 'encaixe perfeito!' : closed ? 'ponto final' : ev.matches >= 2 ? `encaixe ${ORD[ev.matches].toLowerCase()}` : '');
+  if (pts > 0) scoreSign(pts, ev.perfect || harm.length ? 'perfect' : ev.matches >= 3 ? 'good' : ev.matches >= 2 ? 'ok' : '', harm.length ? 'harmonia!' : relicHit ? 'achado distante' : S.undo.revealed.length ? (ev.sides.some((st, i) => st === 1 && S.undo.revealed.some((R) => R.k === key(q + DIRS[i][0], r + DIRS[i][1]))) ? 'bom palpite!' : 'achado revelado') : ev.perfect ? 'encaixe perfeito!' : shut.length ? `${GROUP_INFO[shut[0].group].name} fechado` : closed ? 'ponto final' : ev.links ? (ev.links >= 2 ? 'rede ligada!' : 'rede continua') : ev.matches >= 2 ? `encaixe ${ORD[ev.matches].toLowerCase()}` : '', w);
   spawnBurst(w, ev.matchedTypes.map((t) => TERRAIN[t].color), ev.perfect ? 34 : 4 + ev.matches * 3);
   if (ev.perfect) {
     play('perfect'); pulse(w, 0xffd166); confettiBurst(2);
-    banner(`★ <b>ENCAIXE PERFEITO</b>`, `+${pts} pts · +1 ${icon('tile', 13)}`, 'perfect');
+    banner(`★ <b>PERFEITO</b> +1 ${icon('tile', 14)}`, '', 'perfect', 2600);
   } else if (ev.matches >= 3) {
     confettiBurst(ev.matches >= 4 ? 2 : 1); play('confetti');
-  } else if (S.placed === 1 && !S.tips.has('first')) {
-    S.tips.add('first');
-    banner(ev.matches ? `<b>+${pts}</b>` : '<b>Nenhum lado casou</b>', ev.matches ? 'cada lado igual encostado vale +10' : 'gire a peça (⟲ ⟳) para alinhar terrenos iguais: +10 por lado', 'info', 3600);
-  } else if (ev.matches === 0 && !S.tips.has('miss')) {
-    S.tips.add('miss');
-    banner('<b>Nenhum lado casou</b>', 'lados iguais encostados valem +10 cada', 'info', 3200);
   }
-  if (closed) { pulse(w, GROUP_HEX[groupOf(tile.conn.type)]); banner(`${icon(groupOf(tile.conn.type), 22)} <b>Ponto final</b>`, `linha fechada · +20 pts · +1 ${icon('tile', 13)}`, 'good', 2600); }
-  if (tile.quest) S.quests.push({ ...tile.quest, tileKey: key(q, r) });
+  if (closed) pulse(w, GROUP_HEX[groupOf(tile.conn.type)]);
+  for (const c of shut) flashRegion(c);
+  for (const h of harm) {
+    const t = S.tiles.get(h.k), hw = toWorld(t.q, t.r), color = GROUP_INFO[h.g].color;
+    setTimeout(() => {
+      play('harmony'); confettiBurst(1); starBurst(color); pulse(hw, GROUP_HEX[h.g]); pulse(hw, 0xffd166); spawnBurst(hw, [color, '#ffd166', '#ffffff'], 46, 1.3); cameraShake = { t: 0, dur: 0.5, amp: 0.09 };
+      [0, 300, 600, 900].forEach((ms, n) => setTimeout(() => kick(0.38, n % 2 ? ['#ffd166', color] : [color], 1.25), ms)); // flashes curtos na cor do bioma
+    }, 260);
+    banner(`✺ <b>PERFEITO!</b> <small>harmonia ${GROUP_INFO[h.g].name}</small> <b class="big">+${HARMONY_PTS}</b>`, '', 'perfect harmony', 3400);
+  }
+  if (relicHit) {
+    const rw = toWorld(relicHit.q, relicHit.r);
+    play('relic'); confettiBurst(2); pulse(rw, GROUP_HEX[relicHit.g]); spawnBurst(rw, [GROUP_INFO[relicHit.g].color, '#ffffff'], 36, 1.1);
+    banner(`✦ <b>ACHADO</b> <b class="big">+${relicHit._tiles}</b> ${icon('tile', 18)} <small>+${RELIC_PTS}</small>`, '', 'quest reward', 3200);
+  }
+  if (tile.quest) { const nq = { ...tile.quest, tileKey: key(q, r) }; rebaseQuest(nq); if (nq._coach) nq._coachAt = S.placed; S.quests.push(nq); }
   const fromRect = { x: (window.innerWidth / 2), y: window.innerHeight * 0.36 };
   gained += checkQuests();
   S.undo.gained = gained;
@@ -761,6 +946,228 @@ function commitPlacement() {
   if (S.tiles.size % 6 === 0) rig.flyTo(w.x, w.z);
   updateUndoButton();
 }
+// Bônus de região fechada: uma área de bioma que ficou cercada por completo (não tem mais lado
+// livre para crescer) rende 5 pts por peça e, a partir de 8 peças, +1 peça. Dá um objetivo de
+// médio prazo além do encaixe de cada jogada. Gelo conta; Baldio (respiro) e redes não.
+const CLOSABLE = ['plain', 'cyber', 'solar', 'rock'];
+// prevê os bônus (região fechada, harmonia) pondo a peça no tabuleiro por um instante (regionKeys lê S.tiles)
+// Tudo que commitPlacement paga além de encaixe/rede/perfeito — o botão "Colocar +N" tem que bater
+// com o que entra no placar. (Faltavam o ponto final +20 e o achado ligado +80.) Achado ainda oculto
+// fica de fora de propósito: a prévia não entrega o palpite.
+function previewBonus(q, r, tile, rot) {
+  const none = { shut: 0, harmony: 0, terminal: 0, relic: 0 };
+  const k = key(q, r); if (S.tiles.has(k)) return none;
+  const ev = evalPlacement(q, r, tile, rot);
+  const terminal = isTerminal(tile) && ev.sides[(tile.conn.exits[0] + rot) % 6] === 1 ? 20 : 0;
+  S.tiles.set(k, { q, r, tile, rot });
+  try {
+    const relic = S.relics.filter((R) => !R.claimed && !R.hidden && relicConnected(R)).length * RELIC_PTS;
+    return { shut: closedRegions(q, r, tile, rot).reduce((n, c) => n + c.points, 0), harmony: newHarmonies(q, r).length * HARMONY_PTS, terminal, relic };
+  } finally { S.tiles.delete(k); }
+}
+function closedRegions(q, r, tile, rot) {
+  const k = key(q, r), out = [], seen = new Set();
+  for (let i = 0; i < 6; i++) for (const g of sideGroups(tile, i)) {
+    if (!CLOSABLE.includes(g) || seen.has(g)) continue; seen.add(g);
+    const keys = regionKeys(k, g);
+    if (keys.size >= 3 && !regionOpen(keys, g)) out.push({ group: g, keys, points: keys.size * 5, tiles: keys.size >= 8 ? 1 : 0 });
+  }
+  return out;
+}
+function flashRegion(c) {
+  const color = GROUP_INFO[c.group].color;
+  let n = 0;
+  for (const kk of c.keys) { const t = S.tiles.get(kk); if (!t) continue; const w = toWorld(t.q, t.r); setTimeout(() => { spawnBurst(w, [color, '#ffffff'], 8, 0.7); pulse(w, new THREE.Color(color).getHex()); }, 90 * n++); }
+  play('quest');
+}
+// ---------- harmonia: peça cercada pelos 6 vizinhos do MESMO ambiente vira peça especial ----------
+// Os seis lados da peça e os seis lados que dão para ela são do mesmo bioma (chão — a peça de
+// estrada na cidade também conta). Vale 100 pontos uma vez por peça e ela ganha um halo girando.
+// Pode ser disparada pela peça do centro OU pela sexta vizinha que fecha o anel.
+const HARMONY_PTS = 100;
+const LINK_PTS = 15; // por conector (trilho/rodovia/esgoto) que a peça continua
+const harmonyFx = new Map();
+function harmonyGroup(t) {
+  let g0 = null;
+  for (let i = 0; i < 6; i++) {
+    const nb = S.tiles.get(key(t.q + DIRS[i][0], t.r + DIRS[i][1])); if (!nb) return null;
+    const g = groupOf(groundAt(t.tile, t.rot, i)), gn = groupOf(groundAt(nb.tile, nb.rot, opp(i)));
+    if (g !== gn || (g0 && g !== g0)) return null;
+    g0 = g;
+  }
+  return g0;
+}
+function newHarmonies(q, r) {
+  const out = [];
+  for (const k of [key(q, r), ...DIRS.map((d) => key(q + d[0], r + d[1]))]) {
+    const t = S.tiles.get(k); if (!t || t.harmony) continue;
+    const g = harmonyGroup(t); if (g) out.push({ k, g });
+  }
+  return out;
+}
+// Arte da peça em harmonia: friso no contorno do hexágono com contas douradas nos cantos, névoa leve
+// pairando por cima, vaga-lumes subindo e uma joia pequena. Nada de disco no chão nem anel branco
+// espetado: os dois estouravam no bloom e escondiam justamente a peça que está sendo celebrada.
+const rimGeo = (() => { const g = new THREE.RingGeometry(0.88, 0.965, 6, 1); g.rotateX(-Math.PI / 2); return g; })();
+const rimInGeo = (() => { const g = new THREE.RingGeometry(0.8, 0.82, 6, 1); g.rotateX(-Math.PI / 2); return g; })();
+const beadGeo = new THREE.OctahedronGeometry(0.045, 0), gemGeo = new THREE.OctahedronGeometry(0.06, 0);
+const puffTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.45, 'rgba(255,255,255,.45)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
+})();
+function addHarmonyFx(k, g) {
+  const t = S.tiles.get(k); if (!t) return;
+  const w = toWorld(t.q, t.r), c = new THREE.Color(GROUP_HEX[g]), add = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide };
+  const grp = new THREE.Group(); grp.position.set(w.x, TILE_H, w.z);
+  const rim = new THREE.Mesh(rimGeo, new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(0.6), opacity: 0.55, ...add })); // tom fechado: aditivo + bloom estourava em branco rim.position.y = 0.02;
+  const rimIn = new THREE.Mesh(rimInGeo, new THREE.MeshBasicMaterial({ color: 0xb08a2e, opacity: 0.45, ...add })); rimIn.position.y = 0.02;
+  for (const m of [rim, rimIn]) { m.layers.enable(BLOOM); grp.add(m); }
+  const beads = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3, b = new THREE.Mesh(beadGeo, new THREE.MeshBasicMaterial({ color: 0xd9a63a }));
+    b.position.set(Math.cos(a) * 0.93, 0.07, Math.sin(a) * 0.93); b.layers.enable(BLOOM); grp.add(b); beads.push(b);
+  }
+  const gem = new THREE.Mesh(gemGeo, new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(0.75) })); gem.layers.enable(BLOOM); grp.add(gem);
+  // névoa: tufos claros, tingidos de leve com o bioma, em blending normal (fora do bloom — névoa não brilha)
+  const mistCol = c.clone().lerp(new THREE.Color(0xffffff), 0.7), mist = [];
+  for (let i = 0; i < 7; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, color: mistCol, transparent: true, opacity: 0, depthWrite: false }));
+    sp.userData = { noBloom: true, a: (i / 7) * Math.PI * 2, r: 0.2 + 0.45 * ((i * 0.618) % 1), y: 0.38 + 0.25 * ((i * 0.37) % 1), s: 1 + 0.55 * ((i * 0.73) % 1), ph: i * 1.7 };
+    grp.add(sp); mist.push(sp);
+  }
+  // vaga-lumes: sobem devagar de pontos do tile e somem no alto
+  const motes = [];
+  for (let i = 0; i < 10; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, color: c.clone().lerp(new THREE.Color(0xffd166), 0.35), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    sp.scale.setScalar(0.09); sp.layers.enable(BLOOM); sp.userData = { t: i / 10, a: Math.random() * Math.PI * 2, r: 0.15 + Math.random() * 0.6, sp: 0.18 + Math.random() * 0.12 };
+    grp.add(sp); motes.push(sp);
+  }
+  // cintilas: brilhos de quatro pontas girando em volta da joia — de longe é o que diz "esta é especial"
+  const sparks = [];
+  for (let i = 0; i < 5; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkleTex, color: i % 2 ? 0xffd166 : c.clone().lerp(new THREE.Color(0xffffff), 0.4), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    sp.layers.enable(BLOOM); sp.userData = { a: (i / 5) * Math.PI * 2, r: 0.42 + 0.12 * (i % 2), y: 0.55 + 0.25 * ((i * 0.61) % 1), ph: i * 1.3 };
+    grp.add(sp); sparks.push(sp);
+  }
+  grp.userData = { rim, rimIn, beads, gem, mist, motes, sparks, born: 0, ring: 0.6, color: GROUP_HEX[g] };
+  grp.scale.setScalar(0.01); fxGroup.add(grp); harmonyFx.set(k, grp);
+}
+const sparkleTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 10); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64); x.fillStyle = '#fff';
+  x.beginPath(); x.moveTo(32, 2); x.quadraticCurveTo(35, 29, 62, 32); x.quadraticCurveTo(35, 35, 32, 62); x.quadraticCurveTo(29, 35, 2, 32); x.quadraticCurveTo(29, 29, 32, 2); x.fill();
+  return new THREE.CanvasTexture(c);
+})();
+function removeHarmonyFx(k) { const g = harmonyFx.get(k); if (g) { fxGroup.remove(g); harmonyFx.delete(k); } }
+function updateHarmonyFx(dt, now) {
+  const t = now * 0.001;
+  for (const g of harmonyFx.values()) {
+    const u = g.userData; u.born = Math.min(1, u.born + dt * 1.6);
+    g.scale.setScalar(Math.max(0.01, easeOutBack(u.born)));
+    const glow = 0.5 + 0.5 * Math.sin(t * 1.8 + g.position.x);
+    u.rim.material.opacity = 0.55 + 0.3 * glow; u.rimIn.material.opacity = 0.25 + 0.25 * (1 - glow);
+    u.beads.forEach((b, i) => { b.rotation.y = t * 1.5 + i; b.position.y = 0.07 + 0.025 * Math.sin(t * 2.2 + i); });
+    u.gem.position.y = 0.95 + Math.sin(t * 1.4 + g.position.z) * 0.06; u.gem.rotation.y = t * 1.6; u.gem.rotation.z = Math.sin(t) * 0.3;
+    for (const m of u.mist) {
+      const d = m.userData, a = d.a + t * 0.12;
+      m.position.set(Math.cos(a) * d.r, d.y + 0.04 * Math.sin(t * 0.7 + d.ph), Math.sin(a) * d.r);
+      m.scale.setScalar(d.s * (1 + 0.08 * Math.sin(t * 0.9 + d.ph)));
+      m.material.opacity = u.born * (0.17 + 0.06 * Math.sin(t * 0.8 + d.ph));
+    }
+    for (const m of u.sparks) {
+      const d = m.userData, a = d.a + t * 0.6, tw = Math.max(0, Math.sin(t * 2.6 + d.ph));
+      m.position.set(Math.cos(a) * d.r, d.y + 0.05 * Math.sin(t * 1.3 + d.ph), Math.sin(a) * d.r);
+      m.scale.setScalar(0.08 + 0.16 * tw * tw); m.material.opacity = u.born * (0.25 + 0.75 * tw);
+    }
+    if ((u.ring -= dt) <= 0) { u.ring = 2.6; spawnRingPulse(scene, g.position.x, TILE_H + 0.03, g.position.z, u.color, true); } // anel na cor do bioma, de tempos em tempos
+    for (const m of u.motes) {
+      const d = m.userData; d.t = (d.t + dt * d.sp) % 1;
+      m.position.set(Math.cos(d.a + d.t * 2) * d.r, 0.1 + d.t * 1.1, Math.sin(d.a + d.t * 2) * d.r);
+      m.material.opacity = u.born * Math.sin(d.t * Math.PI) * 0.9;
+    }
+  }
+}
+
+// ---------- achados distantes: peças soltas longe do tabuleiro, ocultas em cinza ----------
+// (como as peças especiais do Dorfromantik): um hexágono inteiro de um bioma, com marco, sob um
+// facho de luz branca. Ela chega DESLIGADA — toda cinza, só a silhueta — e o jogador deduz o bioma
+// pelo ambiente em volta (o bioma é sorteado com peso pelas peças do tabuleiro mais próximas).
+// Encostar uma peça nela ativa a casa: a cor aparece e o encaixe conta de verdade (acertou o palpite,
+// ganha os pontos do lado). Antes de ativar, o encaixe com ela fica "?" — friso branco, sem prévia de
+// pontos, e a dica não sabe a resposta. Quando o tabuleiro principal se LIGA a ela, rende pontos e
+// peças. Pode haver até RELIC_MAX esperando ao mesmo tempo, espalhados como faróis: dão um norte.
+const RELIC_FROM = 18, RELIC_PTS = 80, RELIC_MAX = 2, RELIC_BEAM = 0xc8ccd6;
+const relicTiles = () => (questLevel(S.placed) < 4 ? 2 : 1); // como as missões: no fim da partida o achado paga menos peças
+const hexDist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
+const relicBeamGeo = new THREE.CylinderGeometry(0.06, 0.32, 9, 14, 1, true);
+const relicAt = (k) => S.relics.find((R) => R.k === k);
+function spawnRelic(force) {
+  const waiting = S.relics.filter((R) => !R.claimed).length, since0 = S.sinceRelic;
+  if (!force && (waiting >= RELIC_MAX || S.placed < RELIC_FROM || S.stack.length < 6 || ++S.sinceRelic < 9 || !S.rng.chance(0.25))) return false;
+  const list = S.tileList, opts = ['cyber', 'solar', 'rock', 'plain'];
+  for (let tries = 0; tries < 120; tries++) {
+    const base = list[S.rng.int(list.length)], d = S.rng.int(6), dist = 5 + S.rng.int(3), side = S.rng.chance(0.5) ? DIRS[(d + 1) % 6] : [0, 0];
+    const c = { q: base.q + DIRS[d][0] * dist + side[0], r: base.r + DIRS[d][1] * dist + side[1] };
+    if (list.some((t) => hexDist(t, c) < 4)) continue; // longe de verdade: pelo menos três casas vazias no meio
+    if (S.relics.some((R) => !R.claimed && hexDist(R, c) < 5)) continue; // faróis espalhados, não em cacho
+    // o ambiente decide: as peças mais próximas pesam mais (quem olha em volta consegue adivinhar)
+    const w = {}, near = Math.min(...list.map((t) => hexDist(t, c)));
+    for (const t of list) { const dd = hexDist(t, c); if (dd > near + 2) continue; for (const gr of t.tile.ground) { const g0 = groupOf(gr); if (opts.includes(g0)) w[g0] = (w[g0] || 0) + 1 / (1 + dd - near); } }
+    const g = S.rng.weighted(opts.map((x) => [x, 0.4 + (w[x] || 0)]));
+    const tile = genTile(S.rng, { simple: true });
+    tile.ground = new Array(6).fill(g); tile.edges = tile.ground.slice(); tile.conn = null; tile.relic = true; tile.hidden = true; tile._geo = null;
+    addTile(c.q, c.r, tile, S.rng.int(6), false); refreshSlots();
+    const wp = toWorld(c.q, c.r), beam = new THREE.Mesh(relicBeamGeo, new THREE.MeshBasicMaterial({ color: RELIC_BEAM, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    beam.position.set(wp.x, TILE_H + 4.5, wp.z); beam.layers.enable(BLOOM); fxGroup.add(beam);
+    S.relics.push({ k: key(c.q, c.r), q: c.q, r: c.r, g, beam, claimed: false, hidden: true, pulse: 0 });
+    if (S.undo && !force) S.undo.spawned = { R: S.relics[S.relics.length - 1], since: since0 }; // o desfazer apaga o achado deste saque
+    S.sinceRelic = 0;
+    spawnBurst(wp, ['#c8ccd6', '#ffffff'], 18, 0.8); play('appear');
+    return true;
+  }
+  return false;
+}
+// liga/desliga a casa do achado: troca a peça pela versão colorida (ou cinza, no desfazer)
+function setRelicHidden(R, hidden) {
+  const t = S.tiles.get(R.k); if (!t || R.hidden === hidden) return;
+  R.hidden = hidden; t.tile.hidden = hidden;
+  removeTile(R.k); addTile(R.q, R.r, t.tile, t.rot, false);
+  R.beam.material.color.setHex(hidden ? RELIC_BEAM : GROUP_HEX[R.g]);
+  if (!hidden) {
+    const w = toWorld(R.q, R.r), color = GROUP_INFO[R.g].color;
+    pulse(w, GROUP_HEX[R.g]); spawnBurst(w, [color, '#ffffff'], 28, 1); play('appear');
+    popup(GROUP_INFO[R.g].name, w, 'good', 0.9); // o jogador confere o palpite
+  }
+}
+// achados ocultos encostados na casa (q,r): acendem quando uma peça é colocada ao lado
+function revealAround(q, r) {
+  const out = [];
+  for (const d of DIRS) { const R = relicAt(key(q + d[0], r + d[1])); if (R && R.hidden) { setRelicHidden(R, false); out.push(R); } }
+  return out;
+}
+function relicConnected(R) { // o tabuleiro principal (a partir da peça inicial) já encosta no achado?
+  const seen = new Set([key(0, 0)]), stack = [{ q: 0, r: 0 }];
+  while (stack.length) {
+    const c = stack.pop();
+    for (const d of DIRS) { const q = c.q + d[0], r = c.r + d[1], k = key(q, r); if (seen.has(k) || !S.tiles.has(k)) continue; if (k === R.k) return true; seen.add(k); stack.push({ q, r }); }
+  }
+  return false;
+}
+function updateRelic(dt, now) {
+  for (const R of S.relics) {
+    // o facho chama o jogador até lá; assim que ele começa a construir encostado no achado (mesmo antes
+    // de ligar ao tabuleiro principal), já cumpriu o papel e se dissolve. Desfeita a peça, volta.
+    const used = R.claimed || DIRS.some((d) => S.tiles.has(key(R.q + d[0], R.r + d[1])));
+    R.beam.visible = R.beam.material.opacity > 0.002;
+    if (used) { R.beam.material.opacity = Math.max(0, R.beam.material.opacity - dt * 0.4); R.beam.scale.x = R.beam.scale.z = 1 + (0.32 - R.beam.material.opacity) * 6; continue; }
+    R.beam.scale.set(1, 1, 1); R.beam.visible = true;
+    R.beam.material.opacity = 0.2 + 0.08 * Math.sin(now * 0.003 + R.q); R.beam.rotation.y += dt * 0.4;
+    if ((R.pulse -= dt) <= 0) { R.pulse = 1.8; const w = toWorld(R.q, R.r); spawnRingPulse(scene, w.x, TILE_H + 0.02, w.z, R.hidden ? RELIC_BEAM : GROUP_HEX[R.g], true); }
+  }
+}
+
 // ponto da tela de uma posição do tabuleiro
 function screenOf(w, y = 0.3) {
   const v = new THREE.Vector3(w.x, y, w.z).project(camera);
@@ -770,25 +1177,34 @@ function screenOf(w, y = 0.3) {
 // Desfazer a última peça (uma única vez): a peça sobe de volta para a mão e tudo volta como estava
 function undoLast() {
   const u = S.undo; if (!u || S.over || !S.started) return;
+  for (const hk of u.harmony || []) { removeHarmonyFx(hk); const ht = S.tiles.get(hk); if (ht) ht.harmony = null; }
+  for (const R of u.relics || []) { R.claimed = false; R.beam.material.opacity = 0.32; R.beam.scale.set(1, 1, 1); }
+  for (const R of u.revealed || []) setRelicHidden(R, true); // o palpite volta a ficar em aberto
   const k = key(u.q, u.r), t = removeTile(k); if (!t) { S.undo = null; updateUndoButton(); return; }
+  // desfaz também o que aconteceu ao sacar a peça seguinte: achado novo, bandeira nova, peça trocada
+  if (u.spawned) { const R = u.spawned.R; removeTile(R.k); fxGroup.remove(R.beam); S.relics.splice(S.relics.indexOf(R), 1); S.sinceRelic = u.spawned.since; }
+  if (u.questTile) { const qt = u.questTile; qt.quest = null; qt._geo = null; qt._slab = null; qt._hi = null; }
+  if (u.steer) { const i = S.stack.indexOf(u.steer.to); if (i >= 0) S.stack[i] = u.steer.from; }
   play('appear');
   const w = toWorld(u.q, u.r);
   spawnBurst(w, ['#ffffff', '#9ff5ff'], 10, 0.7);
   // a peça sobe girando e some (anima uma cópia) enquanto a mão recebe a peça de volta
   const ghostCopy = t.group; ghostCopy.position.y = 0; scene.add(ghostCopy);
   anims.push({ obj: ghostCopy, prop: 'undo', t: 0, dur: 0.4 });
-  S.score = u.score; scoreShown = S.score; scoreRoll = null; $('score').textContent = S.score;
-  S.placed = u.placed; S.perfects = u.perfects; S.questsDone = u.questsDone; S.questsLost = u.questsLost; S.sinceQuest = u.sinceQuest; S.lowWarned = u.lowWarned;
+  S.score = u.score; scoreShown = S.score; scoreRoll = null; $('score').textContent = S.score; $('score-box').classList.remove('rolling'); syncRecord();
+  S.placed = u.placed; S.perfects = u.perfects; S.questsDone = u.questsDone; S.questsLost = u.questsLost; S.sinceQuest = u.sinceQuest; S.lowWarned = u.lowWarned; S.hints -= u.hintGain; updateHintButton(); // só tira a dica que a missão deu: a usada depois não volta
+  S.best = u.best; try { localStorage.setItem('pr_best', S.best); } catch (e) {} syncRecord();
+  S.sinceRelic = u.sinceRelic; S.gains = u.gains; S.rng.state = u.rng; // mesmo sorteio ao refazer: nada de re-roll
   S.quests = u.quests.map((x) => ({ ...x }));
-  if (u.gained) S.stack.splice(S.stack.length - u.gained, u.gained);
-  document.querySelectorAll('.flyhex').forEach((e) => e.remove()); S.pendingGain = 0;
+  // devolve a peça sacada ANTES de tirar as ganhas: se a pilha estava vazia, a peça sacada era uma das ganhas
   if (S.current) S.stack.unshift(S.current);
+  if (u.gained) S.stack.splice(S.stack.length - u.gained, u.gained);
+  document.querySelectorAll('.flyhex').forEach((e) => { e.getAnimations().forEach((a) => a.cancel()); e.remove(); }); S.pendingGain = 0;
   S.current = u.tile; S.rot = u.rot;
   S.undo = null;
   refreshSlots();
   S.selected = { q: u.q, r: u.r }; S.ghostSolid = true;
   setGhost(S.current); refreshCurrentPreview(); rebuildStack(); renderQuests(); updateHUD(); updateGhost(); updateUndoButton();
-  toast('Peça de volta na mão — só dá para desfazer a última jogada.', 2200);
 }
 function updateUndoButton() { const b = $('btn-undo'); b.disabled = !S.undo || S.over; }
 // verifica progresso, conclusão e impossibilidade das missões ativas
@@ -797,21 +1213,23 @@ function checkQuests() {
   for (const qst of S.quests) {
     const keys = regionKeys(qst.tileKey, qst.group);
     const before = qst.progress;
-    if (qst.kind === 'city') { let sum = 0; for (const k of keys) sum += buildingsOf(S.tiles.get(k).tile); qst.progress = sum; }
-    else qst.progress = keys.size;
+    qst.progress = questProgress(qst, keys);
     if (qst.progress !== before) qst._bump = true;
-    if (qst.progress === qst.target) done.push(qst);
-    else if (qst.progress > qst.target || !regionOpen(keys, qst.group)) lost.push(qst); // passou do número, ou a formação ficou cercada: não tem mais como cumprir
+    // "N+" cumpre ao chegar OU passar do número (ligar numa rede maior também vale); "N" exige o número exato
+    if (qst.exact ? qst.progress === qst.target : qst.progress >= qst.target) done.push(qst);
+    else if ((qst.exact && qst.progress > qst.target) || !regionOpen(keys, qst.group)) lost.push(qst); // passou do número exato, ou a formação ficou cercada: não tem mais como cumprir
   }
   for (const qst of done) {
     S.quests.splice(S.quests.indexOf(qst), 1);
     S.questsDone++;
+    try { localStorage.setItem('pr_qdone', '1'); } catch (e) { /* sem storage: continua aprendiz */ }
     S.score += qst.reward.points;
     for (let i = 0; i < qst.reward.tiles; i++) S.stack.push(genTile(S.rng));
-    gained += qst.reward.tiles;
+    gained += qst.reward.tiles; gain('quest', qst.reward.tiles);
+    if (qst.reward.hints) { S.hints += qst.reward.hints; if (S.undo) S.undo.hintGain += qst.reward.hints; updateHintButton(); }
     const t = S.tiles.get(qst.tileKey), w = toWorld(t.q, t.r);
     play('quest'); confettiBurst(2); kick(0.6, ['#c4ff2a', qst.color], 0.3);
-    scoreSign(qst.reward.points, 'quest', `${icon(questIcon(qst), 16)} missão`);
+    scoreSign(qst.reward.points, 'quest', `${icon(questIcon(qst), 16)} missão`, w);
     rewardBanner(qst);
     pulse(w, new THREE.Color(qst.color).getHex());
     spawnBurst(w, [qst.color, '#ffffff'], 40);
@@ -821,21 +1239,22 @@ function checkQuests() {
     S.quests.splice(S.quests.indexOf(qst), 1);
     S.questsLost++;
     play('bad');
-    banner(`${icon(questIcon(qst), 22, '#ff5c7a')} <b>Missão perdida</b>`, qst.kind === 'city' && qst.progress > qst.target ? `a cidade passou de ${qst.target} prédios` : 'a formação ficou cercada — sem recompensa', 'warn', 3200);
+    banner(`${icon('x', 16, '#ff5c7a')} ${icon(questIcon(qst), 20, '#ff5c7a')} <b>missão perdida</b> <small>${questName(qst)} ficou cercado</small>`, '', 'warn', 3000);
     if (qst._card) { qst._card.classList.add('lost'); const c = qst._card; setTimeout(() => c.remove(), 900); qst._card = null; }
     const t = S.tiles.get(qst.tileKey); if (t) spawnBurst(toWorld(t.q, t.r), ['#ff5c7a', '#55506a'], 14, 0.6);
   }
-  renderQuests(done.length || lost.length ? 0 : 400);
+  renderQuests(done.length || lost.length ? 900 : 400); // espera o cartão cumprido/perdido terminar a animação
   return gained;
 }
 function rewardBanner(q) {
-  banner(`${icon('check', 20, '#c4ff2a')} <b>MISSÃO CUMPRIDA</b> ${icon(questIcon(q), 22, q.color)}`, `<b class="big">+${q.reward.tiles}</b> ${icon('tile', 18)} peças novas · +${q.reward.points} pts`, 'quest reward', 4200);
+  banner(`${icon('check', 18, '#c4ff2a')} ${icon(questIcon(q), 22, q.color)} <b class="big">+${q.reward.tiles}</b> ${icon('tile', 18)} <small>+${q.reward.points}</small>`, '', 'quest reward', 3600);
 }
 function gameOver() {
   if (S.over) return;
   S.over = true;
   play('over');
   updateUndoButton();
+  $('end-title').textContent = S.daily ? `Desafio do dia · ${dayLabel(S.daily)}` : 'Acabaram as peças';
   $('end-score').textContent = S.score;
   $('end-best').textContent = S.best;
   $('end-stats').innerHTML = `<span>${icon('tile', 14)} ${S.tiles.size}</span><span>★ ${S.perfects}</span><span>${icon('flag', 14)} ${S.questsDone}</span>`;
@@ -843,11 +1262,19 @@ function gameOver() {
 }
 
 // ---------- novo jogo / demonstração / menu ----------
-function newGame(seed) {
+// Desafio do dia: a semente sai da data local, então todo mundo recebe as mesmas peças hoje
+// e o ranking do dia compara partidas iguais. `?daily` na URL também abre o desafio.
+function todayStr() { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
+function dailySeed(str) { let h = 2166136261; for (const ch of 'punkromantik:' + str) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+const dayLabel = (str) => str.slice(8, 10) + '/' + str.slice(5, 7);
+function newGame(seed, daily = null) {
   clearBoard();
+  S.daily = daily;
+  $('daily-chip').textContent = daily ? `📅 desafio ${dayLabel(daily)}` : ''; $('daily-chip').classList.toggle('hidden', !daily);
+  if (daily) seed = dailySeed(daily);
   S.rng = new RNG(seed != null ? seed >>> 0 : (Date.now() ^ (Math.random() * 1e9)) >>> 0);
   S.stack = makeStack(S.rng, STACK_SIZE);
-  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null;
+  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.coached = 0; S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null; S.gains = {};
   updateHintButton(); updateUndoButton();
   addTile(0, 0, starterTile(S.rng), 0, false);
   refreshSlots();
@@ -858,7 +1285,6 @@ function newGame(seed) {
   rebuildStack();
   stackShown = -1; updateHUD();
   drawNext({ q: 0, r: 0 });
-  banner('<b>Lados iguais encostados = +10</b>', 'toque na casa (ou em Colocar) para fixar', 'info', 3800);
 }
 function demoBoard(n) {
   clearBoard();
@@ -871,7 +1297,7 @@ function demoBoard(n) {
     if (!b) break;
     addTile(b.q, b.r, tile, b.rot, false); refreshSlots();
   }
-  for (const s of S.slots.values()) slotGroup.remove(s.mesh);
+  for (const s of S.slots.values()) slotGroup.remove(s.mesh, s.fill, s.ticks);
   S.slots.clear();
   rig.autoOrbit = true; rig.dist = isNarrow() ? 16 : 13; rig.polar = 0.95;
 }
@@ -900,11 +1326,13 @@ function spawnBurst(w, colors, n, power = 1) {
 function spawnAmbient() {
   const list = S.tileList; if (!list.length) return;
   const t = list[(Math.random() * list.length) | 0], w = toWorld(t.q, t.r);
+  if (t.tile.hidden) return; // achado oculto: partícula do bioma entregaria o palpite
   if (Math.hypot(w.x - rig.target.x, w.z - rig.target.z) > rig.dist * 1.5) return;
   const rot = (t.rot * Math.PI) / 3, geo = t.tile._geo;
   const local = (x, z) => ({ x: w.x + x * Math.cos(rot) - z * Math.sin(rot), z: w.z + x * Math.sin(rot) + z * Math.cos(rot) });
-  if (t.tile.conn && t.tile.conn.type === 'sewage' && geo && geo.routes && Math.random() < 0.6) {
-    const route = geo.routes[(Math.random() * geo.routes.length) | 0], p = pointAt(route.pts, Math.random() * route.L), q = local(p.x + (Math.random() - 0.5) * 0.15, p.z + (Math.random() - 0.5) * 0.15);
+  const sew = geo && geo.routes ? geo.routes.filter((r) => r.type === 'sewage') : [];
+  if (sew.length && Math.random() < 0.6) {
+    const route = sew[(Math.random() * sew.length) | 0], p = pointAt(route.pts, Math.random() * route.L), q = local(p.x + (Math.random() - 0.5) * 0.15, p.z + (Math.random() - 0.5) * 0.15);
     return addParticle({ x: q.x, y: TILE_H + 0.03, z: q.z }, Math.random() < 0.5 ? '#c4ff2a' : '#e4ff7a', { vy: 0.25, life: 1.4, size: 0.5 + Math.random() * 0.4, mode: 'rise', wob: 0.15, wf: 3 });
   }
   const i = (Math.random() * 6) | 0, g = t.tile.ground[i], a = edgeAngle(i), r = 0.25 + Math.random() * 0.5, s = (Math.random() - 0.5) * 0.3;
@@ -922,7 +1350,177 @@ function pulse(w, hex) {
   fxGroup.add(m);
   anims.push({ obj: m, prop: 'pulse', from: 1, to: 2.6, t: 0, dur: 0.7 });
 }
-// veículos percorrem a rede de trilhos/rodovias entre peças; em bifurcações escolhem um ramo; em pontos finais param e voltam
+// ---------- fauna: caravanas, ursos e revoadas percorrendo o próprio bioma ----------
+// Mesma ideia dos veículos, só que a "via" é o terreno: o bicho vai do meio de uma aresta do seu
+// bioma ao meio de outra e, se a peça vizinha casar por aquele lado, atravessa — é isso que faz
+// a caravana andar por hexágonos interconectados. Quem anda em bando segue um rastro de migalhas
+// do líder (posição + rumo a cada passo), que é o que mantém a fila sem cada bicho ter estado.
+const faunaGroup = new THREE.Group();
+boardGroup.add(faunaGroup);
+const FAUNA = {
+  camel: { group: 'rock',  fly: false, speed: 0.27, turn: 2.8, flock: [1, 3], gap: 0.2,  side: 0.016, bob: 0.009, bobHz: 7.5, roll: 0.05, pause: [0.7, 2.6], cap: 3, p2: 0.13, p3: 0.28 },
+  bear:  { group: 'plain', fly: false, speed: 0.19, turn: 2.2, flock: [1, 2], gap: 0.22, side: 0.05,  bob: 0.007, bobHz: 5.5, roll: 0.07, pause: [1.2, 3.6], cap: 3, p2: 0.11, p3: 0.24 },
+  // Revoada: bando maior e solto. `wander` é o desvio próprio de cada pássaro (duas senoides com
+  // frequência sorteada), `lag` embaralha a distância no rastro e `smooth` arredonda a rota —
+  // sem os três o bando virava uma fila reta que dava trancos nas quinas do caminho.
+  bird:  { group: 'solar', fly: true,  speed: 0.6,  turn: 2.4, flock: [3, 6], gap: 0.13, side: 0.13,  bob: 0.035, bobHz: 2.2, roll: 0,    pause: [0, 0],     cap: 3, p2: 0.13, p3: 0.26,
+           smooth: 2.6, wander: 0.11, wanderY: 0.06, lag: 0.26, bank: 0.3 },
+  // Iéti: sozinho, lento e raro — é o que faz valer a pena topar com um.
+  yeti:  { group: 'plain', fly: false, speed: 0.15, turn: 1.8, flock: [1, 1], gap: 0.3,  side: 0,     bob: 0.012, bobHz: 3.4, roll: 0.09, pause: [1.5, 4.5], cap: 2, p2: 0.05, p3: 0.11 },
+};
+const FLY_Y = 0.45, PI2 = Math.PI * 2;
+const fauna = [];
+const faunaGeos = {};
+let birdWingGeo = null;
+const angWrap = (d) => { while (d > Math.PI) d -= PI2; while (d < -Math.PI) d += PI2; return d; };
+
+function faunaMesh(kind, v) {
+  const gk = kind + (kind === 'camel' ? v % 3 : '');
+  const geo = faunaGeos[gk] || (faunaGeos[gk] = kind === 'camel' ? buildCamelGeometry(v % 3) : kind === 'bear' ? buildBearGeometry() : kind === 'yeti' ? buildYetiGeometry() : buildBirdGeometry());
+  const g = new THREE.Group(), gl = new THREE.Mesh(geo.glow, glowMat);
+  gl.layers.enable(BLOOM);
+  g.add(new THREE.Mesh(geo.lit, litMat), gl);
+  if (kind === 'bird') { // asas separadas para bater; a direita é a mesma malha espelhada
+    birdWingGeo = birdWingGeo || buildBirdWingGeometry();
+    const wl = new THREE.Mesh(birdWingGeo, litMat), wr = new THREE.Mesh(birdWingGeo, litMat);
+    wr.scale.z = -1; g.add(wl, wr); g.userData.wings = [wl, wr];
+  }
+  return g;
+}
+const walkableEdge = (t, i, group) => !t.tile.hidden && groupOf(edgeAt(t.tile, t.rot, i)) === group; // bicho entrando no achado oculto entregaria o bioma
+// Escolhe a próxima travessia da peça, entrando pela aresta `entry`. Entre as saídas possíveis,
+// puxa para as que CONTINUAM na peça vizinha: a graça é o bando atravessando a formação inteira,
+// não indo bater na borda e dando meia-volta.
+function faunaRoute(f, entry) {
+  const t = S.tiles.get(f.k); if (!t) return false;
+  const cands = [], open = [];
+  for (let i = 0; i < 6; i++) {
+    if (i === entry || !walkableEdge(t, i, f.cfg.group)) continue;
+    cands.push(i);
+    const nb = S.tiles.get(key(t.q + DIRS[i][0], t.r + DIRS[i][1]));
+    if (nb && walkableEdge(nb, opp(i), f.cfg.group)) open.push(i);
+  }
+  const pool = open.length && Math.random() < 0.82 ? open : cands;
+  f.entry = entry; f.exit = pool.length ? pool[(Math.random() * pool.length) | 0] : entry;
+  f.pts = walkRoute(entry, f.exit, tileGeo(t.tile).hub);
+  f.L = pathLength(f.pts); f.s = 0;
+  const w = toWorld(t.q, t.r); f.cx = w.x; f.cz = w.z;
+  return true;
+}
+function crumbAt(cr, d) {
+  if (d <= cr[0].d) return cr[0];
+  for (let i = cr.length - 1; i > 0; i--) {
+    if (cr[i - 1].d > d) continue;
+    const a = cr[i - 1], b = cr[i], t = (d - a.d) / Math.max(1e-6, b.d - a.d);
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t, h: a.h + angWrap(b.h - a.h) * t };
+  }
+  return cr[cr.length - 1];
+}
+function dropFlock(i) {
+  for (const m of fauna[i].members) faunaGroup.remove(m.mesh);
+  fauna.splice(i, 1);
+}
+function addFlock(kind, t, rng) {
+  const cfg = FAUNA[kind], edges = [];
+  for (let i = 0; i < 6; i++) if (walkableEdge(t, i, cfg.group)) edges.push(i);
+  const f = { kind, cfg, k: key(t.q, t.r), crumbs: [], members: [], wait: 0, sp: 1, head: 0, fly: cfg.fly ? FLY_Y + rng.range(-0.1, 0.26) : 0 };
+  if (!faunaRoute(f, edges[rng.int(edges.length)])) return;
+  f.s = rng.float() * f.L;
+  const n = cfg.flock[0] + rng.int(cfg.flock[1] - cfg.flock[0] + 1), y = TILE_H + f.fly;
+  const spread = cfg.wander ? rng.range(0.75, 1.7) : 1; // cada revoada tem a sua largura
+  const back = cfg.gap * (n - 1) + (cfg.lag || 0) + 0.06;
+  for (let i = 12; i >= 0; i--) { // pré-carrega o rastro para o bando já nascer em fila
+    const q = pointAt(f.pts, Math.max(0, f.s - (back * i) / 12)), x = f.cx + q.x, z = f.cz + q.z, pv = f.crumbs[f.crumbs.length - 1];
+    f.crumbs.push({ x, y, z, h: q.a, d: pv ? pv.d + Math.hypot(x - pv.x, z - pv.z) : 0 });
+  }
+  f.head = f.crumbs[f.crumbs.length - 1].h;
+  for (let m = 0; m < n; m++) {
+    const mesh = faunaMesh(kind, m + rng.int(3));
+    faunaGroup.add(mesh);
+    const mem = { mesh, ph: rng.float() * PI2, wings: mesh.userData.wings };
+    if (cfg.wander) { // voo: cada um com o seu posto no bando e o seu bamboleio
+      mem.side = cfg.side * spread * rng.range(-1, 1);
+      mem.lag = cfg.lag * rng.float();
+      mem.up = cfg.wanderY * rng.range(-1.2, 1.2);
+      mem.wt = rng.float() * 40;
+      mem.wf1 = rng.range(0.5, 1.25); mem.wp1 = rng.float() * PI2;
+      mem.wf2 = rng.range(0.7, 1.7); mem.wp2 = rng.float() * PI2;
+      mem.amp = spread * rng.range(0.6, 1.4);
+    } else mem.side = n === 1 ? 0 : cfg.side * (m % 2 ? 1 : -1) * Math.ceil(m / 2);
+    f.members.push(mem);
+  }
+  fauna.push(f);
+}
+// Uma peça nova PODE trazer bicho: precisa de 2+ lados do bioma (senão não teria para onde andar)
+// e ainda passar no sorteio — a maioria das peças fica sem nada, de propósito.
+function spawnFauna(k) {
+  const t = S.tiles.get(k); if (!t) return;
+  let idx = 0;
+  for (const kind of Object.keys(FAUNA)) {
+    const cfg = FAUNA[kind]; idx++;
+    if (fauna.reduce((n, f) => n + (f.kind === kind ? 1 : 0), 0) >= cfg.cap) continue;
+    let n = 0;
+    for (let i = 0; i < 6; i++) if (walkableEdge(t, i, cfg.group)) n++;
+    if (n < 2) continue;
+    const rng = new RNG(((t.tile.seed ^ (0x5eed * idx)) >>> 0) || idx);
+    if (rng.chance(n >= 3 ? cfg.p3 : cfg.p2)) addFlock(kind, t, rng);
+  }
+}
+function updateFauna(dt) {
+  for (let i = fauna.length - 1; i >= 0; i--) {
+    const f = fauna[i], cfg = f.cfg, t = S.tiles.get(f.k);
+    if (!t) { dropFlock(i); continue; }
+    if (f.wait > 0) f.wait -= dt;
+    else {
+      f.s += cfg.speed * f.sp * dt;
+      if (f.s >= f.L) { // chegou no meio da aresta de saída: atravessa se o vizinho casar por ali
+        const e = f.exit, nb = S.tiles.get(key(t.q + DIRS[e][0], t.r + DIRS[e][1]));
+        if (nb && walkableEdge(t, e, cfg.group) && walkableEdge(nb, opp(e), cfg.group)) { f.k = key(nb.q, nb.r); faunaRoute(f, opp(e)); }
+        else { faunaRoute(f, e); f.wait = cfg.pause[0] + Math.random() * (cfg.pause[1] - cfg.pause[0]); } // sem saída: dá meia-volta
+      }
+    }
+    const p = pointAt(f.pts, Math.min(f.s, f.L));
+    let x = f.cx + p.x, z = f.cz + p.z;
+    if (cfg.smooth) { // quem voa não segue a poligonal: persegue o ponto do caminho com atraso
+      const a = 1 - Math.exp(-dt * cfg.smooth);
+      f.smx = f.smx === undefined ? x : f.smx + (x - f.smx) * a;
+      f.smz = f.smz === undefined ? z : f.smz + (z - f.smz) * a;
+      x = f.smx; z = f.smz;
+      const dx = x - (f.px ?? x), dz = z - (f.pz ?? z);
+      if (dx * dx + dz * dz > 1e-8) { const d2 = angWrap(Math.atan2(dz, dx) - f.head); f.turnRate = d2 / Math.max(dt, 1e-3); f.head += Math.sign(d2) * Math.min(Math.abs(d2), cfg.turn * dt); }
+      f.px = x; f.pz = z; f.sp = 1;
+    } else {
+      const d = angWrap(p.a - f.head);
+      f.head += Math.sign(d) * Math.min(Math.abs(d), cfg.turn * dt);
+      f.sp = Math.max(0.12, 1 - Math.abs(d) / 1.1); // quase para para virar
+    }
+    const y = TILE_H + f.fly, last = f.crumbs[f.crumbs.length - 1];
+    const step = Math.hypot(x - last.x, z - last.z);
+    if (step > 0.004) f.crumbs.push({ x, y, z, h: f.head, d: last.d + step });
+    const headD = f.crumbs[f.crumbs.length - 1].d, keep = cfg.gap * (f.members.length - 1) + (cfg.lag || 0) + 0.3;
+    while (f.crumbs.length > 2 && f.crumbs[1].d < headD - keep) f.crumbs.shift();
+    for (let m = 0; m < f.members.length; m++) {
+      const mem = f.members[m], c = crumbAt(f.crumbs, headD - (m * cfg.gap + (mem.lag || 0)));
+      mem.ph += dt * cfg.bobHz * (0.35 + 0.65 * f.sp);
+      const nx = -Math.sin(c.h), nz = Math.cos(c.h);
+      let side = mem.side, up = Math.sin(mem.ph) * cfg.bob, lean = 0;
+      if (cfg.wander) {
+        mem.wt += dt;
+        const w1 = Math.sin(mem.wt * mem.wf1 + mem.wp1);
+        side += cfg.wander * mem.amp * w1;
+        up += cfg.wanderY * mem.amp * Math.sin(mem.wt * mem.wf2 + mem.wp2) + mem.up;
+        lean = -(cfg.bank || 0) * (mem.amp * mem.wf1 * Math.cos(mem.wt * mem.wf1 + mem.wp1) + (f.turnRate || 0) * 0.25);
+      }
+      mem.mesh.position.set(c.x + nx * side, c.y + up, c.z + nz * side);
+      mem.mesh.rotation.y = -c.h;
+      if (cfg.roll) mem.mesh.rotation.z = Math.sin(mem.ph) * cfg.roll;       // gingado
+      else if (lean) mem.mesh.rotation.z = Math.max(-0.5, Math.min(0.5, lean)); // inclinação nas curvas
+      if (mem.wings) { const fl = Math.sin(mem.ph) * 0.8; mem.wings[0].rotation.x = fl; mem.wings[1].rotation.x = -fl; }
+    }
+  }
+}
+
+// carros percorrem a rede de rodovias entre peças; em bifurcações escolhem um ramo; em pontos finais param e voltam
 function updateVehicles(dt) {
   for (const v of vehicles) {
     const t = S.tiles.get(v.tileKey); if (!t) continue;
@@ -935,9 +1533,9 @@ function updateVehicles(dt) {
       let moved = false;
       if (localExit >= 0) {
         const worldEdge = (localExit + t.rot) % 6, nk = key(t.q + DIRS[worldEdge][0], t.r + DIRS[worldEdge][1]), nb = S.tiles.get(nk);
-        if (nb && nb.tile.conn && nb.tile.conn.type === v.type) {
+        if (nb && edgeAt(nb.tile, nb.rot, opp(worldEdge)) === 'road') {
           const le = (((opp(worldEdge) - nb.rot) % 6) + 6) % 6, nr = tileGeo(nb.tile).routes || [];
-          const cands = []; nr.forEach((r, i) => { if (r.from === le || r.to === le) cands.push(i); });
+          const cands = []; nr.forEach((r, i) => { if (r.type === 'road' && (r.from === le || r.to === le)) cands.push(i); });
           if (cands.length) {
             const ri = cands[(Math.random() * cands.length) | 0], r2 = nr[ri], over = v.dir > 0 ? v.s - L : -v.s;
             if (r2.from === le) { v.dir = 1; v.s = Math.min(over, r2.L); } else { v.dir = -1; v.s = Math.max(r2.L - over, 0); }
@@ -948,6 +1546,153 @@ function updateVehicles(dt) {
       if (!moved) { v.dir *= -1; v.s = Math.max(0, Math.min(L, v.s)); if (localExit < 0) v.wait = 1.2 + Math.random() * 1.5; } // parou no terminal: pausa e volta
     }
     placeVehicle(v, route);
+  }
+}
+
+// ---------- comboios: trem-bala nos trilhos, barquinhos e patinhos no esgoto ----------
+// Antes cada peça de trilho tinha um trem do tamanho do hexágono que só ia e voltava dentro dela.
+// Agora: de tempos em tempos nasce um comboio numa rede, entra por uma ponta, segue de peça em
+// peça (escolhendo ramos nas bifurcações) e some ao chegar numa ponta aberta. Os vagões de trás
+// leem o rastro do primeiro, então fazem as curvas exatamente sobre a via. O esgoto ganhou a
+// mesma vida: um rebocador neon soltando bolhas, ou um patinho de borracha amarelo — às vezes
+// com a ninhada atrás. Barco não entra no tanque nem bate na torre do filtro: dá meia-volta.
+const CONVOY = {
+  // Antes o trem exigia rede de 2+ peças e saía a cada 9-19 s: como as redes ficam picadas em
+  // pedaços de uma peça boa parte da partida, trem e barco quase nunca apareciam ("sumiram").
+  rail:   { minNet: 1, speed: 0.85, gap: 0.215, scale: 1.18, every: [5, 11], ends: 'stop', life: 70 },
+  sewage: { minNet: 1, speed: 0.26, gap: 0.085, scale: 1.25, every: [4, 9], ends: 'turn', life: 55 },
+};
+const trains = [];
+let trainGeos = null, boatGeos = {};
+const nextIn = { rail: 3, sewage: 4 };
+const _tv = new THREE.Vector3();
+const hasConnType = (tile, type) => !!((tile.conn && tile.conn.type === type) || (tile.conn2 && tile.conn2.type === type));
+function connNetworks(type) {
+  const seen = new Set(), nets = [];
+  for (const [k, t] of S.tiles) {
+    if (seen.has(k) || !hasConnType(t.tile, type)) continue;
+    const keys = regionKeys(k, groupOf(type)); for (const x of keys) seen.add(x);
+    nets.push([...keys].filter((x) => hasConnType(S.tiles.get(x).tile, type)));
+  }
+  return nets;
+}
+function exitOpen(t, localExit, type) { // a saída `localExit` desta peça não tem a mesma via do outro lado?
+  if (localExit < 0) return true;
+  const we = (localExit + t.rot) % 6, nb = S.tiles.get(key(t.q + DIRS[we][0], t.r + DIRS[we][1]));
+  return !(nb && edgeAt(nb.tile, nb.rot, opp(we)) === type);
+}
+function convoyMeshes(type, lit, glow) {
+  const geos = [];
+  if (type === 'rail') {
+    if (!trainGeos) trainGeos = { head: buildTrainCarGeometry(true), car: buildTrainCarGeometry(false) };
+    for (let c = 0; c < 3; c++) geos.push({ geo: c === 0 || c === 2 ? trainGeos.head : trainGeos.car, flip: c === 2, scale: 1 });
+  } else if (Math.random() < 0.55) { // patinho de borracha (às vezes com a ninhada)
+    boatGeos.duck = boatGeos.duck || buildBoatGeometry('duck');
+    const kids = Math.random() < 0.45 ? 1 + ((Math.random() * 3) | 0) : 0;
+    geos.push({ geo: boatGeos.duck, scale: 1, duck: true });
+    for (let k = 0; k < kids; k++) geos.push({ geo: boatGeos.duck, scale: 0.55, duck: true });
+  } else {
+    const c = ['#ff3b5c', '#ff7a1a', '#22c8ff', '#ffe02a'][(Math.random() * 4) | 0];
+    boatGeos[c] = boatGeos[c] || buildBoatGeometry({ color: c });
+    geos.push({ geo: boatGeos[c], scale: 1, tug: true });
+  }
+  return geos.map((g) => {
+    const m = new THREE.Group(), gl = new THREE.Mesh(g.geo.glow, glow); gl.layers.enable(BLOOM); m.add(new THREE.Mesh(g.geo.lit, lit), gl);
+    m.userData = { flip: !!g.flip, s: g.scale, duck: g.duck, tug: g.tug, ph: Math.random() * 6.28 };
+    m.visible = false; m.scale.setScalar(CONVOY[type].scale * g.scale); boardGroup.add(m);
+    return m;
+  });
+}
+function spawnConvoy(type) {
+  const spec = CONVOY[type], nets = connNetworks(type).filter((n) => n.length >= spec.minNet); if (!nets.length) return false;
+  const net = nets[(Math.random() * nets.length) | 0], ok = (r) => r.type === type;
+  // prefere entrar por uma ponta aberta da rede (o comboio "chega" de fora); senão nasce no meio dela
+  const starts = [];
+  for (const k of net) { const t = S.tiles.get(k), rs = tileGeo(t.tile).routes || []; rs.forEach((r, i) => { if (!ok(r)) return; if (r.to >= 0 && exitOpen(t, r.from, type)) starts.push({ k, i, dir: 1 }); if (r.to >= 0 && exitOpen(t, r.to, type) && !exitOpen(t, r.from, type)) starts.push({ k, i, dir: -1 }); }); }
+  let st = starts.length ? starts[(Math.random() * starts.length) | 0] : null;
+  if (!st) { const k = net[(Math.random() * net.length) | 0], rs = (tileGeo(S.tiles.get(k).tile).routes || []).map((r, i) => (ok(r) ? i : -1)).filter((i) => i >= 0); if (!rs.length) return false; st = { k, i: rs[(Math.random() * rs.length) | 0], dir: 1 }; }
+  const t = S.tiles.get(st.k), r = tileGeo(t.tile).routes[st.i];
+  const lit = litMat.clone(), glow = glowMat.clone(); lit.transparent = glow.transparent = true; lit.opacity = glow.opacity = 0;
+  const cars = convoyMeshes(type, lit, glow);
+  trains.push({ type, spec, tileKey: st.k, route: st.i, dir: st.dir, s: st.dir > 0 ? 0 : r.L, d: 0, trail: [], cars, lit, glow, fade: 0, state: 'run', wait: 0, age: 0, puff: 0 });
+  return true;
+}
+function removeTrain(i) {
+  const tr = trains[i]; for (const m of tr.cars) boardGroup.remove(m); tr.lit.dispose(); tr.glow.dispose(); trains.splice(i, 1);
+}
+function clearTrains() { while (trains.length) removeTrain(trains.length - 1); nextIn.rail = 3; nextIn.sewage = 4; }
+function trailAt(tr, d) { // ponto do rastro na distância percorrida `d` (interpolado)
+  const T = tr.trail; if (!T.length || d < T[0].d) return null;
+  let i = T.length - 1; while (i > 0 && T[i - 1].d > d) i--;
+  const b = T[i], a = T[i - 1] || b, f = b.d > a.d ? (d - a.d) / (b.d - a.d) : 0;
+  return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, z: a.z + (b.z - a.z) * f };
+}
+function updateTrains(dt, now) {
+  if (!S.started && !S.tiles.size) return;
+  for (const type in CONVOY) {
+    const live = trains.filter((x) => x.type === type).length, max = 1 + (S.tiles.size >= 25 ? 1 : 0) + (S.tiles.size >= 55 ? 1 : 0), ev = CONVOY[type].every;
+    if (live < max && (nextIn[type] -= dt) <= 0) nextIn[type] = spawnConvoy(type) ? ev[0] + Math.random() * (ev[1] - ev[0]) : 2;
+  }
+  for (let i = trains.length - 1; i >= 0; i--) {
+    const tr = trains[i], t = S.tiles.get(tr.tileKey), spec = tr.spec, type = tr.type;
+    if (!t) { removeTrain(i); continue; }
+    tr.age += dt;
+    let route = tileGeo(t.tile).routes[tr.route];
+    if (tr.state === 'run') {
+      const step = spec.speed * dt; tr.s += tr.dir * step; tr.d += step;
+      if (route.stop) { // barco: obstáculo no miolo (tanque, filtro, grade) → meia-volta
+        const p = pointAt(route.pts, Math.max(0, Math.min(route.L, tr.s)));
+        if (Math.hypot(p.x, p.z) < route.stop) { tr.dir *= -1; tr.s += tr.dir * step * 2; }
+      }
+      if (tr.s > route.L || tr.s < 0) {
+        const localExit = tr.dir > 0 ? route.to : route.from, over = tr.dir > 0 ? tr.s - route.L : -tr.s;
+        let moved = false;
+        if (localExit >= 0 && !exitOpen(t, localExit, type) && tr.age < spec.life) {
+          const we = (localExit + t.rot) % 6, nk = key(t.q + DIRS[we][0], t.r + DIRS[we][1]), nb = S.tiles.get(nk);
+          const le = (((opp(we) - nb.rot) % 6) + 6) % 6, nr = tileGeo(nb.tile).routes || [];
+          const cands = []; nr.forEach((r2, j) => { if (r2.type === type && (r2.from === le || r2.to === le)) cands.push(j); });
+          // nas bifurcações, prefere o ramo que continua em outra peça (a graça é atravessar a rede)
+          const onward = cands.filter((j) => { const r2 = nr[j], out = r2.from === le ? r2.to : r2.from; return out >= 0 && !exitOpen(nb, out, type); });
+          const pool = onward.length && Math.random() < 0.8 ? onward : cands;
+          if (pool.length) {
+            const j = pool[(Math.random() * pool.length) | 0], r2 = nr[j];
+            if (r2.from === le) { tr.dir = 1; tr.s = Math.min(over, r2.L); } else { tr.dir = -1; tr.s = Math.max(r2.L - over, 0); }
+            tr.route = j; tr.tileKey = nk; route = r2; moved = true;
+          }
+        }
+        if (!moved) {
+          if (localExit < 0 && spec.ends === 'turn') { tr.dir *= -1; tr.s = Math.max(0, Math.min(route.L, tr.s)); } // barco no fim do canal: volta
+          else { tr.ext = Math.abs(over); tr.s = Math.max(0, Math.min(route.L, tr.s)); tr.state = localExit < 0 ? 'stop' : 'leave'; tr.wait = localExit < 0 ? 2.2 : 0; tr.ext = localExit < 0 ? 0 : tr.ext; }
+        }
+      }
+      if (tr.age > spec.life + 10 && tr.state === 'run') { tr.state = 'leave'; tr.parked = true; } // barco perdido num canal fechado: some devagar
+    } else if (tr.state === 'stop') { if ((tr.wait -= dt) <= 0) { tr.state = 'leave'; tr.parked = true; } }
+    else if (tr.state === 'leave' && !tr.parked) { const step = spec.speed * dt; tr.ext += step; tr.d += step; } // ponta aberta: segue reto para fora da rede enquanto some
+    const cur = S.tiles.get(tr.tileKey), p = pointAt(route.pts, Math.max(0, Math.min(route.L, tr.s))), ex = (tr.ext || 0) * tr.dir;
+    const lx = p.x + Math.cos(p.a) * ex, lz = p.z + Math.sin(p.a) * ex;
+    _tv.set(lx, TILE_H + routeLift(route, lx, lz) + (type === 'sewage' ? 0.012 : 0), lz).applyMatrix4(cur.group.matrix);
+    const last = tr.trail[tr.trail.length - 1];
+    if (!last || Math.abs(tr.d - last.d) > 0.012) { tr.trail.push({ x: _tv.x, y: _tv.y, z: _tv.z, d: tr.d }); if (tr.trail.length > 400) tr.trail.shift(); }
+    // aparece entrando e some saindo (sem pular de repente)
+    tr.fade = tr.state === 'leave' ? tr.fade - dt * 1.4 : Math.min(1, tr.fade + dt * 1.6);
+    if (tr.fade <= 0 && tr.state === 'leave') { removeTrain(i); continue; }
+    tr.lit.opacity = tr.glow.opacity = Math.max(0, tr.fade);
+    const tt = now * 0.001;
+    tr.cars.forEach((m, c) => {
+      const dc = tr.d - c * spec.gap, a = trailAt(tr, dc), b = trailAt(tr, dc - 0.04) || a, f = trailAt(tr, dc + 0.04) || a;
+      if (!a) { m.visible = false; return; }
+      m.visible = true; m.position.set(a.x, a.y, a.z);
+      const dx = f.x - b.x, dz = f.z - b.z; if (Math.abs(dx) + Math.abs(dz) > 1e-5) m.rotation.y = -Math.atan2(dz, dx) + (m.userData.flip ? Math.PI : 0);
+      if (type === 'sewage') { // boia: sobe e desce, balança, e o patinho dá umas viradinhas de curiosidade
+        const u = m.userData; m.position.y += Math.sin(tt * 3.1 + u.ph) * 0.004;
+        m.rotation.z = Math.sin(tt * 2.3 + u.ph) * 0.12; m.rotation.x = Math.sin(tt * 1.7 + u.ph) * 0.08;
+        if (u.duck) m.rotation.y += Math.sin(tt * 0.9 + u.ph) * 0.35;
+      }
+    });
+    if (type === 'sewage' && tr.cars[0].userData.tug && tr.fade > 0.5 && (tr.puff -= dt) <= 0) { // fumacinha de bolhas da chaminé
+      tr.puff = 0.35 + Math.random() * 0.3; const m = tr.cars[0], r = m.rotation.y;
+      addParticle({ x: m.position.x - Math.cos(r) * 0.045, y: m.position.y + 0.08, z: m.position.z + Math.sin(r) * 0.045 }, Math.random() < 0.5 ? '#c4ff2a' : '#2dffb8', { vy: 0.22, life: 1.2, size: 0.35 + Math.random() * 0.3, mode: 'rise', wob: 0.1, wf: 3 });
+    }
   }
 }
 
@@ -979,7 +1724,7 @@ function updateOverlay(dt, now) {
   const t = now * 0.001, dpr = Math.min(devicePixelRatio || 1, 2), W = cfx.width, Hh = cfx.height;
   if (fx.sides > 0) fx.sides = Math.max(0, fx.sides - dt);
   hoverFx.k += (hoverFx.target - hoverFx.k) * Math.min(1, dt * 6);
-  const hasFx = fx.sides > 0 || hoverFx.k > 0.01 || confetti.length > 0;
+  const hasFx = fx.sides > 0 || hoverFx.k > 0.01 || confetti.length > 0 || stars.length > 0;
   if (!hasFx) { if (cfx._dirty) { cctx.clearRect(0, 0, W, Hh); cfx._dirty = false; } return; }
   cctx.clearRect(0, 0, W, Hh); cfx._dirty = true;
   cctx.save(); cctx.scale(dpr, dpr);
@@ -1000,6 +1745,35 @@ function updateOverlay(dt, now) {
     if (p.t >= p.life || p.y > innerHeight + 30) { confetti.splice(i, 1); continue; }
     cctx.save(); cctx.globalAlpha = Math.min(1, (p.life - p.t) / 0.5); cctx.translate(p.x * dpr, p.y * dpr); cctx.rotate(p.rot); cctx.scale(dpr, dpr);
     cctx.fillStyle = p.c; cctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * (0.4 + 0.6 * Math.abs(Math.cos(p.t * 9 + p.rot)))); cctx.restore();
+  }  updateStars(dt, dpr);
+}
+// Estrelas da harmonia: sobem pelas duas laterais da tela, girando e cintilando na cor do bioma
+// completado (com algumas douradas), enquanto as faixas laterais piscam em flashes curtos da mesma cor.
+const stars = [];
+function starBurst(color, n = 26) {
+  const W = innerWidth, H = innerHeight;
+  for (const side of [0, 1]) for (let i = 0; i < n; i++) {
+    const dir = side ? -1 : 1;
+    stars.push({ x: side ? W - 6 - Math.random() * 40 : 6 + Math.random() * 40, y: H * (0.55 + Math.random() * 0.5), vx: dir * (30 + Math.random() * 140), vy: -(260 + Math.random() * 420),
+      r: 7 + Math.random() * 11, rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 6, c: Math.random() < 0.3 ? '#ffd166' : color, t: -Math.random() * 0.5, life: 1.3 + Math.random() * 0.9, ph: Math.random() * 6 });
+  }
+}
+function drawStar(ctx, r) {
+  ctx.beginPath();
+  for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r * 0.45 : r; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+  ctx.closePath(); ctx.fill();
+}
+function updateStars(dt, dpr) {
+  for (let i = stars.length - 1; i >= 0; i--) {
+    const p = stars[i]; p.t += dt; if (p.t < 0) continue;
+    p.vy += 160 * dt; p.vx *= 1 - 1.2 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+    if (p.t >= p.life) { stars.splice(i, 1); continue; }
+    const fade = Math.min(1, (p.life - p.t) / 0.5, p.t / 0.12), tw = 0.7 + 0.3 * Math.sin(p.t * 22 + p.ph);
+    cctx.save(); cctx.globalCompositeOperation = 'lighter'; cctx.globalAlpha = fade * tw;
+    cctx.translate(p.x * dpr, p.y * dpr); cctx.rotate(p.rot); cctx.scale(dpr, dpr);
+    cctx.shadowColor = p.c; cctx.shadowBlur = 14; cctx.fillStyle = p.c; drawStar(cctx, p.r);
+    cctx.shadowBlur = 0; cctx.fillStyle = '#ffffff'; cctx.globalAlpha = fade * tw * 0.8; drawStar(cctx, p.r * 0.4);
+    cctx.restore();
   }
 }
 function confettiBurst(strength = 1) {
@@ -1012,9 +1786,23 @@ function confettiBurst(strength = 1) {
 }
 
 // ---------- HUD, banners, rótulos ----------
+// número flutuando sobre uma casa do tabuleiro (sobe e some)
+function popup(text, w, cls = '', y = 0.5) {
+  const p = screenOf(w, y); if (!p) return;
+  const el = document.createElement('div');
+  el.className = `popup ${cls}`; el.textContent = text;
+  el.style.left = `${p.x}px`; el.style.top = `${p.y}px`;
+  $('popups').appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+}
 // Letreiro neon animado com os pontos: letras pulam uma a uma, o letreiro voa até o placar e o número rola
 let scoreShown = 0, scoreRoll = null;
-function scoreSign(pts, cls = '', sub = '') {
+function scoreSign(pts, cls = '', sub = '', w = null) {
+  if (isNarrow() && w) { // celular: nada no meio da tela — número pequeno sobe da peça e o placar rola
+    popup(`+${pts}`, w, cls === 'perfect' ? 'perfect' : cls === 'quest' ? 'pquest' : pts >= 30 ? 'good' : '');
+    setTimeout(() => bumpScore(cls), 500);
+    return;
+  }
   const el = document.createElement('div');
   el.className = `sign ${cls}`;
   const chars = `+${pts}`.split('');
@@ -1024,21 +1812,42 @@ function scoreSign(pts, cls = '', sub = '') {
   setTimeout(() => {
     const r = start(), dx = target.left + target.width / 2 - (r.left + r.width / 2), dy = target.top + target.height / 2 - (r.top + r.height / 2);
     el.animate([{ transform: 'translate(-50%, -50%) scale(1)', opacity: 1 }, { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.25)`, opacity: 0.2 }], { duration: 520, easing: 'cubic-bezier(0.55, 0, 1, 0.45)', fill: 'forwards' })
-      .onfinish = () => { el.remove(); const sb = $('score-box'); sb.classList.remove('pulse'); void sb.offsetWidth; sb.classList.add('pulse'); scoreRoll = { from: scoreShown, to: S.score, t: 0 }; };
+      .onfinish = () => { el.remove(); bumpScore(cls); };
   }, 950 + Math.min(600, chars.length * 70));
 }
+// placar recebe os pontos: salta, brilho atravessa, faíscas, "+N" escorrega por baixo e o número rola
+let recordFrom = 0; // recorde de antes desta partida — passou dele, o placar entra em modo "novo recorde"
+function bumpScore(cls = '') {
+  const sb = $('score-box'), gain = S.score - scoreShown;
+  sb.classList.remove('pulse'); void sb.offsetWidth; sb.classList.add('pulse', 'rolling');
+  scoreRoll = { from: scoreShown, to: S.score, t: 0 };
+  if (gain <= 0) return;
+  const kind = cls === 'perfect' ? 'perfect' : cls === 'quest' ? 'quest' : '';
+  sb.querySelectorAll('.sb-gain').forEach(g => g.remove());
+  const g = document.createElement('div'); g.className = `sb-gain ${kind}`; g.textContent = `+${gain}`;
+  sb.appendChild(g); setTimeout(() => g.remove(), 1150);
+  const colors = kind === 'perfect' ? ['#7dff9a', '#22f3ff', '#fff'] : kind === 'quest' ? ['#c4ff2a', '#ffe93a', '#fff'] : ['#ffe93a', '#ff2bd6', '#22f3ff', '#fff'];
+  const n = Math.min(18, 8 + Math.round(gain / 10)), w = sb.offsetWidth;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + Math.random() * 0.4, d = w * (0.45 + Math.random() * 0.35);
+    const sp = document.createElement('i'); sp.className = 'sb-spark';
+    sp.style.cssText = `--dx:${(Math.cos(a) * d).toFixed(1)}px;--dy:${(Math.sin(a) * d * 0.55).toFixed(1)}px;--c:${colors[i % colors.length]}`;
+    sb.appendChild(sp); setTimeout(() => sp.remove(), 750);
+  }
+}
+function syncRecord() { $('score-box').classList.toggle('record', recordFrom > 0 && scoreShown > recordFrom); }
 function rollScore(dt) {
-  if (scoreRoll) { scoreRoll.t += dt; const p = Math.min(1, scoreRoll.t / 0.55), e = 1 - Math.pow(1 - p, 3); scoreShown = Math.round(scoreRoll.from + (scoreRoll.to - scoreRoll.from) * e); $('score').textContent = scoreShown; if (p >= 1) scoreRoll = null; }
-  else if (scoreShown !== S.score && !document.querySelector('#signs .sign')) { scoreShown = S.score; $('score').textContent = scoreShown; }
+  if (scoreRoll) { scoreRoll.t += dt; const p = Math.min(1, scoreRoll.t / 0.55), e = 1 - Math.pow(1 - p, 3); scoreShown = Math.round(scoreRoll.from + (scoreRoll.to - scoreRoll.from) * e); $('score').textContent = scoreShown; if (p >= 1) { scoreRoll = null; $('score-box').classList.remove('rolling'); syncRecord(); } }
+  else if (scoreShown !== S.score && !document.querySelector('#signs .sign')) { scoreShown = S.score; $('score').textContent = scoreShown; syncRecord(); }
 }
 let toastTimer = null;
 function toast(msg, ms = 2600) {
-  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  const t = $('toast'); t.innerHTML = msg; t.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
 }
 function banner(title, sub, cls = '', ms = 3000) {
   const box = $('banners');
-  while (box.children.length >= 2) box.firstChild.remove();
+  while (box.children.length >= 1) box.firstChild.remove();
   const el = document.createElement('div');
   el.className = 'banner ' + cls.split(' ').filter(Boolean).map((c) => 'bn-' + c).join(' ');
   el.innerHTML = `<div class="bt">${title}</div>${sub ? `<span>${sub}</span>` : ''}`;
@@ -1067,47 +1876,130 @@ function rewardTiles(n, from) {
     };
   }
 }
+// texto da missão: "ligue 8+ peças de Sandpunk" / "cidade com exatamente 14 prédios"
+function questText(q) {
+  if (q.kind === 'city') return q.exact ? `cidade com <b>exatamente ${q.target}</b> prédios` : `cidade com <b>pelo menos ${q.target}</b> prédios`;
+  return `ligue <b>${q.target} ou mais</b> peças de <b>${GROUP_INFO[q.group].name}</b>`;
+}
+// balão: ícone do grupo num disco da cor do grupo + "falta N" escuro sobre fundo amarelo
+const labelHTML = (q, num) => `<i class="qarrow"></i><span class="qlic">${icon(questIcon(q), 15)}</span>${num}${icon(q.kind === 'city' ? 'city' : 'tile', 11, 'currentColor', 'unit')}`;
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+// Playtest 11/10: o cartão fechado mostrava só "1+" — era quanto FALTA, mas lia como a meta "pelo menos 1",
+// e não dizia o bioma nem o que fazer. Agora o "N+" fica só na meta; o que falta vem escrito por extenso.
+const unitWord = (q, n) => (q.kind === 'city' ? (n === 1 ? 'prédio' : 'prédios') : n === 1 ? 'peça' : 'peças');
+const questName = (q) => (q.kind === 'city' ? 'Prédios Cyberpunk' : GROUP_INFO[q.group].name);
+const leftText = (q, n, to = '') => (n === 0 ? '<b>pronto!</b>' : `${n === 1 ? 'falta' : 'faltam'} <b>${n}</b> ${unitWord(q, n)}${to}`);
+const rewardHTML = (q) => `+${q.reward.tiles}${icon('tile', 11)}${q.reward.hints ? ` +${q.reward.hints}${icon('bulb', 11)}` : ''}`;
+// Quem nunca cumpriu uma missão é tratado como aprendiz: as duas primeiras missões de cada partida abrem
+// o cartão sozinhas (a da mão enquanto ela está na mão; a do tabuleiro durante a jogada seguinte).
+const learner = () => { try { return !localStorage.getItem('pr_qdone'); } catch (e) { return false; } };
+const balloonLeft = (n, to = '') => `<small>${n === 1 ? 'falta' : 'faltam'}</small><b>${n}${to}</b>`;
+let pendLabel = null;
 function renderQuests(delayMs = 0) {
   const el = $('quests'), lab = $('qlabels');
   const build = () => {
     el.innerHTML = ''; lab.innerHTML = '';
+    const pend = S.current && S.current.quest && !S.over ? S.current.quest : null;
+    if (pend) { // missão da peça na mão: card tracejado com ícone, alvo e recompensa (começa quando a peça for colocada)
+      if (pend._coach == null) pend._coach = learner() && S.coached < 2 && !!++S.coached;
+      const d = document.createElement('div'); d.className = 'quest pending' + (pend._coach ? ' open' : ''); d.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
+      d.innerHTML = `<div class="qhead"><span class="qicon">${icon(questIcon(pend), 21)}</span><span class="qtxt"><span class="qname">nova missão · ${questName(pend)}</span><span class="qleft">ligar <b>${pendGoal(pend)}</b> ${unitWord(pend, 2)}</span></span><span class="qrew">${rewardHTML(pend)}</span></div>
+        <div class="qbody"><div class="qin"><p>A peça na sua mão tem uma <b>bandeira</b>. Coloque-a e vá juntando a ela ${pend.kind === 'city' ? `peças de <b>Cyberpunk</b> até a cidade somar <b>${pendGoal(pend)}</b> prédios (cada peça mostra quantos tem)` : `peças de <b>${GROUP_INFO[pend.group].name}</b>, uma encostada na outra, até a formação ter <b>${pendGoal(pend)}</b> peças (a da bandeira conta)`}.</p><p class="qr">Cumpriu: <b>+${pend.reward.tiles}</b> peças na pilha · <b>+${pend.reward.points}</b> pts${pend.reward.hints ? ' · <b>+1</b> dica' : ''}</p></div></div>`;
+      d.addEventListener('click', () => { pend._coach = false; d.classList.toggle('open'); });
+      el.appendChild(d);
+    }
     for (const q of S.quests) {
       const info = GROUP_INFO[q.group], left = questLeft(q), pct = Math.max(0, Math.min(1, q.progress / q.target)), ic = questIcon(q);
-      const d = document.createElement('div'); d.className = 'quest' + (q._open ? ' open' : ''); d.style.setProperty('--qc', q.color || info.color);
+      const d = document.createElement('div'); d.className = 'quest' + (q._open || (q._coachAt === S.placed && !(pend && pend._coach)) ? ' open' : ''); // um cartão aberto por vez d.style.setProperty('--qc', q.color || info.color);
       const R = 17, C = 2 * Math.PI * R;
       d.innerHTML = `<div class="qhead">
-          <span class="qicon"><svg class="qring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="${R}"/><circle cx="20" cy="20" r="${R}" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct)}"/></svg>${icon(ic, 20)}</span>
-          <span class="qleft${q._bump ? ' bump' : ''}">${left}</span>
-          <span class="qrew">+${q.reward.tiles}${icon('tile', 11)}</span>
+          <span class="qicon"><svg class="qring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="${R}"/><circle cx="20" cy="20" r="${R}" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct)}"/></svg>${icon(ic, 21)}</span>
+          <span class="qtxt"><span class="qname">${questName(q)} · ${q.progress}/${q.target}</span><span class="qleft${q._bump ? ' bump' : ''}">${leftText(q, left)}</span></span>
+          <span class="qrew">${rewardHTML(q)}</span>
         </div>
-        <div class="qbody">
-          <p>${q.kind === 'city' ? `Cidade com <b>exatamente ${q.target}</b> prédios ligada à bandeira — tem <b>${q.progress}</b>, faltam <b>${left}</b>.` : `Ligue <b>${q.target}</b> peças de <b>${info.name}</b> à bandeira — já são <b>${q.progress}</b>, faltam <b>${left}</b>.`}</p>
-          <p class="qr">Recompensa: <b>+${q.reward.points}</b> pts · <b>+${q.reward.tiles}</b> peças${q.kind === 'city' ? ' · passar do número cancela a missão' : ''}</p>
+        <div class="qbody"><div class="qin">
+          <p>${q.kind === 'city' ? `Junte peças de <b>Cyberpunk</b> à cidade da bandeira até ela somar <b>${q.target}+</b> prédios` : `Encoste peças de <b>${info.name}</b> na formação da bandeira até ela ter <b>${q.target}+</b> peças`} — já são <b>${q.progress}</b>.</p>
+          <p class="qr">Cumpriu: <b>+${q.reward.tiles}</b> peças na pilha · <b>+${q.reward.points}</b> pts${q.reward.hints ? ' · <b>+1</b> dica' : ''}. Passar do número também vale; se a formação ficar cercada, a missão se perde.</p>
           <button class="qgo" type="button">${icon('pin', 14)} ir até a bandeira</button>
-        </div>`;
+        </div></div>`;
       q._bump = false;
       d.addEventListener('click', (e) => {
         if (e.target.closest('.qgo')) { const t = S.tiles.get(q.tileKey); if (t) { const w = toWorld(t.q, t.r); rig.flyTo(w.x, w.z); pulse(w, new THREE.Color(q.color).getHex()); } return; }
         const open = !d.classList.contains('open');
-        for (const o of S.quests) o._open = false; el.querySelectorAll('.quest.open').forEach((x) => x.classList.remove('open'));
+        for (const o of S.quests) { o._open = false; o._coachAt = -1; } el.querySelectorAll('.quest.open').forEach((x) => x.classList.remove('open'));
         q._open = open; d.classList.toggle('open', open);
       });
       q._card = d; el.appendChild(d);
       const l = document.createElement('div'); l.className = 'qlabel'; l.style.setProperty('--qc', q.color || info.color);
-      l.innerHTML = `${icon(ic, 16)}<b>${left}</b>`;
+      l.innerHTML = labelHTML(q, balloonLeft(left));
+      l.addEventListener('click', () => { const t = S.tiles.get(q.tileKey); if (t) { const w = toWorld(t.q, t.r); rig.flyTo(w.x, w.z); pulse(w, new THREE.Color(q.color).getHex()); } });
       q._label = l; lab.appendChild(l);
     }
-    $('quests-title').classList.toggle('hidden', S.quests.length === 0);
+    pendLabel = null;
+    if (pend) { // a peça na mão também ganha o balão: a bandeira sozinha não dizia que ali tem peças a ganhar
+      const l = document.createElement('div'); l.className = 'qlabel pending'; l.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
+      l.innerHTML = labelHTML(pend, `<small>meta</small><b>${pendGoal(pend)}</b>`) + `<span class="qgain">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +1${icon('bulb', 11)}` : ''}</span>`;
+      pendLabel = l; lab.appendChild(l);
+    }
+    $('quests-title').classList.toggle('hidden', S.quests.length === 0 && !pend);
+    if (S.selected && S.current && !S.over) { const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot); previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true) : new Map()); }
   };
   if (delayMs) setTimeout(build, delayMs); else build();
 }
+// balão e cartão mostram "falta X → Y" para as missões que esta jogada mexeria (verde = fecha, vermelho = passa do número)
+function previewQuests(byGroup) {
+  for (const q of S.quests) {
+    const keys = byGroup.get(q.group);
+    let proj = null;
+    if (keys && keys.has(q.tileKey) && S.current) {
+      proj = questProgress(q, keys) + (q.kind === 'city' ? buildingsOf(S.current) : 1); // + a peça na mão
+    }
+    const left = questLeft(q), raw = proj == null ? null : q.target - proj, newLeft = raw == null ? null : q.exact ? raw : Math.max(0, raw);
+    const cls = newLeft == null ? '' : newLeft === 0 ? 'hit' : newLeft < 0 ? 'over' : '';
+    const to = newLeft == null || newLeft === left ? '' : `<span class="to">→ ${newLeft < 0 ? '✕' : newLeft === 0 ? '✓' : newLeft}</span>`;
+    if (q._label) { q._label.innerHTML = labelHTML(q, balloonLeft(left, to)); q._label.className = 'qlabel ' + cls; }
+    if (q._card) { const ql = q._card.querySelector('.qleft'); if (ql) { ql.innerHTML = leftText(q, left, to); ql.classList.toggle('hit', cls === 'hit'); ql.classList.toggle('over', cls === 'over'); } }
+  }
+}
+// A missão da peça na mão mostra o alvo que ela TERÁ na casa onde o fantasma está: se a bandeira cai
+// numa formação que já existe, rebaseQuest sobe o alvo — antes o balão dizia "5+" e virava "9" ao colocar.
+const pendGoal = (q) => `${q._shown || q.target}+`;
+function previewPendingGoal(ev) {
+  const q = S.current && S.current.quest; if (!q) return;
+  let shown = q.target;
+  if (ev.legal) {
+    const keys = formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true).get(q.group) || new Set();
+    const p = (q.kind === 'city' ? sumBuildings(keys) + buildingsOf(S.current) : keys.size + 1);
+    shown = Math.max(q.target, p + (q.grow || 0));
+  }
+  if (shown === (q._shown || q.target)) return;
+  q._shown = shown; renderQuests(0);
+}
 function updateQuestLabels() {
+  if (pendLabel) { // balão da peça na mão acompanha o fantasma
+    const vis0 = ghostGroup.visible && S.current && S.current.quest && !S.over;
+    const v = vis0 ? new THREE.Vector3(ghostGroup.position.x, ghostGroup.position.y + 0.95, ghostGroup.position.z).project(camera) : null;
+    const vis = v && v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
+    pendLabel.style.display = vis ? '' : 'none';
+    if (vis) { pendLabel.style.left = `${((v.x + 1) / 2) * innerWidth}px`; pendLabel.style.top = `${((1 - v.y) / 2) * innerHeight}px`; }
+  }
+  // bandeira fora da tela: o balão encosta na borda com uma seta apontando para ela (toque = ir até lá)
+  const W = innerWidth, Hh = innerHeight, narrow = isNarrow(), top = narrow ? 120 : 96, bottom = Hh - (narrow ? 200 : 150), side = 30, edgeIn = 62, cards = $('quests').getBoundingClientRect();
   for (const q of S.quests) {
     const t = S.tiles.get(q.tileKey), l = q._label; if (!t || !l) continue;
     const w = toWorld(t.q, t.r), v = new THREE.Vector3(w.x, 0.95, w.z).project(camera);
-    const vis = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
-    l.style.display = vis ? '' : 'none';
-    if (vis) { l.style.left = `${((v.x + 1) / 2) * innerWidth}px`; l.style.top = `${((1 - v.y) / 2) * innerHeight}px`; }
+    let x = ((v.x + 1) / 2) * W, y = ((1 - v.y) / 2) * Hh;
+    const behind = v.z > 1; if (behind) { x = W - x; y = Hh - y; }
+    const inside = !behind && x > side && x < W - side && y > top && y < bottom;
+    l.style.display = '';
+    l.classList.toggle('edge', !inside);
+    if (!inside) {
+      const cx = W / 2, cy = (top + bottom) / 2; let dx = x - cx, dy = y - cy; if (!dx && !dy) dy = 1;
+      const f = Math.min(Math.abs(dx) > 1e-3 ? (W / 2 - edgeIn) / Math.abs(dx) : Infinity, Math.abs(dy) > 1e-3 ? (dy < 0 ? cy - top - 20 : bottom - cy - 20) / Math.abs(dy) : Infinity);
+      x = cx + dx * f; y = cy + dy * f; l.style.setProperty('--ang', `${Math.atan2(dy, dx)}rad`);
+      if (cards.height && x > cards.left - 70 && y < cards.bottom + 30) y = cards.bottom + 34; // não cobre a coluna de cartões
+    }
+    l.style.left = `${x}px`; l.style.top = `${y}px`;
   }
 }
 // contador da pilha: número grande no topo; ao mudar, o dígito antigo sai por cima e o novo entra por baixo com quique
@@ -1122,13 +2014,13 @@ function setStackCount(n, animate) {
   setTimeout(() => { if (stackShown === n) num.innerHTML = `<span>${n}</span>`; }, 520);
 }
 function updateHUD(animateCount = true) {
-  if (!S.started || S.score === 0) { scoreShown = S.score; $('score').textContent = S.score; }
+  if (!S.started || S.score === 0) { scoreShown = S.score; $('score').textContent = S.score; recordFrom = S.best; syncRecord(); }
   const total = S.stack.length + (S.current ? 1 : 0), shown = Math.max(0, total - S.pendingGain);
   setStackCount(shown, animateCount);
   $('best').textContent = S.best;
   const low = S.started && !S.over && total <= 5;
   $('stack-area').classList.toggle('low', low);
-  if (low && !S.lowWarned) { S.lowWarned = true; play('warn'); banner(`<b>ÚLTIMAS ${total} PEÇAS</b>`, `missões ${icon('flag', 12)} e encaixes perfeitos ★ dão peças novas`, 'warn', 4200); }
+  if (low && !S.lowWarned) { S.lowWarned = true; play('warn'); } // o contador vermelho piscando já avisa
   if (total > 5) S.lowWarned = false;
 }
 function showOverlay(id) { document.querySelectorAll('.overlay').forEach((o) => o.classList.add('hidden')); if (id) $(id).classList.remove('hidden'); }
@@ -1170,24 +2062,28 @@ async function submitScore(e) {
   localStorage.setItem('pr_name', name);
   rankSubmitted = true; $('rank-submit').disabled = true; $('rank-name').disabled = true; $('rank-status').textContent = 'enviando…';
   try {
-    const res = await fetch(RANK_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, score: S.score, tiles: S.tiles.size, perfects: S.perfects, quests: S.questsDone }) });
+    const res = await fetch(RANK_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, score: S.score, tiles: S.tiles.size, perfects: S.perfects, quests: S.questsDone, daily: S.daily || undefined }) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    $('rank-status').innerHTML = `${icon('trophy', 16, '#ffe93a')} você ficou em <b>${data.rank}º</b> de ${data.total}`;
+    $('rank-status').innerHTML = `${icon('trophy', 16, '#ffe93a')} você ficou em <b>${data.rank}º</b> de ${data.total}${S.daily ? ` no desafio de ${dayLabel(S.daily)}` : ''}`;
     renderRankList($('rank-list'), data.top, name, data.rank);
   } catch (err) {
     $('rank-status').textContent = 'ranking indisponível agora — seu recorde ficou salvo neste navegador';
     rankSubmitted = false; $('rank-submit').disabled = false; $('rank-name').disabled = false;
   }
 }
-async function openRanking() {
+let rankTab = 'all';
+async function openRanking(tab) {
+  if (typeof tab === 'string') rankTab = tab;
   showOverlay('overlay-rank');
-  const ol = $('rank-list-all'); ol.innerHTML = '<li class="empty">carregando…</li>';
+  document.querySelectorAll('.rank-tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === rankTab));
+  const ol = $('rank-list-all'), day = todayStr(); ol.innerHTML = '<li class="empty">carregando…</li>'; $('rank-total').textContent = '';
   try {
-    const res = await fetch(`${RANK_API}?limit=30`); if (!res.ok) throw new Error();
+    const res = await fetch(`${RANK_API}?limit=30${rankTab === 'daily' ? `&daily=${day}` : ''}`); if (!res.ok) throw new Error();
     const data = await res.json();
     renderRankList(ol, data.top, localStorage.getItem('pr_name') || '', 0);
-    $('rank-total').textContent = data.total ? `${data.total} partidas registradas` : '';
+    if (!data.top.length && rankTab === 'daily') ol.innerHTML = '<li class="empty">ninguém jogou o desafio de hoje ainda</li>';
+    $('rank-total').textContent = rankTab === 'daily' ? `desafio de ${dayLabel(day)} · ${data.total} partidas` : data.total ? `${data.total} partidas registradas` : '';
   } catch (err) { ol.innerHTML = '<li class="empty">ranking indisponível (servidor offline)</li>'; }
 }
 
@@ -1206,7 +2102,7 @@ attachInput(canvas, rig, {
     if (!S.started || S.over) return;
     const c = cellAt(x, y);
     if (!c) return;
-    if (S.selected && S.selected.q === c.q && S.selected.r === c.r) commitPlacement();
+    if (S.selected && S.selected.q === c.q && S.selected.r === c.r) playerCommit();
     else selectSlot(c);
   },
   onRotate(dir) { rotate(dir); },
@@ -1222,9 +2118,10 @@ let wheelAcc = 0;
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
+  if (k !== 'escape' && [...document.querySelectorAll('.overlay')].some((o) => !o.classList.contains('hidden'))) return; // menu/ajuda aberto: o jogo fica parado
   if (k === 'r' || k === 'e') rotate(1);
   else if (k === 'q') rotate(-1);
-  else if (k === ' ' || k === 'enter') { e.preventDefault(); commitPlacement(); }
+  else if (k === ' ' || k === 'enter') { e.preventDefault(); if (!e.repeat) playerCommit(); }
   else if (k === 'h') hint();
   else if (k === 'z' || k === 'u' || k === 'backspace') { e.preventDefault(); undoLast(); }
   else if (k === 'arrowleft' || k === 'a') rig.pan(-40, 0);
@@ -1233,7 +2130,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'arrowdown' || k === 's') rig.pan(0, 40);
   else if (k === '+' || k === '=') rig.zoom(0.85);
   else if (k === '-') rig.zoom(1.18);
-  else if (k === 'escape') { const open = [...document.querySelectorAll('.overlay')].some((o) => !o.classList.contains('hidden')); if (open) showOverlay(null); else if (S.started) { syncMenuToggles(); showOverlay('overlay-menu'); } }
+  else if (k === 'escape') { const open = [...document.querySelectorAll('.overlay')].some((o) => !o.classList.contains('hidden')); if (open) showOverlay(S.started ? null : 'overlay-start'); else if (S.started) { syncMenuToggles(); showOverlay('overlay-menu'); } }
 });
 // Move a peça atual para o melhor encaixe (usado pela dica e pela demonstração automática)
 function applyBest() {
@@ -1247,10 +2144,9 @@ function applyBest() {
 }
 function hint() {
   if (!S.current || S.over) return;
-  if (S.hints <= 0) { play('bad'); toast('Suas 5 dicas desta partida acabaram.'); return; }
+  if (S.hints <= 0) { play('bad'); return; }
   if (!applyBest()) return;
   S.hints--; play('select'); updateHintButton();
-  if (S.hints === 0) toast('Última dica usada — agora é com você!');
 }
 function updateHintButton() {
   const b = $('btn-hint');
@@ -1260,9 +2156,13 @@ function updateHintButton() {
 
 $('rot-l').addEventListener('click', () => rotate(-1));
 $('current-area').addEventListener('click', () => rotate(1));
-$('current-area').addEventListener('wheel', (e) => { e.preventDefault(); rotate(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+$('current-area').addEventListener('wheel', (e) => { // mesmo acumulador do tabuleiro: trackpad não gira 4 passos de uma vez
+  e.preventDefault(); if (!e.deltaY) return;
+  if (Math.abs(e.deltaY) >= 50) { wheelAcc = 0; rotate(e.deltaY > 0 ? 1 : -1); return; }
+  wheelAcc += e.deltaY; while (wheelAcc >= 60) { wheelAcc -= 60; rotate(1); } while (wheelAcc <= -60) { wheelAcc += 60; rotate(-1); }
+}, { passive: false });
 $('rot-r').addEventListener('click', () => rotate(1));
-$('btn-place').addEventListener('click', commitPlacement);
+$('btn-place').addEventListener('click', playerCommit);
 $('btn-hint').addEventListener('click', hint);
 $('btn-undo').addEventListener('click', undoLast);
 $('btn-help').addEventListener('click', () => showOverlay('overlay-help'));
@@ -1270,11 +2170,13 @@ $('btn-menu').addEventListener('click', () => { syncMenuToggles(); showOverlay('
 $('btn-sound').addEventListener('click', () => { setMuted(!isMuted()); $('btn-sound').textContent = isMuted() ? '🔇' : '🔊'; });
 $('btn-start').addEventListener('click', () => { initAudio(); showOverlay(null); newGame(); });
 $('btn-rank').addEventListener('click', openRanking);
-$('btn-restart').addEventListener('click', () => { showOverlay(null); newGame(); });
+$('btn-daily').addEventListener('click', () => { initAudio(); showOverlay(null); newGame(null, todayStr()); });
+document.querySelectorAll('.rank-tab').forEach((b) => b.addEventListener('click', () => openRanking(b.dataset.tab)));
+$('btn-restart').addEventListener('click', () => { showOverlay(null); newGame(null, S.daily ? todayStr() : null); });
 $('btn-look').addEventListener('click', () => showOverlay(null));
 $('rank-form').addEventListener('submit', submitScore);
 $('menu-continue').addEventListener('click', () => showOverlay(null));
-$('menu-restart').addEventListener('click', () => { showOverlay(null); newGame(); });
+$('menu-restart').addEventListener('click', () => { showOverlay(null); newGame(null, S.daily ? todayStr() : null); });
 $('menu-home').addEventListener('click', () => returnToMenu());
 $('menu-rank').addEventListener('click', openRanking);
 $('tg-bloom').addEventListener('click', () => { prefs.bloom = !prefs.bloom; localStorage.setItem('pr_bloom', prefs.bloom ? '1' : '0'); syncMenuToggles(); });
@@ -1331,8 +2233,8 @@ function loop(now) {
   if (ringAcc >= 0.85) {
     ringAcc = 0;
     if (S.started && !S.over) {
-      if (S.stack[0] && S.stack[0].quest && stackTopGroup) spawnRingPulse(uiScene, stackTopGroup.position.x, stackTopGroup.position.y + 0.02, stackTopGroup.position.z, S.stack[0].quest.color);
-      if (S.current && S.current.quest) { spawnRingPulse(uiScene, 50, 0.02, 0, S.current.quest.color); if (ghostGroup.visible) spawnRingPulse(scene, ghostGroup.position.x, TILE_H + 0.02, ghostGroup.position.z, S.current.quest.color, true); }
+      if (S.stack[0] && S.stack[0].quest && stackTopGroup) spawnRingPulse(stackTopGroup, 0, TILE_H + 0.012, 0, S.stack[0].quest.color); // sai do centro do hexágono, sobre o topo da peça
+      if (S.current && S.current.quest) { spawnRingPulse(uiScene, 50, TILE_H + 0.012, 0, S.current.quest.color); if (ghostGroup.visible) spawnRingPulse(scene, ghostGroup.position.x, TILE_H + 0.02, ghostGroup.position.z, S.current.quest.color, true); }
     }
   }
   updateRingPulses(dt);
@@ -1357,6 +2259,7 @@ function loop(now) {
     const a = anims[i]; a.t += dt;
     const p = Math.min(1, a.t / a.dur), e = 1 - Math.pow(1 - p, 3);
     if (a.prop === 'y') a.obj.position.y = a.from + (a.to - a.from) * e;
+    else if (a.prop === 'nudge') { const k = (1 - p) * Math.sin(p * Math.PI * 6); a.obj.rotation.y = k * 0.35; a.obj.scale.setScalar(1 + 0.35 * (1 - p)); if (p >= 1) { a.obj.rotation.y = 0; a.obj.scale.setScalar(1); anims.splice(i, 1); continue; } }
     else if (a.prop === 'settle') { if (a.t >= 0) a.obj.position.y = -a.amp * Math.sin(Math.PI * p); if (p >= 1) a.obj.position.y = 0; }
     else if (a.prop === 'undo') { // antecipação (afunda um tiquinho) -> sobe acelerando, gira e encolhe
       const o = a.obj;
@@ -1398,6 +2301,7 @@ function loop(now) {
   }
   if (S.tileList.length) { ambAcc += dt * Math.min(26, 5 + S.tileList.length * 0.9); while (ambAcc >= 1) { ambAcc -= 1; if (particles.length < 170) spawnAmbient(); } }
   waterMat.uniforms.time.value = now * 0.001; waterGhost.uniforms.time.value = now * 0.001;
+  for (const m of auroraMats) m.uniforms.time.value = now * 0.001;
   const groups = boardGroup.children.concat(ghostGroup.children);
   for (const g of groups) {
     for (const r of g.userData.rotors || []) r.rotation.x += r.userData.speed * dt;
@@ -1412,6 +2316,9 @@ function loop(now) {
     }
   }
   updateVehicles(dt);
+  updateTrains(dt, now);
+  updateHarmonyFx(dt, now); updateRelic(dt, now); updateSlotFx(now);
+  updateFauna(dt);
   for (let i = 0; i < DUST_N; i++) {
     const d = dustVel[i]; let x = dustPos[i * 3], y = dustPos[i * 3 + 1] + d.vy * dt, z = dustPos[i * 3 + 2];
     x += Math.sin(now * 0.0005 * d.f + d.ph) * 0.12 * dt; z += Math.cos(now * 0.0004 * d.f + d.ph) * 0.12 * dt;
@@ -1435,14 +2342,14 @@ function loop(now) {
 }
 
 // acesso para testes/automação no console
-window.PR = { S, rig, camera, toWorld, selectSlot, commitPlacement, hint, applyBest, rotate, evalPlacement, bestPlacement, newGame, confettiBurst, banner, vehicles, fx, hoverFx, kick, undoLast, rewardTiles, checkQuests, regionKeys, buildingsOf, tileGeo, showOverlay };
+window.PR = { S, addHarmonyFx, starBurst, revealAround, setRelicHidden, bumpScore, rig, camera, trains, connNetworks, spawnConvoy, harmonyGroup, spawnRelic, previewBonus, renderQuests, closedRegions, frontier, toWorld, selectSlot, commitPlacement, hint, applyBest, rotate, evalPlacement, bestPlacement, newGame, confettiBurst, banner, vehicles, fauna, fx, hoverFx, kick, undoLast, rewardTiles, checkQuests, regionKeys, buildingsOf, tileGeo, showOverlay, addTile, refreshSlots, genTile, RNG };
 const params = new URLSearchParams(location.search);
 if (params.has('nobloom')) prefs.bloom = false;
 if (params.has('nolens')) prefs.lens = false;
 if (params.has('nograin')) prefs.grain = false;
 $('grain').classList.toggle('hidden', !prefs.grain);
 if (params.has('play')) {
-  showOverlay(null); newGame(params.has('seed') ? +params.get('seed') : undefined);
+  showOverlay(null); newGame(params.has('seed') ? +params.get('seed') : undefined, params.has('daily') ? todayStr() : null);
   if (params.get('zoom')) rig.dist = +params.get('zoom');
   const auto = +(params.get('auto') || 0); // ?play&auto=N joga N peças sozinho (teste/demonstração)
   if (auto > 0) { let n = 0; const iv = setInterval(() => { if (S.over || n++ >= auto) return clearInterval(iv); applyBest(); commitPlacement(); }, 350); }
