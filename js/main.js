@@ -31,9 +31,45 @@ const ICON_PATHS = {
   undo: '<path d="M9 5L3 11l6 6v-4h5a4 4 0 0 1 0 8h-3v3h3a7 7 0 0 0 0-14H9z"/>',
   x: '<path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>',
   check: '<path d="M4 12l5 5L20 6" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+  help: '<path fill-rule="evenodd" d="M12 1.8a10.2 10.2 0 1 1 0 20.4a10.2 10.2 0 1 1 0-20.4ZM12 4.6c-2.7 0-4.6 1.6-4.8 4h2.8c.2-1 .9-1.5 1.9-1.5 1.1 0 1.9.6 1.9 1.6 0 .8-.4 1.2-1.4 1.8-1.3.8-1.9 1.6-1.9 3v.6h2.7v-.4c0-.8.3-1.2 1.4-1.8 1.4-.8 2.3-1.9 2.3-3.4 0-2.4-2-3.9-4.9-3.9ZM10.3 17.4a1.7 1.7 0 1 0 3.4 0a1.7 1.7 0 1 0-3.4 0Z"/>',
+  sound: '<path d="M3.5 9.2c0-.7.5-1.2 1.2-1.2h2.8l4.3-3.6c.8-.6 1.9-.1 1.9.9v13.4c0 1-1.1 1.5-1.9.9L7.5 16H4.7c-.7 0-1.2-.5-1.2-1.2z"/><path d="M16 8.6a4.6 4.6 0 0 1 0 6.8M18.6 6a8.3 8.3 0 0 1 0 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>',
+  mute: '<path d="M3.5 9.2c0-.7.5-1.2 1.2-1.2h2.8l4.3-3.6c.8-.6 1.9-.1 1.9.9v13.4c0 1-1.1 1.5-1.9.9L7.5 16H4.7c-.7 0-1.2-.5-1.2-1.2z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>',
+  menu: '<path d="M5 6.5h14M5 12h14M5 17.5h14" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" fill="none"/>',
+  rotl: '<path d="M7.2 8.4A6.8 6.8 0 1 1 5.5 14" stroke="currentColor" stroke-width="2.9" stroke-linecap="round" fill="none"/><path d="M2.6 4.6l.9 6.6 6.4-2.1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>',
+  rotr: '<path d="M16.8 8.4A6.8 6.8 0 1 0 18.5 14" stroke="currentColor" stroke-width="2.9" stroke-linecap="round" fill="none"/><path d="M21.4 4.6l-.9 6.6-6.4-2.1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>',
+  play: '<path d="M7 4.6c0-1.2 1.3-1.9 2.3-1.3l10.6 7.4c.9.6.9 2 0 2.6L9.3 20.7c-1 .6-2.3-.1-2.3-1.3z"/>',
+  restart: '<path d="M18.4 8.5A7.3 7.3 0 1 0 19.3 13" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" fill="none"/><path d="M20.8 3.6l-.6 6.6-6.4-1.9z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>',
+  home: '<path d="M3 11.2 11.2 4a1.2 1.2 0 0 1 1.6 0l8.2 7.2c.5.5.2 1.3-.5 1.3H19v7.3c0 .7-.5 1.2-1.2 1.2h-3.3v-5.2h-5V21H6.2c-.7 0-1.2-.5-1.2-1.2v-7.3H3.5c-.7 0-1-.8-.5-1.3Z"/>',
+  calendar: '<path fill-rule="evenodd" d="M7 2.5h2v2h6v-2h2v2h1.5A2.5 2.5 0 0 1 21 7v12a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 19V7a2.5 2.5 0 0 1 2.5-2.5H7ZM5.5 10v9h13v-9ZM12 11.5l1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.3-2.4 1.3.5-2.6-1.9-1.8 2.6-.4Z"/>',
+  sparkle: '<path d="M12 1.5c.6 4.6 2 7.4 9 10.5-7 3.1-8.4 5.9-9 10.5-.6-4.6-2-7.4-9-10.5 7-3.1 8.4-5.9 9-10.5z"/>',
+  star: '<path d="M12 2.2l2.9 6 6.6.9-4.8 4.6 1.2 6.6L12 17.2l-5.9 3.1 1.2-6.6-4.8-4.6 6.6-.9z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
+  heart: '<path d="M12 20.5s-8.5-5-8.5-11A4.8 4.8 0 0 1 12 6.6a4.8 4.8 0 0 1 8.5 2.9c0 6-8.5 11-8.5 11z"/>',
+  eye: '<path fill-rule="evenodd" d="M12 5c5.2 0 9 4.4 10 7-1 2.6-4.8 7-10 7S3 14.6 2 12c1-2.6 4.8-7 10-7Zm0 3a4 4 0 1 0 0 8a4 4 0 1 0 0-8Zm0 2.3a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4Z"/>',
   trophy: '<path d="M6 3h12v2h3v3a5 5 0 0 1-4.3 4.95A6 6 0 0 1 13 16.9V19h4v2H7v-2h4v-2.1a6 6 0 0 1-3.7-3.95A5 5 0 0 1 3 8V5h3zm-1 4v1a3 3 0 0 0 1.2 2.4A6 6 0 0 1 6 9V7zm14 0h-1v2c0 .5 0 1-.2 1.4A3 3 0 0 0 19 8z"/>',
 };
 const icon = (name, size = 18, color = 'currentColor', cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="${color}" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
+// Hexi, o mascote: hexágono de moicano que reage ao jogo (idle pisca, happy = olhinhos ^ ^, star = olhos de estrela, sad = chorinho)
+const HEXI_SVG = (cls = '', mood = 'idle') => `<svg class="hexi ${cls} m-${mood}" viewBox="0 -8 48 56" aria-hidden="true">
+  <path d="M19 4 L16 -6 L22 0 L24 -8 L27 0 L33 -5 L30 4Z" fill="#7fd8ff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M22 1 L24 -4 L26 1Z" fill="#ffe066"/>
+  <path d="M24 3 L42 13.5 V34.5 L24 45 L6 34.5 V13.5Z" fill="#ffb3d6" stroke="#fff" stroke-width="3.2" stroke-linejoin="round"/>
+  <path d="M24 6.5 L39 15.2 V20 Q24 13 9 20 V15.2Z" fill="#fff" opacity="0.35"/>
+  <ellipse cx="13" cy="30" rx="3.6" ry="2.2" fill="#ff6fa8" opacity="0.6"/><ellipse cx="35" cy="30" rx="3.6" ry="2.2" fill="#ff6fa8" opacity="0.6"/>
+  <g class="hx-eyes" data-m="idle sad"><ellipse cx="17.5" cy="24.5" rx="2.8" ry="3.6" fill="#4a2a5c"/><ellipse cx="30.5" cy="24.5" rx="2.8" ry="3.6" fill="#4a2a5c"/><circle cx="18.5" cy="23.2" r="1.1" fill="#fff"/><circle cx="31.5" cy="23.2" r="1.1" fill="#fff"/></g>
+  <path data-m="happy" d="M14.5 26 Q17.5 21 20.5 26 M27.5 26 Q30.5 21 33.5 26" stroke="#4a2a5c" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+  <path data-m="star" d="M17.5 20.5l1.3 2.7 3 .4-2.2 2.1.5 3-2.6-1.4-2.6 1.4.5-3-2.2-2.1 3-.4zM30.5 20.5l1.3 2.7 3 .4-2.2 2.1.5 3-2.6-1.4-2.6 1.4.5-3-2.2-2.1 3-.4z" fill="#ffd23f" stroke="#4a2a5c" stroke-width="1" stroke-linejoin="round"/>
+  <path data-m="idle" d="M21.5 30 Q24 32.6 26.5 30" stroke="#4a2a5c" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path data-m="happy star" d="M20.5 29.5 Q24 35 27.5 29.5Z" fill="#4a2a5c" stroke="#4a2a5c" stroke-width="1.4" stroke-linejoin="round"/>
+  <path data-m="sad" d="M21 32.5 Q24 29.8 27 32.5" stroke="#4a2a5c" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path data-m="sad" d="M33.5 28 q1.6 3 0 4.2 q-1.6-1.2 0-4.2z" fill="#7fd8ff"/>
+</svg>`;
+let hexiTimer = null;
+function hexiMood(mood, ms = 1400) { // o Hexi do placar muda de cara e dá um pulinho (ou balança, se for tristeza)
+  const h = document.querySelector('#hexi-hud .hexi'); if (!h) return;
+  h.classList.remove('m-idle', 'm-happy', 'm-star', 'm-sad', 'hop', 'shake'); void h.getBoundingClientRect();
+  h.classList.add('m-' + mood, mood === 'sad' ? 'shake' : 'hop');
+  clearTimeout(hexiTimer); hexiTimer = setTimeout(() => { h.classList.remove('m-' + mood, 'hop', 'shake'); h.classList.add('m-idle'); }, ms);
+}
 const questIcon = (q) => (q.kind === 'city' ? 'city' : q.group);
 const questLeft = (q) => Math.max(0, q.target - q.progress);
 const plus = (q) => (q.exact ? '' : '+'); // "N+": pelo menos N
@@ -670,7 +706,7 @@ function updateGhost() {
   ghostLit.opacity = op; ghostGlow.opacity = op; waterGhost.uniforms.opacity.value = op;
   hoverFx.target = 0;
   const bp = $('btn-place');
-  if (!S.selected || !S.current) { ghostGroup.visible = false; ghostShadow.visible = false; seamGhost.group.visible = false; hideFormation(); setSlotMaterials(); bp.disabled = true; bp.innerHTML = 'Colocar'; return; }
+  if (!S.selected || !S.current) { ghostGroup.visible = false; ghostShadow.visible = false; seamGhost.group.visible = false; hideFormation(); setSlotMaterials(); bp.disabled = true; bp.innerHTML = 'Escolha uma casa'; return; }
   const w = toWorld(S.selected.q, S.selected.r);
   if (!ghostGroup.visible) { ghostPos.x.v = w.x; ghostPos.z.v = w.z; ghostPos.x.vel = 0; ghostPos.z.vel = 0; ghostGroup.position.set(w.x, 0.24, w.z); }
   ghostShadow.position.set(w.x, TILE_H + 0.009, w.z);
@@ -812,7 +848,7 @@ function commitPlacement() {
   spawnBurst(w, ev.matchedTypes.map((t) => TERRAIN[t].color), ev.perfect ? 34 : 4 + ev.matches * 3);
   if (ev.perfect) {
     play('perfect'); pulse(w, 0xffd166); confettiBurst(2);
-    banner(`★ <b>PERFEITO</b> +1 ${icon('tile', 14)}`, '', 'perfect', 2600);
+    banner(`${icon('star', 18, '#ffd23f')} <b>Perfeito!</b> <b class="big">+1</b> ${icon('tile', 16, '#2fbf86')}`, '', 'perfect', 2600);
   } else if (ev.matches >= 3) {
     confettiBurst(ev.matches >= 4 ? 2 : 1); play('confetti');
   }
@@ -821,12 +857,12 @@ function commitPlacement() {
   for (const h of harm) {
     const t = S.tiles.get(h.k), hw = toWorld(t.q, t.r), color = GROUP_INFO[h.g].color;
     setTimeout(() => { play('harmony'); confettiBurst(3); kick(1.1, [color, '#ffd166', '#ffffff'], 1); pulse(hw, GROUP_HEX[h.g]); pulse(hw, 0xffd166); spawnBurst(hw, [color, '#ffd166', '#ffffff'], 46, 1.3); cameraShake = { t: 0, dur: 0.5, amp: 0.09 }; }, 260);
-    banner(`✺ <b>HARMONIA</b> <b class="big">+${HARMONY_PTS}</b>`, '', 'perfect harmony', 3200);
+    banner(`✺ <b>Harmonia!</b> <b class="big">+${HARMONY_PTS}</b>`, '', 'perfect harmony', 3200);
   }
   if (relicHit) {
     const rw = toWorld(relicHit.q, relicHit.r);
     play('relic'); confettiBurst(2); pulse(rw, GROUP_HEX[relicHit.g]); spawnBurst(rw, [GROUP_INFO[relicHit.g].color, '#ffffff'], 36, 1.1);
-    banner(`✦ <b>ACHADO</b> <b class="big">+${RELIC_TILES}</b> ${icon('tile', 18)} <small>+${RELIC_PTS}</small>`, '', 'quest reward', 3200);
+    banner(`${icon('sparkle', 18, '#8f73f0')} <b>Achado!</b> <b class="big">+${RELIC_TILES}</b> ${icon('tile', 18)} <small>+${RELIC_PTS}</small>`, '', 'quest reward', 3200);
   }
   if (tile.quest) S.quests.push({ ...tile.quest, tileKey: key(q, r) });
   const fromRect = { x: (window.innerWidth / 2), y: window.innerHeight * 0.36 };
@@ -1068,7 +1104,7 @@ function checkQuests() {
     S.quests.splice(S.quests.indexOf(qst), 1);
     S.questsLost++;
     play('bad');
-    banner(`${icon('x', 16, '#ff5c7a')} ${icon(questIcon(qst), 20, '#ff5c7a')} <b>missão perdida</b>`, '', 'warn', 2600);
+    banner(`${icon(questIcon(qst), 20, '#d63a5e')} <b>missão perdida</b>`, '', 'warn', 2600);
     if (qst._card) { qst._card.classList.add('lost'); const c = qst._card; setTimeout(() => c.remove(), 900); qst._card = null; }
     const t = S.tiles.get(qst.tileKey); if (t) spawnBurst(toWorld(t.q, t.r), ['#ff5c7a', '#55506a'], 14, 0.6);
   }
@@ -1076,7 +1112,7 @@ function checkQuests() {
   return gained;
 }
 function rewardBanner(q) {
-  banner(`${icon('check', 18, '#c4ff2a')} ${icon(questIcon(q), 22, q.color)} <b class="big">+${q.reward.tiles}</b> ${icon('tile', 18)} <small>+${q.reward.points}</small>`, '', 'quest reward', 3600);
+  banner(`${icon('check', 18, '#2fbf86')} <b>missão!</b> <b class="big">+${q.reward.tiles}</b> ${icon('tile', 18)} <small>+${q.reward.points}</small>`, '', 'quest reward', 3600);
 }
 function gameOver() {
   if (S.over) return;
@@ -1086,7 +1122,7 @@ function gameOver() {
   $('end-title').textContent = S.daily ? `Desafio do dia · ${dayLabel(S.daily)}` : 'Acabaram as peças';
   $('end-score').textContent = S.score;
   $('end-best').textContent = S.best;
-  $('end-stats').innerHTML = `<span>${icon('tile', 14)} ${S.tiles.size}</span><span>★ ${S.perfects}</span><span>${icon('flag', 14)} ${S.questsDone}</span>`;
+  $('end-stats').innerHTML = `<span>${icon('tile', 14)} ${S.tiles.size}</span><span>${icon('star', 15, '#ffd23f')} ${S.perfects}</span><span>${icon('flag', 14)} ${S.questsDone}</span>`;
   setTimeout(() => { showOverlay('overlay-end'); prepareRankForm(); }, 700);
 }
 
@@ -1099,7 +1135,7 @@ const dayLabel = (str) => str.slice(8, 10) + '/' + str.slice(5, 7);
 function newGame(seed, daily = null) {
   clearBoard();
   S.daily = daily;
-  $('daily-chip').textContent = daily ? `📅 desafio ${dayLabel(daily)}` : ''; $('daily-chip').classList.toggle('hidden', !daily);
+  $('daily-chip').innerHTML = daily ? `${icon('calendar', 13)} desafio ${dayLabel(daily)}` : ''; $('daily-chip').classList.toggle('hidden', !daily);
   if (daily) seed = dailySeed(daily);
   S.rng = new RNG(seed != null ? seed >>> 0 : (Date.now() ^ (Math.random() * 1e9)) >>> 0);
   S.stack = makeStack(S.rng, STACK_SIZE);
@@ -1570,15 +1606,25 @@ function updateOverlay(dt, now) {
     p.vy += 900 * dt; p.vx *= 1 - 1.4 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
     if (p.t >= p.life || p.y > innerHeight + 30) { confetti.splice(i, 1); continue; }
     cctx.save(); cctx.globalAlpha = Math.min(1, (p.life - p.t) / 0.5); cctx.translate(p.x * dpr, p.y * dpr); cctx.rotate(p.rot); cctx.scale(dpr, dpr);
-    cctx.fillStyle = p.c; cctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * (0.4 + 0.6 * Math.abs(Math.cos(p.t * 9 + p.rot)))); cctx.restore();
+    cctx.fillStyle = p.c;
+    if (p.s) { // coraçãozinho ou estrelinha (vira de lado como papel)
+      const k = p.w * 0.11; cctx.scale(k * (0.35 + 0.65 * Math.abs(Math.cos(p.t * 6 + p.rot))), k); cctx.fill(p.s === 1 ? CONF_HEART : CONF_STAR);
+    } else cctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * (0.4 + 0.6 * Math.abs(Math.cos(p.t * 9 + p.rot))));
+    cctx.restore();
   }
 }
+// confete kawaii: papel em tons pastel + uns neon da cena, e ~30% vira coração ou estrela
+const CONF_COLORS = ['#ff9ccd', '#ffe066', '#7fd8ff', '#b9a3ff', '#6fe3b0', '#ffb38a', '#ffffff', '#ff2bd6', '#22f3ff'];
+const CONF_HEART = new Path2D('M0 3.5C-4.5 0-6-2-6-4a3 3 0 0 1 6-1a3 3 0 0 1 6 1c0 2-1.5 4-6 7.5z');
+const CONF_STAR = new Path2D('M0-6l1.8 3.8 4.2.5-3.1 2.9.8 4.1L0 3.3-3.7 5.3l.8-4.1L-6-1.7l4.2-.5z');
 function confettiBurst(strength = 1) {
   const W = innerWidth, H = innerHeight, n = 40 * strength;
   for (const side of [0, 1]) for (let i = 0; i < n; i++) {
     const dir = side ? -1 : 1;
     confetti.push({ x: side ? W + 8 : -8, y: H * (0.3 + Math.random() * 0.35), vx: dir * (260 + Math.random() * 520), vy: -(250 + Math.random() * 450), rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 14,
-      w: 5 + Math.random() * 6, h: 9 + Math.random() * 8, c: NEON[(Math.random() * NEON.length) | 0], t: 0, life: 2 + Math.random() * 1.2 });
+      w: 5 + Math.random() * 6, h: 9 + Math.random() * 8, c: CONF_COLORS[(Math.random() * CONF_COLORS.length) | 0], t: 0, life: 2 + Math.random() * 1.2,
+      s: Math.random() < 0.3 ? 1 + (Math.random() < 0.5 ? 1 : 0) : 0 });
+    if (confetti[confetti.length - 1].s) confetti[confetti.length - 1].w += 6;
   }
 }
 
@@ -1619,11 +1665,12 @@ function bumpScore(cls = '') {
   sb.classList.remove('pulse'); void sb.offsetWidth; sb.classList.add('pulse', 'rolling');
   scoreRoll = { from: scoreShown, to: S.score, t: 0 };
   if (gain <= 0) return;
+  if (!$('banners').children.length) hexiMood(cls === 'perfect' || gain >= 40 ? 'star' : 'happy');
   const kind = cls === 'perfect' ? 'perfect' : cls === 'quest' ? 'quest' : '';
   sb.querySelectorAll('.sb-gain').forEach(g => g.remove());
   const g = document.createElement('div'); g.className = `sb-gain ${kind}`; g.textContent = `+${gain}`;
   sb.appendChild(g); setTimeout(() => g.remove(), 1150);
-  const colors = kind === 'perfect' ? ['#7dff9a', '#22f3ff', '#fff'] : kind === 'quest' ? ['#c4ff2a', '#ffe93a', '#fff'] : ['#ffe93a', '#ff2bd6', '#22f3ff', '#fff'];
+  const colors = kind === 'perfect' ? ['#6fe3b0', '#7fd8ff', '#ffe066'] : kind === 'quest' ? ['#b9a3ff', '#ffe066', '#ff9ccd'] : ['#ffe066', '#ff9ccd', '#7fd8ff', '#b9a3ff'];
   const n = Math.min(18, 8 + Math.round(gain / 10)), w = sb.offsetWidth;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + Math.random() * 0.4, d = w * (0.45 + Math.random() * 0.35);
@@ -1647,7 +1694,9 @@ function banner(title, sub, cls = '', ms = 3000) {
   while (box.children.length >= 1) box.firstChild.remove();
   const el = document.createElement('div');
   el.className = 'banner ' + cls.split(' ').filter(Boolean).map((c) => 'bn-' + c).join(' ');
-  el.innerHTML = `<div class="bt">${title}</div>${sub ? `<span>${sub}</span>` : ''}`;
+  const mood = /warn/.test(cls) ? 'sad' : /perfect|harmony|reward/.test(cls) ? 'star' : 'happy';
+  el.innerHTML = `${HEXI_SVG('', mood)}<div><div class="bt">${title}</div>${sub ? `<span>${sub}</span>` : ''}</div>`;
+  hexiMood(mood, ms * 0.6);
   box.appendChild(el);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, ms);
 }
@@ -1797,11 +1846,10 @@ function updateHUD(animateCount = true) {
   if (total > 5) S.lowWarned = false;
 }
 function showOverlay(id) { document.querySelectorAll('.overlay').forEach((o) => o.classList.add('hidden')); if (id) $(id).classList.remove('hidden'); }
+function syncSoundIcon() { $('btn-sound').innerHTML = icon(isMuted() ? 'mute' : 'sound', 22); }
 function syncMenuToggles() {
-  $('tg-bloom').textContent = `Brilho neon: ${prefs.bloom ? 'ligado' : 'desligado'}`;
-  $('tg-sound').textContent = `Som: ${isMuted() ? 'desligado' : 'ligado'}`;
-  $('tg-lens').textContent = `Efeito de lente: ${prefs.lens ? 'ligado' : 'desligado'}`;
-  $('tg-grain').textContent = `Granulação: ${prefs.grain ? 'ligada' : 'desligada'}`;
+  const tg = (id, on) => { $(id).classList.toggle('on', on); $(id).setAttribute('aria-pressed', on); };
+  tg('tg-bloom', prefs.bloom); tg('tg-sound', !isMuted()); tg('tg-lens', prefs.lens); tg('tg-grain', prefs.grain);
   $('grain').classList.toggle('hidden', !prefs.grain);
 }
 
@@ -1838,7 +1886,7 @@ async function submitScore(e) {
     const res = await fetch(RANK_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, score: S.score, tiles: S.tiles.size, perfects: S.perfects, quests: S.questsDone, daily: S.daily || undefined }) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    $('rank-status').innerHTML = `${icon('trophy', 16, '#ffe93a')} você ficou em <b>${data.rank}º</b> de ${data.total}${S.daily ? ` no desafio de ${dayLabel(S.daily)}` : ''}`;
+    $('rank-status').innerHTML = `${icon('trophy', 18)} você ficou em <b>${data.rank}º</b> de ${data.total}${S.daily ? ` no desafio de ${dayLabel(S.daily)}` : ''}`;
     renderRankList($('rank-list'), data.top, name, data.rank);
   } catch (err) {
     $('rank-status').textContent = 'ranking indisponível agora — seu recorde ficou salvo neste navegador';
@@ -1922,7 +1970,7 @@ function hint() {
 }
 function updateHintButton() {
   const b = $('btn-hint');
-  b.innerHTML = `${icon('bulb', 18)}<b>${S.hints}</b>`;
+  b.innerHTML = `<span class="row">${icon('bulb', 19)}<b>${S.hints}</b></span><span class="lbl">dica</span>`;
   b.disabled = S.hints <= 0;
 }
 
@@ -1935,7 +1983,7 @@ $('btn-hint').addEventListener('click', hint);
 $('btn-undo').addEventListener('click', undoLast);
 $('btn-help').addEventListener('click', () => showOverlay('overlay-help'));
 $('btn-menu').addEventListener('click', () => { syncMenuToggles(); showOverlay('overlay-menu'); });
-$('btn-sound').addEventListener('click', () => { setMuted(!isMuted()); $('btn-sound').textContent = isMuted() ? '🔇' : '🔊'; });
+$('btn-sound').addEventListener('click', () => { setMuted(!isMuted()); syncSoundIcon(); });
 $('btn-start').addEventListener('click', () => { initAudio(); showOverlay(null); newGame(); });
 $('btn-rank').addEventListener('click', openRanking);
 $('btn-daily').addEventListener('click', () => { initAudio(); showOverlay(null); newGame(null, todayStr()); });
@@ -1950,10 +1998,12 @@ $('menu-rank').addEventListener('click', openRanking);
 $('tg-bloom').addEventListener('click', () => { prefs.bloom = !prefs.bloom; localStorage.setItem('pr_bloom', prefs.bloom ? '1' : '0'); syncMenuToggles(); });
 $('tg-grain').addEventListener('click', () => { prefs.grain = !prefs.grain; localStorage.setItem('pr_grain', prefs.grain ? '1' : '0'); syncMenuToggles(); });
 $('tg-lens').addEventListener('click', () => { prefs.lens = !prefs.lens; localStorage.setItem('pr_lens', prefs.lens ? '1' : '0'); syncMenuToggles(); });
-$('tg-sound').addEventListener('click', () => { setMuted(!isMuted()); $('btn-sound').textContent = isMuted() ? '🔇' : '🔊'; syncMenuToggles(); });
+$('tg-sound').addEventListener('click', () => { setMuted(!isMuted()); syncSoundIcon(); syncMenuToggles(); });
 document.querySelectorAll('.close-overlay').forEach((b) => b.addEventListener('click', () => showOverlay(null)));
 document.querySelectorAll('.to-start').forEach((b) => b.addEventListener('click', () => showOverlay(S.started ? null : 'overlay-start')));
 document.querySelectorAll('.ic-slot').forEach((el) => { el.innerHTML = icon(el.dataset.icon, +(el.dataset.size || 18)); });
+document.querySelectorAll('.hexi-slot').forEach((el) => { el.outerHTML = el.id ? `<span id="${el.id}">${HEXI_SVG(el.dataset.cls, el.dataset.mood)}</span>` : HEXI_SVG(el.dataset.cls, el.dataset.mood); });
+syncSoundIcon();
 
 // ---------- laço ----------
 function resize() {

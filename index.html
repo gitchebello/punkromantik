@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1">
-<meta name="theme-color" content="#1c1c22">
+<meta name="theme-color" content="#ff9ccd">
 <title>Punkromantik</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='25,5 75,5 100,50 75,95 25,95 0,50' fill='%23ff2bd6'/%3E%3Cpolygon points='35,22 65,22 80,50 65,78 35,78 20,50' fill='%2322f3ff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
@@ -13,41 +13,44 @@
 
 <div id="hud" class="hidden">
   <div class="hud-top">
-    <div class="logo">PUNK<span>ROMANTIK</span></div>
+    <div class="logo">punk<i>♥</i><span>romantik</span></div>
     <div id="daily-chip" class="daily-chip hidden"></div>
     <div class="score-box" id="score-box">
       <i class="sb-corner tl"></i><i class="sb-corner tr"></i><i class="sb-corner bl"></i><i class="sb-corner br"></i><i class="sb-shine"></i>
-      <div class="score" id="score">0</div>
-      <div class="score-label"><span class="rec-old">recorde <b id="best">0</b></span><span class="rec-new">★ novo recorde!</span></div>
+      <span class="hexi-slot" data-cls="bob" id="hexi-hud"></span>
+      <div class="sb-num">
+        <div class="score" id="score">0</div>
+        <div class="score-label"><span class="rec-old">pontos · recorde <b id="best">0</b></span><span class="rec-new">★ novo recorde! ★</span></div>
+      </div>
     </div>
     <div class="icon-btns">
-      <button id="btn-help" class="icon" title="Ajuda">?</button>
-      <button id="btn-sound" class="icon" title="Som">🔊</button>
-      <button id="btn-menu" class="icon menu" title="Menu / sair">☰</button>
+      <button id="btn-help" class="icon" title="Como jogar" aria-label="Como jogar"><span class="ic-slot" data-icon="help" data-size="22"></span></button>
+      <button id="btn-sound" class="icon" title="Som" aria-label="Som"><span class="ic-slot" data-icon="sound" data-size="22"></span></button>
+      <button id="btn-menu" class="icon menu" title="Menu" aria-label="Menu"><span class="ic-slot" data-icon="menu" data-size="22"></span></button>
     </div>
   </div>
 
   <div id="banners" class="banners"></div>
   <div class="quests-wrap">
-    <div id="quests-title" class="quests-title hidden"><span class="ic-slot" data-icon="flag" data-size="12"></span> missões · toque para ler</div>
+    <div id="quests-title" class="quests-title hidden"><span class="ic-slot" data-icon="flag" data-size="13"></span> missões <small>· toque para ler</small></div>
     <div id="quests" class="quests"></div>
   </div>
 
   <div class="hud-bottom">
-    <div id="stack-area" class="stack-area" title="Peças restantes — a que paira é a próxima">
-      <div id="stack-count" class="stack-count"><span class="ic-slot" data-icon="tile" data-size="16"></span><span class="num"><span>0</span></span></div>
+    <div id="stack-area" class="stack-area" title="Peças que faltam — a que paira é a próxima">
+      <div id="stack-count" class="stack-count"><span class="ic-slot" data-icon="tile" data-size="18"></span><span class="sc-txt"><span class="num"><span>0</span></span><small>peças</small></span></div>
       <div id="next-bld" class="bld-badge next" title="Prédios na próxima peça" hidden></div>
     </div>
     <div class="tile-controls">
-      <button id="rot-l" class="round" title="Girar (Q)">⟲</button>
-      <div id="current-area" class="current-area" title="Peça atual — toque/role para girar"><div id="cur-bld" class="bld-badge" title="Prédios nesta peça" hidden></div></div>
-      <button id="rot-r" class="round" title="Girar (R)">⟳</button>
+      <button id="rot-l" class="round" title="Girar para a esquerda (Q)" aria-label="Girar para a esquerda"><span class="ic-slot" data-icon="rotl" data-size="28"></span></button>
+      <div id="current-area" class="current-area" title="Sua peça — toque ou role para girar"><div id="cur-bld" class="bld-badge" title="Prédios nesta peça" hidden></div><span class="cap">toque p/ girar</span></div>
+      <button id="rot-r" class="round" title="Girar para a direita (R)" aria-label="Girar para a direita"><span class="ic-slot" data-icon="rotr" data-size="28"></span></button>
     </div>
     <div class="action-col">
-      <button id="btn-place" class="place" disabled>Colocar</button>
+      <button id="btn-place" class="place" disabled>Escolha uma casa</button>
       <div class="mini-row">
-        <button id="btn-undo" class="ghost-btn mini" title="Desfazer a última peça (Z)" disabled><span class="ic-slot" data-icon="undo" data-size="20"></span></button>
-        <button id="btn-hint" class="ghost-btn mini" title="Dica (H)"></button>
+        <button id="btn-undo" class="ghost-btn mini" title="Desfazer a última peça (Z)" disabled><span class="ic-slot" data-icon="undo" data-size="20"></span><span class="lbl">desfazer</span></button>
+        <button id="btn-hint" class="ghost-btn mini" title="Dica: mostra o melhor encaixe (H)"></button>
       </div>
     </div>
   </div>
@@ -63,29 +66,40 @@
 <!-- TELA INICIAL -->
 <div id="overlay-start" class="overlay">
   <div class="card">
-    <div class="title">PUNK<span>ROMANTIK</span></div>
-    <p class="tagline">Um quebra-cabeça calmo de paisagens poly em quatro vertentes punk — cyberpunk, solarpunk, sandpunk e snowpunk — ligadas por trens-bala, rodovias e esgotos radioativos flutuando no escuro.</p>
-    <div class="legend">
-      <div><i style="background:#141626;box-shadow:0 0 0 2px #ff2bd6 inset"></i><b>Cyberpunk</b><small>torres neon, pagodas, drones</small></div>
-      <div><i style="background:#4fc43f;box-shadow:0 0 0 2px #9dff4a inset"></i><b>Solarpunk</b><small>jardins, girassóis, painéis solares</small></div>
-      <div><i style="background:#8c5a33;box-shadow:0 0 0 2px #ff9a3c inset"></i><b>Sandpunk</b><small>zigurates, sucata, coletores de umidade</small></div>
-      <div><i style="background:#0c5a4a;box-shadow:0 0 0 2px #2dffb8 inset"></i><b>Esgoto Radioativo</b><small>canais, bacias, lagoas</small></div>
-      <div><i style="background:#7a7d8f;box-shadow:0 0 0 2px #d5d9e6 inset"></i><b>Trem-bala</b><small>precisa continuar</small></div>
-      <div><i style="background:#2b2e42;box-shadow:0 0 0 2px #ffe36a inset"></i><b>Rodovia</b><small>precisa continuar</small></div>
-      <div><i style="background:#a9c7dd;box-shadow:0 0 0 2px #9ff5ff inset"></i><b>Snowpunk</b><small>gelo, iglus, aurora, robôs de neve</small></div>
-      <div><i style="background:#cdb68c;box-shadow:0 0 0 2px #ffd98a inset"></i><b>Baldio</b><small>terreno quase vazio, florzinhas</small></div>
+    <span class="hexi-slot" data-cls="hero" data-mood="happy"></span>
+    <div class="title">punk<i>♥</i><span>romantik</span></div>
+    <p class="tagline">Um quebra-cabeça calminho de paisagens em quatro vertentes punk — cyber, solar, sand e snow — ligadas por trens-bala, rodovias e esgotos radioativos flutuando no escuro.</p>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><div class="bub"><span class="ic-slot" data-icon="rotr" data-size="24"></span></div>Gire a peça<small>roda do mouse, ⟲ ⟳ ou toque nela</small></div>
+      <div class="step"><span class="n">2</span><div class="bub"><span class="ic-slot" data-icon="tile" data-size="24"></span></div>Encaixe lados iguais<small><b>+10</b> por lado · 6 lados = <b>+1 peça</b></small></div>
+      <div class="step"><span class="n">3</span><div class="bub"><span class="ic-slot" data-icon="flag" data-size="24"></span></div>Cumpra missões<small>e ganhe mais peças para jogar</small></div>
     </div>
-    <ul class="rules">
-      <li><b>+10</b> por lado encaixado com o mesmo terreno · <b>6 lados</b> = <b>+60</b> e <b>+1 peça</b>.</li>
-      <li>Peças com <b>bandeira</b> trazem missões, e o balão amarelo mostra <b>quanto falta</b>. <b>8+</b> = pelo menos 8 (passar também vale); <b>8</b> = exatamente 8. Cumpriu → peças extras. Cercou, ou passou de um número exato → missão some.</li>
-      <li>Esgoto, trilhos e rodovias <b>não podem ser interrompidos</b>; eles <b>bifurcam</b> e têm <b>pontos finais</b> (fechar uma linha vale +1 peça).</li>
-      <li>Fechou por completo uma área de um bioma? <b>+5 por peça</b> (8 ou mais peças: <b>+1 peça</b>).</li>
-      <li>Errou? <b>Desfazer</b> (Z) devolve a última peça à mão — só a última.</li>
-    </ul>
-    <button id="btn-start" class="primary">Jogar</button>
-    <button id="btn-daily" class="ghost-btn daily-btn">📅 Desafio do dia <small>mesmas peças para todo mundo</small></button>
-    <button id="btn-rank" class="ghost-btn">🏆 Ranking</button>
-    <p class="hint-text">Toque na casa (ou em <b>Colocar</b>) para fixar. No PC a <b>roda do mouse gira a peça</b> (Ctrl+roda = zoom). Arraste para mover a câmera, pinça para zoom, botão direito ou dois dedos para orbitar.</p>
+    <button id="btn-start" class="primary"><span class="ic-slot" data-icon="play" data-size="20"></span> Jogar</button>
+    <button id="btn-daily" class="ghost-btn daily-btn"><span class="row"><span class="ic-slot" data-icon="calendar" data-size="18"></span> Desafio do dia</span><small>as mesmas peças para todo mundo</small></button>
+    <button id="btn-rank" class="ghost-btn"><span class="ic-slot ic-trophy" data-icon="trophy" data-size="18"></span> Ranking</button>
+    <details class="more">
+      <summary><span class="ic-slot" data-icon="sparkle" data-size="16"></span> Biomas e regras completas</summary>
+      <div class="inner">
+        <div class="legend">
+          <div><i style="background:#141626;box-shadow:0 0 0 2px #ff2bd6 inset"></i><b>Cyberpunk</b><small>torres neon, pagodas, drones</small></div>
+          <div><i style="background:#4fc43f;box-shadow:0 0 0 2px #9dff4a inset"></i><b>Solarpunk</b><small>jardins, girassóis, painéis solares</small></div>
+          <div><i style="background:#8c5a33;box-shadow:0 0 0 2px #ff9a3c inset"></i><b>Sandpunk</b><small>zigurates, sucata, coletores de umidade</small></div>
+          <div><i style="background:#a9c7dd;box-shadow:0 0 0 2px #9ff5ff inset"></i><b>Snowpunk</b><small>gelo, iglus, aurora, robôs de neve</small></div>
+          <div><i style="background:#cdb68c;box-shadow:0 0 0 2px #ffd98a inset"></i><b>Baldio</b><small>terreno quase vazio, florzinhas</small></div>
+          <div><i style="background:#0c5a4a;box-shadow:0 0 0 2px #2dffb8 inset"></i><b>Esgoto Radioativo</b><small>canais, bacias, lagoas</small></div>
+          <div><i style="background:#7a7d8f;box-shadow:0 0 0 2px #d5d9e6 inset"></i><b>Trem-bala</b><small>precisa continuar</small></div>
+          <div><i style="background:#2b2e42;box-shadow:0 0 0 2px #ffe36a inset"></i><b>Rodovia</b><small>precisa continuar</small></div>
+        </div>
+        <ul class="rules">
+          <li><b>+10</b> por lado encaixado com o mesmo terreno · <b>6 lados</b> = <b>+60</b> e <b>+1 peça</b>.</li>
+          <li>Peças com <b>bandeira</b> trazem missões, e o balão amarelo mostra <b>quanto falta</b>. <b>8+</b> = pelo menos 8 (passar também vale); <b>8</b> = exatamente 8. Cumpriu → peças extras. Cercou, ou passou de um número exato → missão some.</li>
+          <li>Esgoto, trilhos e rodovias <b>não podem ser interrompidos</b>; eles <b>bifurcam</b> e têm <b>pontos finais</b> (fechar uma linha vale +1 peça).</li>
+          <li>Fechou por completo uma área de um bioma? <b>+5 por peça</b> (8 ou mais peças: <b>+1 peça</b>).</li>
+          <li>Errou? <b>Desfazer</b> (Z) devolve a última peça à mão — só a última.</li>
+        </ul>
+        <p class="hint-text">Toque na casa (ou em <b>Colocar</b>) para fixar. No PC a <b>roda do mouse gira a peça</b> (Ctrl+roda = zoom). Arraste para mover a câmera, pinça para zoom, botão direito ou dois dedos para orbitar.</p>
+      </div>
+    </details>
   </div>
 </div>
 
@@ -96,39 +110,41 @@
     <ul class="rules">
       <li><b>Prever:</b> toque numa casa livre (anel branco). No PC, basta passar o mouse. Tudo que se liga à peça <b>brilha</b> na cor do terreno.</li>
       <li><b>Colocar:</b> toque de novo na casa, <b>Colocar</b> ou <kbd>Espaço</kbd>. <b>Desfazer:</b> ↶ ou <kbd>Z</kbd> (só a última peça).</li>
-      <li><b>Girar:</b> roda do mouse, ⟲ ⟳, <kbd>Q</kbd>/<kbd>R</kbd>, ou clique direito.</li>
+      <li><b>Girar:</b> roda do mouse, ⟲ ⟳, <kbd>Q</kbd>/<kbd>R</kbd>, ou toque na sua peça.</li>
       <li><b>Câmera:</b> arraste = mover · <kbd>Ctrl</kbd>+roda ou pinça = zoom · botão direito / dois dedos = orbitar · <kbd>WASD</kbd>.</li>
       <li><b>Missões:</b> o balão amarelo sobre a bandeira mostra <b>quanto falta</b>; toque no cartão para ler os detalhes. <b>N+</b> é "pelo menos N": ligar numa rede que já passou do número cumpre a missão. Número sem <b>+</b> é exato: passou, perdeu.</li>
       <li><b>Pilha</b> (esquerda): o número é quanto resta; a peça que paira é a próxima e dá para espiar a seguinte. Recompensas caem nela.</li>
-      <li><b>Dica</b> 💡: melhor encaixe — 5 por partida.</li>
+      <li><b>Dica</b>: mostra o melhor encaixe — 5 por partida.</li>
     </ul>
-    <button class="primary close-overlay">Voltar</button>
+    <button class="primary close-overlay">Entendi!</button>
   </div>
 </div>
 
 <!-- MENU -->
 <div id="overlay-menu" class="overlay hidden">
   <div class="card small">
-    <h2>Menu</h2>
-    <button id="menu-continue" class="primary">Continuar jogando</button>
-    <button id="menu-restart" class="ghost-btn">Reiniciar partida</button>
-    <button id="menu-rank" class="ghost-btn">🏆 Ranking</button>
-    <button id="menu-home" class="ghost-btn danger">Sair para a tela inicial</button>
+    <h2>Pausa</h2>
+    <button id="menu-continue" class="primary"><span class="ic-slot" data-icon="play" data-size="20"></span> Continuar jogando</button>
+    <div class="btn-row">
+      <button id="menu-restart" class="ghost-btn"><span class="ic-slot" data-icon="restart" data-size="18"></span> Reiniciar</button>
+      <button id="menu-rank" class="ghost-btn"><span class="ic-slot ic-trophy" data-icon="trophy" data-size="18"></span> Ranking</button>
+    </div>
     <div class="toggles">
-      <button id="tg-bloom" class="ghost-btn">Brilho neon: ligado</button>
-      <button id="tg-lens" class="ghost-btn">Efeito de lente: ligado</button>
-      <button id="tg-grain" class="ghost-btn">Granulação: ligada</button>
-      <button id="tg-sound" class="ghost-btn">Som: ligado</button>
+      <button id="tg-bloom" class="ghost-btn"><span>Brilho neon</span><i class="sw"></i></button>
+      <button id="tg-lens" class="ghost-btn"><span>Efeito de lente</span><i class="sw"></i></button>
+      <button id="tg-grain" class="ghost-btn"><span>Granulação</span><i class="sw"></i></button>
+      <button id="tg-sound" class="ghost-btn"><span>Som</span><i class="sw"></i></button>
     </div>
     <p class="hint-text">Se o jogo estiver lento no celular, desligue o brilho neon e o efeito de lente.</p>
+    <button id="menu-home" class="ghost-btn danger" style="margin:14px 0 0"><span class="ic-slot" data-icon="home" data-size="18"></span> Sair para a tela inicial</button>
   </div>
 </div>
 
 <!-- RANKING -->
 <div id="overlay-rank" class="overlay hidden">
   <div class="card small">
-    <h2>🏆 Ranking</h2>
-    <div class="rank-tabs"><button class="ghost-btn rank-tab on" data-tab="all" type="button">Geral</button><button class="ghost-btn rank-tab" data-tab="daily" type="button">📅 Hoje</button></div>
+    <h2><span class="ic-slot" data-icon="trophy" data-size="24"></span> Ranking</h2>
+    <div class="rank-tabs"><button class="ghost-btn rank-tab on" data-tab="all" type="button">Geral</button><button class="ghost-btn rank-tab" data-tab="daily" type="button">Hoje</button></div>
     <p id="rank-total" class="rank-total"></p>
     <ol id="rank-list-all" class="rank-list"></ol>
     <button class="primary to-start">Voltar</button>
@@ -138,6 +154,7 @@
 <!-- FIM -->
 <div id="overlay-end" class="overlay hidden">
   <div class="card small">
+    <span class="hexi-slot" data-cls="mid" data-mood="star"></span>
     <h2 id="end-title">Acabaram as peças</h2>
     <div class="final"><span id="end-score">0</span><small>pontos · recorde <b id="end-best">0</b></small></div>
     <div id="end-stats" class="stats"></div>
@@ -147,8 +164,8 @@
     </form>
     <div id="rank-status" class="rank-status"></div>
     <ol id="rank-list" class="rank-list"></ol>
-    <button id="btn-restart" class="primary">Jogar de novo</button>
-    <button id="btn-look" class="ghost-btn">Continuar admirando a paisagem</button>
+    <button id="btn-restart" class="primary"><span class="ic-slot" data-icon="restart" data-size="20"></span> Jogar de novo</button>
+    <button id="btn-look" class="ghost-btn"><span class="ic-slot" data-icon="eye" data-size="18"></span> Continuar admirando a paisagem</button>
   </div>
 </div>
 

@@ -88,6 +88,7 @@ b { font-weight: 900; }
 .quests-title { font-size: 12px; font-weight: 900; color: #fff; padding: 3px 10px 3px 8px; border-radius: 999px; background: var(--lav-deep); box-shadow: 0 3px 0 color-mix(in srgb, var(--lav-deep) 60%, var(--ink)); display: flex; gap: 5px; align-items: center; }
 .quests-title small { font-weight: 700; opacity: 0.8; }
 .quests { display: flex; flex-direction: column; gap: 12px; pointer-events: auto; align-items: flex-end; }
+.quests-wrap:has(.quests:empty) .quests-title { display: none; } /* missão cumprida/perdida some e o título ia junto ficando órfão */
 /* cartão minimizado: ícone com anel de progresso + número que falta; toque abre o texto */
 .quest { --ring: color-mix(in srgb, var(--qc, var(--lav)) 75%, #fff); cursor: pointer; border-radius: 22px; padding: 4px 10px 4px 4px; animation: pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1); max-width: 100%; transition: transform 0.15s; }
 .quest:hover { transform: translateX(-3px) rotate(-1deg); }
@@ -252,7 +253,7 @@ b { font-weight: 900; }
 
 /* ---------- letreiro de pontos: bolha de chiclete com letras pulando ---------- */
 #signs { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
-.sign { --c: var(--pink-deep); --ring: var(--pink); position: absolute; left: 50%; top: 18%; transform: translate(-50%, -50%); display: flex; align-items: baseline; padding: 8px 22px 8px; border-radius: 999px;
+.sign { --c: var(--pink-deep); --ring: var(--pink); position: absolute; left: 50%; top: max(25%, 190px); transform: translate(-50%, -50%); display: flex; align-items: baseline; padding: 8px 22px 8px; border-radius: 999px;
   background: var(--cream); border: 4px solid #fff; box-shadow: var(--sticker);
   font-weight: 1000; font-size: 42px; line-height: 1; color: var(--c); white-space: nowrap; animation: signWiggle 0.9s ease-in-out 0.5s; }
 .sign::before, .sign::after { content: ''; position: absolute; left: 24px; right: 24px; height: 6px; border-radius: 3px;
@@ -263,7 +264,7 @@ b { font-weight: 900; }
 .sign.ok { --c: #f08a00; --ring: var(--lemon); }
 .sign.good { --c: #ff6a3d; --ring: var(--peach); font-size: 48px; }
 .sign.perfect { --c: var(--mint-deep); --ring: var(--mint); font-size: 54px; }
-.sign.quest { --c: var(--lav-deep); --ring: var(--lav); top: 26%; }
+.sign.quest { --c: var(--lav-deep); --ring: var(--lav); top: max(33%, 250px); }
 @keyframes charPop { 0% { transform: translateY(26px) scale(0.2) rotate(-14deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
 @keyframes lights { to { background-position: 14px 0; } }
 @keyframes signWiggle { 0%, 100% { transform: translate(-50%, -50%) rotate(0); } 25% { transform: translate(-50%, -50%) rotate(-3deg) scale(1.05); } 75% { transform: translate(-50%, -50%) rotate(2.5deg) scale(1.02); } }
@@ -318,8 +319,7 @@ b { font-weight: 900; }
 .card .hexi.hero { width: 78px; height: 88px; margin: -70px auto 0; display: block; filter: drop-shadow(0 6px 0 rgba(74, 42, 92, 0.25)); }
 .card .hexi.mid { width: 64px; height: 72px; margin: -58px auto 2px; display: block; filter: drop-shadow(0 5px 0 rgba(74, 42, 92, 0.25)); }
 .card .hexi.hero, .card .hexi.mid { animation: hxBob 2.4s ease-in-out infinite; }
-.overlay:not(.hidden) .card:has(.hexi.hero) { margin-top: max(auto, 70px); }
-#overlay-start .card, #overlay-end .card { margin-top: 70px; }
+#overlay-start, #overlay-end { padding-top: 76px; } /* espaço para o Hexi que sai por cima do cartão */
 .title { font-weight: 1000; font-size: clamp(32px, 8vw, 48px); letter-spacing: 0.01em; line-height: 1; color: #fff; margin-top: 6px;
   text-shadow: 0 3px 0 var(--pink-deep), 3px 0 0 var(--pink-deep), -3px 0 0 var(--pink-deep), 0 -3px 0 var(--pink-deep), 3px 3px 0 var(--pink-deep), -3px 3px 0 var(--pink-deep), 3px -3px 0 var(--pink-deep), -3px -3px 0 var(--pink-deep), 0 8px 0 var(--ink); }
 .title span { text-shadow: 0 3px 0 var(--sky-deep), 3px 0 0 var(--sky-deep), -3px 0 0 var(--sky-deep), 0 -3px 0 var(--sky-deep), 3px 3px 0 var(--sky-deep), -3px 3px 0 var(--sky-deep), 3px -3px 0 var(--sky-deep), -3px -3px 0 var(--sky-deep), 0 8px 0 var(--ink); }
@@ -393,6 +393,7 @@ kbd { background: #fff; border-radius: 6px; padding: 0 6px; font-family: inherit
 .rank-list .nm { font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank-list .sc { font-weight: 1000; color: var(--pink-deep); }
 .rank-list .tl { font-size: 12px; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 3px; }
+.rank-list:empty { display: none; }
 .rank-list .empty { display: block; text-align: center; color: var(--ink-soft); padding: 14px; }
 
 /* desafio do dia */
@@ -453,7 +454,8 @@ h2 .ic { color: #e0a000; margin-top: -4px; }
   .action-col { grid-area: actions; flex-direction: row; gap: 10px; align-items: stretch; }
   .place { flex: 1; min-width: 0; padding: 13px 10px; font-size: 16px; }
   .mini-row { flex: none; }
-  .ghost-btn.mini { min-width: 60px; padding: 6px 8px 5px; }
+  .ghost-btn.mini { min-width: 66px; padding: 6px 4px 5px; }
+  .ghost-btn.mini .lbl { font-size: 10px; }
   .flyhex svg { width: 26px; height: 26px; }
   .card { padding: 22px 16px 18px; border-radius: 28px; }
   .steps { gap: 8px; } .step { padding: 12px 5px 8px; font-size: 12px; } .step small { font-size: 10.5px; } .step .bub { width: 40px; height: 40px; }
