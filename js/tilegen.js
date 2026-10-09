@@ -173,7 +173,11 @@ const QUEST_GROW = { cyber: 3, solar: 3, rock: 3, toxic: 2, rail: 2, road: 2 };
 //    sobem: quem joga bem continua sendo premiado, mas no placar, e a partida termina.
 export const QUEST_LEVEL_EVERY = 15;
 export const questLevel = (placed) => Math.floor(placed / QUEST_LEVEL_EVERY);
-const rewardTiles = (grow, level) => Math.max(1, Math.min(3, 1 + Math.floor(grow / 3)) - Math.floor(level / 2));
+// Recompensa proporcional ao esforço: paga uma FRAÇÃO das peças que a missão pede para crescer.
+// A fração cai com o nível (80% → 50%), mas como o crescimento sobe, a missão difícil paga mais
+// peças que a fácil. Fica sempre abaixo de 1 peça por peça exigida — é isso que garante que a
+// partida acaba (a versão anterior pagava 1 peça no fim, por missão grande: ficou dura demais).
+const rewardTiles = (grow, level) => Math.max(2, Math.min(6, Math.round(grow * Math.max(0.5, 0.8 - 0.04 * level))));
 
 // Dois tipos de missão:
 //  - 'region': conecte `target` peças do grupo a partir da bandeira (progress = peças ligadas).
@@ -191,17 +195,17 @@ export function makeQuest(rng, tile, buildings = 0, weights = null, ctx = null) 
   if (!cands.length) return null;
   const group = weights ? rng.weighted(cands.map((g) => [g, 1 + (weights[g] || 0)])) : rng.pick(cands);
   const q = makeQuestFor(rng, group, buildings, ctx || { level: 0, have: {}, city: 0 });
-  if (rng.chance(Math.max(0.1, 0.3 - 0.04 * (ctx ? ctx.level : 0)))) q.reward.hints = 1; // às vezes a missão também devolve uma dica
+  if (rng.chance(Math.max(0.15, 0.3 - 0.025 * (ctx ? ctx.level : 0)))) q.reward.hints = 1; // às vezes a missão também devolve uma dica
   return q;
 }
 function makeQuestFor(rng, group, buildings, ctx) {
   const L = ctx.level, mult = 1 + 0.2 * L; // pontos sobem com o nível
   if (group === 'cyber' && buildings > 0 && rng.chance(0.55)) {
-    const grow = 9 + rng.int(9) + 3 * L; // prédios além da maior cidade (uma peça cheia de cidade tem ~8-11)
+    const grow = 9 + rng.int(9) + 2 * L; // prédios além da maior cidade (uma peça cheia de cidade tem ~8-11)
     const target = Math.max(buildings, ctx.city || 0) + grow;
     return { kind: 'city', exact: false, group, target, progress: buildings, reward: { tiles: rewardTiles(Math.round(grow / 4), L), points: Math.round(grow * 10 * mult) } };
   }
-  const grow = QUEST_GROW[group] + rng.int(2) + L;
+  const grow = QUEST_GROW[group] + rng.int(2) + Math.round(L * 0.7); // dificuldade sobe mais devagar que o nível
   const target = Math.max(QUEST_BASE[group] + rng.int(3) - 1, (ctx.have[group] || 0) + grow);
   return { kind: 'region', exact: false, group, target, progress: 1, reward: { tiles: rewardTiles(grow, L), points: Math.round(Math.max(grow, target / 2) * 20 * mult) } };
 }
