@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js';
-import { RNG } from './rng.js';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile } from './tilegen.js';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js';
-import { initAudio, play, setMuted, isMuted } from './audio.js';
-import { CameraRig, attachInput } from './controls.js';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011f';
+import { RNG } from './rng.js?v=20261011f';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011f';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011f';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011f';
+import { CameraRig, attachInput } from './controls.js?v=20261011f';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -12,16 +12,16 @@ const $ = (id) => document.getElementById(id);
 const prefs = { bloom: localStorage.getItem('pr_bloom') !== '0', lens: localStorage.getItem('pr_lens') !== '0', grain: localStorage.getItem('pr_grain') !== '0' };
 
 // ---------- ícones (SVG inline: a HUD fala por números e símbolos, não por texto) ----------
-// Detalhe é RECORTE (fill-rule evenodd), nunca sobreposição branca: no cartão o ícone já é branco e
-// no balão é tinta escura — o furo mostra o fundo nos dois casos, a sobreposição sumia num deles.
+// Ícones de missão: o conjunto de 07/10, restaurado a pedido do usuário em 09/10 (as duas reformas
+// seguintes — "fofos" com recortes e silhuetas — foram rejeitadas). Não redesenhar sem ele pedir.
 const ICON_PATHS = {
-  cyber: '<path fill-rule="evenodd" d="M2.9 12h3.2a1.4 1.4 0 0 1 1.4 1.4v8.2a1.4 1.4 0 0 1 -1.4 1.4h-3.2a1.4 1.4 0 0 1 -1.4 -1.4v-8.2a1.4 1.4 0 0 1 1.4 -1.4ZM3.8 14.5h1.4a0.5 0.5 0 0 1 0.5 0.5v1a0.5 0.5 0 0 1 -0.5 0.5h-1.4a0.5 0.5 0 0 1 -0.5 -0.5v-1a0.5 0.5 0 0 1 0.5 -0.5ZM3.8 18.5h1.4a0.5 0.5 0 0 1 0.5 0.5v1a0.5 0.5 0 0 1 -0.5 0.5h-1.4a0.5 0.5 0 0 1 -0.5 -0.5v-1a0.5 0.5 0 0 1 0.5 -0.5Z"/><path fill-rule="evenodd" d="M8.5 23V7.5Q8.5 5 12 5Q15.5 5 15.5 7.5V23ZM10.9 8.5h2.2a0.9 0.9 0 0 1 0.9 0.9v0a0.9 0.9 0 0 1 -0.9 0.9h-2.2a0.9 0.9 0 0 1 -0.9 -0.9v0a0.9 0.9 0 0 1 0.9 -0.9ZM10.5 12.5h0.6a0.5 0.5 0 0 1 0.5 0.5v1a0.5 0.5 0 0 1 -0.5 0.5h-0.6a0.5 0.5 0 0 1 -0.5 -0.5v-1a0.5 0.5 0 0 1 0.5 -0.5ZM12.9 12.5h0.6a0.5 0.5 0 0 1 0.5 0.5v1a0.5 0.5 0 0 1 -0.5 0.5h-0.6a0.5 0.5 0 0 1 -0.5 -0.5v-1a0.5 0.5 0 0 1 0.5 -0.5ZM10.5 16.5h0.6a0.5 0.5 0 0 1 0.5 0.5v1a0.5 0.5 0 0 1 -0.5 0.5h-0.6a0.5 0.5 0 0 1 -0.5 -0.5v-1a0.5 0.5 0 0 1 0.5 -0.5ZM12.9 16.5h0.6a0.5 0.5 0 0 1 0.5 0.5v1a0.5 0.5 0 0 1 -0.5 0.5h-0.6a0.5 0.5 0 0 1 -0.5 -0.5v-1a0.5 0.5 0 0 1 0.5 -0.5Z"/><path d="M11.3 5.2V2.4h1.4v2.8z"/><path fill-rule="evenodd" d="M10.8 1.9a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0Z"/><path fill-rule="evenodd" d="M16.5 23V11.5a3 3 0 0 1 6 0V23ZM18.8 13h1.4a0.5 0.5 0 0 1 0.5 0.5v1a0.5 0.5 0 0 1 -0.5 0.5h-1.4a0.5 0.5 0 0 1 -0.5 -0.5v-1a0.5 0.5 0 0 1 0.5 -0.5ZM18.8 17h1.4a0.5 0.5 0 0 1 0.5 0.5v1a0.5 0.5 0 0 1 -0.5 0.5h-1.4a0.5 0.5 0 0 1 -0.5 -0.5v-1a0.5 0.5 0 0 1 0.5 -0.5Z"/>', // skyline de três torres
-  city: '<path fill-rule="evenodd" d="M5.5 21.5V8a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v13.5ZM8.7 7.5h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM13.9 7.5h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM8.7 11h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM13.9 11h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM8.7 14.5h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM13.9 14.5h1.4a0.7 0.7 0 0 1 0.7 0.7v1a0.7 0.7 0 0 1 -0.7 0.7h-1.4a0.7 0.7 0 0 1 -0.7 -0.7v-1a0.7 0.7 0 0 1 0.7 -0.7ZM10.4 21.5v-2.3a1.6 1.6 0 0 1 3.2 0v2.3Z"/><path d="M11.2 5.2V2.6h1.6v2.6z"/><path fill-rule="evenodd" d="M10.7 2.2a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0Z"/><path fill-rule="evenodd" d="M3.6 21h16.8a1.1 1.1 0 0 1 1.1 1.1v0a1.1 1.1 0 0 1 -1.1 1.1h-16.8a1.1 1.1 0 0 1 -1.1 -1.1v0a1.1 1.1 0 0 1 1.1 -1.1Z"/>', // um prédio só (a missão conta prédios)
-  solar: '<path fill-rule="evenodd" d="M12 1.2L12.45 1.36L12.84 1.82L13.13 2.5L13.31 3.3L13.4 4.06L13.49 4.6L13.93 4.28L14.54 3.81L15.23 3.37L15.92 3.1L16.52 3.05L16.95 3.25L17.15 3.68L17.1 4.28L16.83 4.97L16.39 5.66L15.92 6.27L15.6 6.71L16.14 6.8L16.9 6.89L17.7 7.07L18.38 7.36L18.84 7.75L19 8.2L18.84 8.65L18.38 9.04L17.7 9.33L16.9 9.51L16.14 9.6L15.6 9.69L15.92 10.13L16.39 10.74L16.83 11.43L17.1 12.12L17.15 12.72L16.95 13.15L16.52 13.35L15.92 13.3L15.23 13.03L14.54 12.59L13.93 12.12L13.49 11.8L13.4 12.34L13.31 13.1L13.13 13.9L12.84 14.58L12.45 15.04L12 15.2L11.55 15.04L11.16 14.58L10.87 13.9L10.69 13.1L10.6 12.34L10.51 11.8L10.07 12.12L9.46 12.59L8.77 13.03L8.08 13.3L7.48 13.35L7.05 13.15L6.85 12.72L6.9 12.12L7.17 11.43L7.61 10.74L8.08 10.13L8.4 9.69L7.86 9.6L7.1 9.51L6.3 9.33L5.62 9.04L5.16 8.65L5 8.2L5.16 7.75L5.62 7.36L6.3 7.07L7.1 6.89L7.86 6.8L8.4 6.71L8.08 6.27L7.61 5.66L7.17 4.97L6.9 4.28L6.85 3.68L7.05 3.25L7.48 3.05L8.08 3.1L8.77 3.37L9.46 3.81L10.07 4.28L10.51 4.6L10.6 4.06L10.69 3.3L10.87 2.5L11.16 1.82L11.55 1.36L12 1.2ZM9.3 8.2a2.7 2.7 0 1 0 5.4 0a2.7 2.7 0 1 0 -5.4 0ZM10.7 8.2a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0Z"/><path fill-rule="evenodd" d="M12 14.5h0a0.9 0.9 0 0 1 0.9 0.9v6.7a0.9 0.9 0 0 1 -0.9 0.9h0a0.9 0.9 0 0 1 -0.9 -0.9v-6.7a0.9 0.9 0 0 1 0.9 -0.9Z"/><path fill-rule="evenodd" d="M12 20.5C9.5 20.5 6.5 19.5 5.6 15.6C8.8 15.6 11.4 17.2 12 20.5Z"/><path fill-rule="evenodd" d="M12 18.5C14 18.5 16.8 17.6 17.8 14.4C15 14.3 12.6 15.8 12 18.5Z"/>', // girassol
-  rock: '<path fill-rule="evenodd" d="M15.1 6.2a3.2 3.2 0 1 0 6.4 0a3.2 3.2 0 1 0 -6.4 0Z"/><path fill-rule="evenodd" d="M1 23.5Q6 20.2 12 20.8Q18 21.4 23 19.8V23.5Z"/><path fill-rule="evenodd" d="M3.5 20.4V18q0-1 1-1h1.7v-2.5q0-1 1-1h1.6v-2.3q0-1 1-1h1.5V8q0-1 1-1h1.4q1 0 1 1v2.2h1.5q1 0 1 1v2.3h1.6q1 0 1 1V17h1.7q1 0 1 1v2.4ZM10.6 20.4v-2.2a1.4 1.4 0 0 1 2.8 0v2.2ZM11.3 13.4v-1a.7.7 0 0 1 1.4 0v1Z"/>', // zigurate na duna, sol atrás
-  toxic: '<path fill-rule="evenodd" d="M11 1.8C11 1.8 3.8 9.6 3.8 15A7.2 7.2 0 0 0 18.2 15C18.2 9.6 11 1.8 11 1.8ZM10.15 13.73L8.5 10.87A5 5 0 0 1 13.5 10.87L11.85 13.73A1.7 1.7 0 0 0 10.15 13.73ZM12.7 15.2L16 15.2A5 5 0 0 1 13.5 19.53L11.85 16.67A1.7 1.7 0 0 0 12.7 15.2ZM10.15 16.67L8.5 19.53A5 5 0 0 1 6 15.2L9.3 15.2A1.7 1.7 0 0 0 10.15 16.67ZM10 15.2a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z"/><path fill-rule="evenodd" d="M17.7 5.5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0Z"/><path fill-rule="evenodd" d="M20.1 10.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z"/>', // gota com trevo radioativo e bolhas
-  rail: '<path d="M9.5 3.4 8 1.2h1.4L12 3l2.6-1.8H16l-1.5 2.2z"/><path fill-rule="evenodd" d="M4.3 16.4V9.8C4.3 5.6 7.7 3 12 3s7.7 2.6 7.7 6.8v6.6a2.2 2.2 0 0 1-2.2 2.2h-11a2.2 2.2 0 0 1-2.2-2.2ZM6.8 10.6C6.8 7.4 9.2 5.6 12 5.6s5.2 1.8 5.2 5ZM6.7 14.6a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0ZM14.1 14.6a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0Z"/><path d="M7.3 19.5h2.1L8 23.5H5.6zM14.6 19.5h2.1l1.7 4H16z"/><path fill-rule="evenodd" d="M7 20.8h10a0.6 0.6 0 0 1 0.6 0.6v0a0.6 0.6 0 0 1 -0.6 0.6h-10a0.6 0.6 0 0 1 -0.6 -0.6v0a0.6 0.6 0 0 1 0.6 -0.6Z"/>', // trem-bala de frente, nos trilhos
-  road: '<path fill-rule="evenodd" d="M2.5 15.3v-2.4c0-1.1.7-1.8 1.8-2l3-.6 2.1-3.2C10 6.2 10.8 5.8 11.9 5.8h3.6c1.1 0 1.9.4 2.5 1.3l2.1 3.3c1.1.3 1.6 1 1.6 2.2v2.7c0 .8-.5 1.2-1.2 1.2H3.7c-.8 0-1.2-.4-1.2-1.2ZM10.2 10.2l1.5-2.4h1.9v2.4ZM15 10.2V7.8h1.4l1.5 2.4ZM19.55 12.5a0.75 0.75 0 1 0 1.5 0a0.75 0.75 0 1 0 -1.5 0Z"/><path fill-rule="evenodd" d="M4.8 16.4a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0ZM6.3 16.4a0.9 0.9 0 1 0 1.8 0a0.9 0.9 0 1 0 -1.8 0Z"/><path fill-rule="evenodd" d="M14.4 16.4a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0ZM15.9 16.4a0.9 0.9 0 1 0 1.8 0a0.9 0.9 0 1 0 -1.8 0Z"/><path fill-rule="evenodd" d="M1.6 21h3.6a0.8 0.8 0 0 1 0.8 0.8v0a0.8 0.8 0 0 1 -0.8 0.8h-3.6a0.8 0.8 0 0 1 -0.8 -0.8v0a0.8 0.8 0 0 1 0.8 -0.8ZM10.2 21h3.6a0.8 0.8 0 0 1 0.8 0.8v0a0.8 0.8 0 0 1 -0.8 0.8h-3.6a0.8 0.8 0 0 1 -0.8 -0.8v0a0.8 0.8 0 0 1 0.8 -0.8ZM18.8 21h3.6a0.8 0.8 0 0 1 0.8 0.8v0a0.8 0.8 0 0 1 -0.8 0.8h-3.6a0.8 0.8 0 0 1 -0.8 -0.8v0a0.8 0.8 0 0 1 0.8 -0.8Z"/>', // carrinho na faixa tracejada
+  cyber: '<path d="M2 22V11h4V6h5v4h4v3h4v9z"/><path fill="#fff" opacity=".6" d="M4 13h1.6v2H4zm0 3.5h1.6v2H4zM8 8h1.6v2H8zm0 3.5h1.6v2H8zm0 3.5h1.6v2H8zm4 0h1.6v2H12zm4 3h1.6v2H16z"/>',
+  city: '<path d="M4 22V4h16v18z"/><path fill="#fff" opacity=".75" d="M6.5 6.5h2.4v2.4H6.5zm4.3 0h2.4v2.4h-2.4zm4.3 0h2.4v2.4h-2.4zM6.5 10.8h2.4v2.4H6.5zm4.3 0h2.4v2.4h-2.4zm4.3 0h2.4v2.4h-2.4zM6.5 15.1h2.4v2.4H6.5zm4.3 0h2.4v2.4h-2.4zm4.3 0h2.4v2.4h-2.4z"/><path d="M2 22h20v1.5H2z"/>',
+  solar: '<path d="M12 23V12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/><path d="M12 14.5C8.5 14 3 12 2 3.5c6.5.6 10 5 10 11z"/><path d="M12 13c3.5-.5 9-2.5 10-11-6.5.6-10 5-10 11z"/><path d="M11 13 4.5 6.5M13 11.5 19.5 5" stroke="#fff" stroke-width="1" opacity=".5" fill="none"/>',
+  rock: '<path d="M1.5 21.5h21V19h-21zM4 19h16v-2.6H4zM6.6 16.4h10.8v-2.6H6.6zM9.2 13.8h5.6v-2.6H9.2zM10.8 11.2h2.4V8.4h-2.4z"/><path fill="#fff" opacity=".55" d="M4 18.4h16v.7H4zM6.6 15.8h10.8v.7H6.6zM9.2 13.2h5.6v.7H9.2z"/>',
+  toxic: '<path d="M12 2s7 8 7 13a7 7 0 0 1-14 0c0-5 7-13 7-13z"/><circle cx="9.4" cy="15" r="1.7" fill="#fff" opacity=".6"/>',
+  rail: '<path d="M2 16V9a5 5 0 0 1 5-5h8c4.5 0 8 3.5 9 8v4z"/><path fill="#fff" opacity=".65" d="M5 8h4v4H5zm6 0h4v4h-4z"/><circle cx="7" cy="19.5" r="2.2"/><circle cx="17" cy="19.5" r="2.2"/>',
+  road: '<path d="M8.5 2h7l6 20H2.5z"/><path d="M12 4v3.5M12 10v4M12 16.5v5" stroke="#fff" stroke-width="1.9" stroke-linecap="round" opacity=".85" fill="none"/>',
   plain: '<path d="M12 2l2 6 6-2-4 5 4 5-6-2-2 6-2-6-6 2 4-5-4-5 6 2z"/>',
   grass: '<path d="M4 21c0-6 3-10 8-12-2 4-2 8-1 12zM12 21c-1-7 3-12 9-13-3 4-5 8-5 13z"/>',
   tile: '<path d="M12 2l8.66 5v10L12 22l-8.66-5V7z"/>',
@@ -31,48 +31,11 @@ const ICON_PATHS = {
   undo: '<path d="M9 5L3 11l6 6v-4h5a4 4 0 0 1 0 8h-3v3h3a7 7 0 0 0 0-14H9z"/>',
   x: '<path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>',
   check: '<path d="M4 12l5 5L20 6" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
-  help: '<path fill-rule="evenodd" d="M12 1.8a10.2 10.2 0 1 1 0 20.4a10.2 10.2 0 1 1 0-20.4ZM12 4.6c-2.7 0-4.6 1.6-4.8 4h2.8c.2-1 .9-1.5 1.9-1.5 1.1 0 1.9.6 1.9 1.6 0 .8-.4 1.2-1.4 1.8-1.3.8-1.9 1.6-1.9 3v.6h2.7v-.4c0-.8.3-1.2 1.4-1.8 1.4-.8 2.3-1.9 2.3-3.4 0-2.4-2-3.9-4.9-3.9ZM10.3 17.4a1.7 1.7 0 1 0 3.4 0a1.7 1.7 0 1 0-3.4 0Z"/>',
-  sound: '<path d="M3.5 9.2c0-.7.5-1.2 1.2-1.2h2.8l4.3-3.6c.8-.6 1.9-.1 1.9.9v13.4c0 1-1.1 1.5-1.9.9L7.5 16H4.7c-.7 0-1.2-.5-1.2-1.2z"/><path d="M16 8.6a4.6 4.6 0 0 1 0 6.8M18.6 6a8.3 8.3 0 0 1 0 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>',
-  mute: '<path d="M3.5 9.2c0-.7.5-1.2 1.2-1.2h2.8l4.3-3.6c.8-.6 1.9-.1 1.9.9v13.4c0 1-1.1 1.5-1.9.9L7.5 16H4.7c-.7 0-1.2-.5-1.2-1.2z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>',
-  menu: '<path d="M5 6.5h14M5 12h14M5 17.5h14" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" fill="none"/>',
-  rotl: '<path d="M7.2 8.4A6.8 6.8 0 1 1 5.5 14" stroke="currentColor" stroke-width="2.9" stroke-linecap="round" fill="none"/><path d="M2.6 4.6l.9 6.6 6.4-2.1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>',
-  rotr: '<path d="M16.8 8.4A6.8 6.8 0 1 0 18.5 14" stroke="currentColor" stroke-width="2.9" stroke-linecap="round" fill="none"/><path d="M21.4 4.6l-.9 6.6-6.4-2.1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>',
-  play: '<path d="M7 4.6c0-1.2 1.3-1.9 2.3-1.3l10.6 7.4c.9.6.9 2 0 2.6L9.3 20.7c-1 .6-2.3-.1-2.3-1.3z"/>',
-  restart: '<path d="M18.4 8.5A7.3 7.3 0 1 0 19.3 13" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" fill="none"/><path d="M20.8 3.6l-.6 6.6-6.4-1.9z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>',
-  home: '<path d="M3 11.2 11.2 4a1.2 1.2 0 0 1 1.6 0l8.2 7.2c.5.5.2 1.3-.5 1.3H19v7.3c0 .7-.5 1.2-1.2 1.2h-3.3v-5.2h-5V21H6.2c-.7 0-1.2-.5-1.2-1.2v-7.3H3.5c-.7 0-1-.8-.5-1.3Z"/>',
-  calendar: '<path fill-rule="evenodd" d="M7 2.5h2v2h6v-2h2v2h1.5A2.5 2.5 0 0 1 21 7v12a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 19V7a2.5 2.5 0 0 1 2.5-2.5H7ZM5.5 10v9h13v-9ZM12 11.5l1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.3-2.4 1.3.5-2.6-1.9-1.8 2.6-.4Z"/>',
-  sparkle: '<path d="M12 1.5c.6 4.6 2 7.4 9 10.5-7 3.1-8.4 5.9-9 10.5-.6-4.6-2-7.4-9-10.5 7-3.1 8.4-5.9 9-10.5z"/>',
-  star: '<path d="M12 2.2l2.9 6 6.6.9-4.8 4.6 1.2 6.6L12 17.2l-5.9 3.1 1.2-6.6-4.8-4.6 6.6-.9z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
-  heart: '<path d="M12 20.5s-8.5-5-8.5-11A4.8 4.8 0 0 1 12 6.6a4.8 4.8 0 0 1 8.5 2.9c0 6-8.5 11-8.5 11z"/>',
-  eye: '<path fill-rule="evenodd" d="M12 5c5.2 0 9 4.4 10 7-1 2.6-4.8 7-10 7S3 14.6 2 12c1-2.6 4.8-7 10-7Zm0 3a4 4 0 1 0 0 8a4 4 0 1 0 0-8Zm0 2.3a1.7 1.7 0 1 1 0 3.4a1.7 1.7 0 1 1 0-3.4Z"/>',
   trophy: '<path d="M6 3h12v2h3v3a5 5 0 0 1-4.3 4.95A6 6 0 0 1 13 16.9V19h4v2H7v-2h4v-2.1a6 6 0 0 1-3.7-3.95A5 5 0 0 1 3 8V5h3zm-1 4v1a3 3 0 0 0 1.2 2.4A6 6 0 0 1 6 9V7zm14 0h-1v2c0 .5 0 1-.2 1.4A3 3 0 0 0 19 8z"/>',
 };
 const icon = (name, size = 18, color = 'currentColor', cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="${color}" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
-// Hexi, o mascote: hexágono de moicano que reage ao jogo (idle pisca, happy = olhinhos ^ ^, star = olhos de estrela, sad = chorinho)
-const HEXI_SVG = (cls = '', mood = 'idle') => `<svg class="hexi ${cls} m-${mood}" viewBox="0 -8 48 56" aria-hidden="true">
-  <path d="M19 4 L16 -6 L22 0 L24 -8 L27 0 L33 -5 L30 4Z" fill="#7fd8ff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
-  <path d="M22 1 L24 -4 L26 1Z" fill="#ffe066"/>
-  <path d="M24 3 L42 13.5 V34.5 L24 45 L6 34.5 V13.5Z" fill="#ffb3d6" stroke="#fff" stroke-width="3.2" stroke-linejoin="round"/>
-  <path d="M24 6.5 L39 15.2 V20 Q24 13 9 20 V15.2Z" fill="#fff" opacity="0.35"/>
-  <ellipse cx="13" cy="30" rx="3.6" ry="2.2" fill="#ff6fa8" opacity="0.6"/><ellipse cx="35" cy="30" rx="3.6" ry="2.2" fill="#ff6fa8" opacity="0.6"/>
-  <g class="hx-eyes" data-m="idle sad"><ellipse cx="17.5" cy="24.5" rx="2.8" ry="3.6" fill="#4a2a5c"/><ellipse cx="30.5" cy="24.5" rx="2.8" ry="3.6" fill="#4a2a5c"/><circle cx="18.5" cy="23.2" r="1.1" fill="#fff"/><circle cx="31.5" cy="23.2" r="1.1" fill="#fff"/></g>
-  <path data-m="happy" d="M14.5 26 Q17.5 21 20.5 26 M27.5 26 Q30.5 21 33.5 26" stroke="#4a2a5c" stroke-width="2.4" stroke-linecap="round" fill="none"/>
-  <path data-m="star" d="M17.5 20.5l1.3 2.7 3 .4-2.2 2.1.5 3-2.6-1.4-2.6 1.4.5-3-2.2-2.1 3-.4zM30.5 20.5l1.3 2.7 3 .4-2.2 2.1.5 3-2.6-1.4-2.6 1.4.5-3-2.2-2.1 3-.4z" fill="#ffd23f" stroke="#4a2a5c" stroke-width="1" stroke-linejoin="round"/>
-  <path data-m="idle" d="M21.5 30 Q24 32.6 26.5 30" stroke="#4a2a5c" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path data-m="happy star" d="M20.5 29.5 Q24 35 27.5 29.5Z" fill="#4a2a5c" stroke="#4a2a5c" stroke-width="1.4" stroke-linejoin="round"/>
-  <path data-m="sad" d="M21 32.5 Q24 29.8 27 32.5" stroke="#4a2a5c" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path data-m="sad" d="M33.5 28 q1.6 3 0 4.2 q-1.6-1.2 0-4.2z" fill="#7fd8ff"/>
-</svg>`;
-let hexiTimer = null;
-function hexiMood(mood, ms = 1400) { // o Hexi do placar muda de cara e dá um pulinho (ou balança, se for tristeza)
-  const h = document.querySelector('#hexi-hud .hexi'); if (!h) return;
-  h.classList.remove('m-idle', 'm-happy', 'm-star', 'm-sad', 'hop', 'shake'); void h.getBoundingClientRect();
-  h.classList.add('m-' + mood, mood === 'sad' ? 'shake' : 'hop');
-  clearTimeout(hexiTimer); hexiTimer = setTimeout(() => { h.classList.remove('m-' + mood, 'hop', 'shake'); h.classList.add('m-idle'); }, ms);
-}
 const questIcon = (q) => (q.kind === 'city' ? 'city' : q.group);
 const questLeft = (q) => Math.max(0, q.target - q.progress);
-const plus = (q) => (q.exact ? '' : '+'); // "N+": pelo menos N
 
 // ---------- cena ----------
 const canvas = $('scene');
@@ -109,6 +72,14 @@ const litMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
 const ghostLit = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.5 });
 const ghostGlow = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5 });
+// Achado oculto: a peça inteira em cinza, "desligada". Dessatura mantendo o claro/escuro, então a
+// silhueta continua legível — a cor o jogador deduz pelo ambiente ao redor, e só vê ao encostar nela.
+function greyed(mat, lift, k) {
+  mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>\n  diffuseColor.rgb = vec3(${lift.toFixed(2)} + ${k.toFixed(2)} * dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)));`); };
+  return mat;
+}
+const hiddenLit = greyed(new THREE.MeshLambertMaterial({ vertexColors: true }), 0.3, 0.45);
+const hiddenGlow = greyed(new THREE.MeshBasicMaterial({ vertexColors: true }), 0.22, 0.2);
 // Água do esgoto: ondulações procedurais escuras com linhas neon
 const WATER_VS = `varying vec3 vWorld;
 #include <fog_pars_vertex>
@@ -175,7 +146,22 @@ const ringSel = {
   bad: new THREE.MeshBasicMaterial({ color: 0xff5c7a, transparent: true, opacity: 0.95, depthWrite: false }),
   none: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }),
 };
+const EDGE_COLORS = { plain: 0x6fd2f5, grass: 0xffd98a, cyber: 0xff2bd6, solar: 0x7dff4a, rock: 0xff9a3c, pool: 0x2dffb8, sewage: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x3a1f4f, transparent: true, opacity: 0.22, depthWrite: false });
+// Conector só encosta em conector do mesmo tipo (estrada com estrada, trilho com trilho...): casa onde
+// nenhuma rotação cabe é proibida e fica sutil — escurecida, com uma marquinha vermelha curta só na(s)
+// borda(s) que causam o conflito (nada de X nem anel vermelho, que poluíam o tabuleiro); o fantasma não
+// vai até ela. O convite continua: casas onde a peça na mão CONTINUA uma rede aberta ganham contorno na
+// cor do conector, pulsando, e continuar a rede vale bônus (LINK_PTS).
+const slotBlockedRing = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, depthWrite: false }); // contorno quase sumido (faded)
+const slotBlockedFill = new THREE.MeshBasicMaterial({ color: 0x07040d, transparent: true, opacity: 0.5, depthWrite: false });
+const slotTickMat = new THREE.MeshBasicMaterial({ color: 0xff3b5c, transparent: true, opacity: 0.55, depthWrite: false });
+const tickGeo = new THREE.BoxGeometry(0.36, 0.006, 0.07);
+const slotLinkRing = {}, slotLinkFill = {};
+for (const t of ['sewage', 'rail', 'road']) {
+  slotLinkRing[t] = new THREE.MeshBasicMaterial({ color: EDGE_COLORS[t], transparent: true, opacity: 0.7, depthWrite: false });
+  slotLinkFill[t] = new THREE.MeshBasicMaterial({ color: EDGE_COLORS[t], transparent: true, opacity: 0.1, depthWrite: false });
+}
 
 const BLOOM = 1, bloomLayer = new THREE.Layers(); bloomLayer.set(BLOOM);
 const boardGroup = new THREE.Group(), slotGroup = new THREE.Group(), ghostGroup = new THREE.Group(), fxGroup = new THREE.Group();
@@ -183,7 +169,6 @@ scene.add(boardGroup, slotGroup, ghostGroup, fxGroup);
 const ghostShadow = new THREE.Mesh(discGeo, shadowMat); ghostShadow.position.y = TILE_H + 0.008; ghostShadow.visible = false; scene.add(ghostShadow);
 // Indicadores de encaixe: em cada lado compatível, o friso do hexágono brilha/vibra na cor do terreno
 // e um flash vertical da mesma cor pulsa na lateral (na junta com a peça vizinha).
-const EDGE_COLORS = { plain: 0x6fd2f5, grass: 0xffd98a, cyber: 0xff2bd6, solar: 0x7dff4a, rock: 0xff9a3c, pool: 0x2dffb8, sewage: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
 const GROUP_HEX = { plain: 0x6fd2f5, grass: 0xffd98a, cyber: 0xff2bd6, solar: 0x7dff4a, rock: 0xff9a3c, toxic: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
 const stripGeo = new THREE.BoxGeometry(0.86, 0.014, 0.07);
 const flashGeo = new THREE.PlaneGeometry(0.92, 0.3);
@@ -209,9 +194,9 @@ const seamGhost = makeSeamSet(), seamPlaced = makeSeamSet();
 function setSeamStates(set, ev) {
   ev.sides.forEach((st, i) => {
     const it = set.items[i]; it.st = st;
-    const hex = st === -1 ? 0xff3b5c : st === 2 ? 0x55506a : (EDGE_COLORS[ev.types[i]] || 0xffffff);
+    const hex = st === -1 ? 0xff3b5c : st === 2 ? 0x55506a : st === 3 ? 0xdfe3ee : (EDGE_COLORS[ev.types[i]] || 0xffffff);
     it.base.setHex(hex);
-    it.strip.visible = st !== 0; it.mirror.visible = st === 1 || st === -1; it.flash.visible = st === 1 || st === -1;
+    it.strip.visible = st !== 0; it.mirror.visible = st === 1; it.flash.visible = st === 1;
   });
   set.group.visible = true;
 }
@@ -230,10 +215,10 @@ function updateSeams(set, now, dt) {
       it.flash.material.opacity = Math.min(1, f) * fade;
       it.flash.position.y = it.y0 + (Math.random() - 0.5) * 0.012; it.flash.scale.set(1 + 0.04 * Math.sin(t * 31 + it.ph), 1 + 0.1 * Math.sin(t * 23 + it.ph), 1);
       it.strip.scale.y = 1 + 1.5 * Math.abs(Math.sin(t * 13 + it.ph)); it.mirror.scale.y = it.strip.scale.y;
-    } else if (it.st === -1) { // proibido: estrobo vermelho
-      const on = Math.sin(t * 40) > 0 ? 1 : 0.15;
-      it.strip.material.color.copy(it.base).multiplyScalar(on * 1.3); it.strip.material.opacity = fade;
-      it.flash.material.color.copy(it.base); it.flash.material.opacity = on * 0.9 * fade; it.flash.position.y = it.y0;
+    } else if (it.st === -1) { // lado que não cabe: vermelho baixo respirando devagar (sem estrobo, sem flash)
+      it.strip.material.color.copy(it.base).multiplyScalar(0.6 + 0.25 * Math.sin(t * 3 + it.ph)); it.strip.material.opacity = 0.7 * fade; it.strip.scale.y = 1;
+    } else if (it.st === 3) { // encosta num achado oculto: friso branco respirando devagar, sem resposta
+      it.strip.material.color.copy(it.base).multiplyScalar(0.55 + 0.45 * Math.sin(t * 2.4 + it.ph)); it.strip.material.opacity = 0.85 * fade; it.strip.scale.y = 1;
     } else { // não casa: friso apagado
       it.strip.material.color.copy(it.base); it.strip.material.opacity = 0.5 * fade; it.strip.scale.y = 1;
     }
@@ -264,13 +249,13 @@ function placeHi(m, t, group) {
   m.position.set(w.x, TILE_H + 0.012, w.z); m.rotation.y = (-t.rot * Math.PI) / 3; m.userData.group = group;
 }
 // grupos de formação que a peça na casa (q,r) com esta avaliação tocaria, e as casas de cada um
-function formationGroups(q, r, ev, tile = S.current, rot = S.rot) {
+function formationGroups(q, r, ev, tile = S.current, rot = S.rot, all = false) { // `all`: inclui Snowpunk/Baldio (prévia de missão)
   const byGroup = new Map();
   for (let i = 0; i < 6; i++) {
     if (ev.sides[i] !== 1) continue;
     const nk = key(q + DIRS[i][0], r + DIRS[i][1]), nb = S.tiles.get(nk);
     for (const g of sideGroups(tile, local(i, rot))) { // a estrada na cidade liga a rede E a cidade
-      if (g === 'plain' || g === 'grass') continue; // gelo e baldio não formam "formação": não vale realçar meio tabuleiro
+      if (!all && (g === 'plain' || g === 'grass')) continue; // no REALCE, gelo e baldio ficam de fora (acenderia meio tabuleiro); nas missões contam
       if (!nb || !sideHas(nb, opp(i), g)) continue;
       let set = byGroup.get(g); if (!set) { set = new Set(); byGroup.set(g, set); }
       if (!set.has(nk)) for (const k of regionKeys(nk, g)) set.add(k);
@@ -510,9 +495,12 @@ const dust = (() => {
 const S = {
   tiles: new Map(), slots: new Map(), stack: [], current: null, rot: 0, selected: null, ghostSolid: true,
   score: 0, placed: 0, perfects: 0, questsDone: 0, questsLost: 0, quests: [], over: false, started: false, rng: new RNG(Date.now() >>> 0),
-  best: +(localStorage.getItem('pr_best') || 0), tips: new Set(), lowWarned: false, tileList: [], hints: 5, undo: null, sinceQuest: 0, pendingGain: 0,
+  best: +(localStorage.getItem('pr_best') || 0), tips: new Set(), coached: 0, lowWarned: false, tileList: [], hints: 5, undo: null, sinceQuest: 0, pendingGain: 0, relics: [], sinceRelic: 0, gains: {},
 };
 const HINTS_PER_GAME = 5, QUEST_CAP = 4;
+// no começo menos missões abertas ao mesmo tempo (3 nas primeiras 40 peças, depois 4): o jogador sente que dá conta
+const questCap = () => (questLevel(S.placed) < 2 ? 3 : QUEST_CAP);
+const gain = (src, n = 1) => { S.gains[src] = (S.gains[src] || 0) + n; }; // de onde vêm as peças extras (balanceamento)
 const anims = [], particles = [], vehicles = [];
 let ghostAnim = null, ambAcc = 0;
 const particleGeo = new THREE.BoxGeometry(0.07, 0.07, 0.07);
@@ -588,8 +576,10 @@ function makeTileGroup(tile, lit, glow, live) {
 }
 
 // ---------- regras ----------
-function evalPlacement(q, r, tile, rot) {
-  let matches = 0, neighbors = 0, legal = true;
+// `peek`: só na hora de colocar de verdade. Antes disso, o lado que dá para um achado oculto fica
+// em aberto (estado 3): sem prévia de pontos nem friso colorido — senão a prévia entregava o bioma.
+function evalPlacement(q, r, tile, rot, peek = false) {
+  let matches = 0, neighbors = 0, links = 0, legal = true;
   const matchedTypes = [], sides = [], types = [];
   for (let i = 0; i < 6; i++) {
     const nb = S.tiles.get(key(q + DIRS[i][0], r + DIRS[i][1]));
@@ -597,11 +587,13 @@ function evalPlacement(q, r, tile, rot) {
     if (!nb) { sides.push(0); continue; }
     neighbors++;
     const mine = edgeAt(tile, rot, i), theirs = edgeAt(nb.tile, nb.rot, opp(i));
-    if (compatible(mine, theirs)) { matches++; matchedTypes.push(mine); sides.push(1); }
-    else if (isConnector(mine) || isConnector(theirs)) { legal = false; sides.push(-1); }
+    if (nb.tile.hidden && !peek) { if (isConnector(mine)) { legal = false; sides.push(-1); } else sides.push(3); continue; }
+    if (compatible(mine, theirs)) { matches++; matchedTypes.push(mine); sides.push(1); if (isConnector(mine) && isConnector(theirs)) links++; } // rede só continua em rede (esgoto na lagoa encaixa, mas não é "rede continua")
+    else if (isConnector(mine) || isConnector(theirs)) { legal = false; sides.push(-1); } // conector interrompido: proibido (friso vermelho baixo)
     else sides.push(2);
   }
-  return { legal, matches, neighbors, matchedTypes, sides, types, perfect: neighbors === 6 && matches === 6 };
+  // `links` = conectores que a peça continua
+  return { legal, matches, neighbors, links, matchedTypes, sides, types, perfect: neighbors === 6 && matches === 6 };
 }
 // lado local de uma aresta do mundo
 const local = (i, rot) => (((i - rot) % 6) + 6) % 6;
@@ -637,7 +629,7 @@ function bestPlacement(tile, cells) {
     for (let rot = 0; rot < 6; rot++) {
       const ev = evalPlacement(cell.q, cell.r, tile, rot);
       if (!ev.legal) continue;
-      const score = ev.matches * 10 + (ev.perfect ? 60 : 0) + (ev.matches === ev.neighbors ? 3 : 0) + S.rng.float();
+      const score = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + (ev.matches === ev.neighbors ? 3 : 0) + Math.random(); // desempate FORA do S.rng: dica/pré-posição não podem mudar a pilha (desafio diário)
       if (!best || score > best.score) best = { q: cell.q, r: cell.r, rot, score, ev };
     }
   }
@@ -646,7 +638,13 @@ function bestPlacement(tile, cells) {
 
 // ---------- tabuleiro ----------
 function addTile(q, r, tile, rot, animate, ev) {
-  const group = makeTileGroup(tile, litMat, glowMat, true);
+  const group = makeTileGroup(tile, tile.hidden ? hiddenLit : litMat, tile.hidden ? hiddenGlow : glowMat, true);
+  if (tile.hidden) { // nada de água colorida, aurora, raio nem bloom: tudo apagado até alguém encostar
+    const drop = [];
+    group.traverse((m) => { if (!m.isMesh) return; m.layers.disable(BLOOM); if (m.material === waterMat) m.material = hiddenLit; else if (m.userData.aurora || m.userData.bolt) drop.push(m); });
+    for (const m of drop) m.parent.remove(m);
+    group.userData.bolts = [];
+  }
   const w = toWorld(q, r), k = key(q, r);
   group.position.set(w.x, animate ? ghostGroup.position.y : 0, w.z);
   group.rotation.y = (-rot * Math.PI) / 3;
@@ -655,7 +653,7 @@ function addTile(q, r, tile, rot, animate, ev) {
   S.tileList = [...S.tiles.values()];
   for (const v of group.userData.vehicles || []) { v.tileKey = k; vehicles.push(v); }
   if (animate) anims.push({ obj: group, prop: 'drop', t: 0, dur: 0.46, y0: ghostGroup.position.y, w, ev, impact: false });
-  spawnFauna(k);
+  if (!tile.hidden) spawnFauna(k);
 }
 function removeTile(k) {
   const t = S.tiles.get(k); if (!t) return null;
@@ -669,17 +667,24 @@ function refreshSlots() {
   const wanted = new Map();
   for (const t of S.tiles.values())
     for (const d of DIRS) { const q = t.q + d[0], r = t.r + d[1], k = key(q, r); if (!S.tiles.has(k) && !wanted.has(k)) wanted.set(k, { q, r }); }
-  for (const [k, s] of S.slots) if (!wanted.has(k)) { slotGroup.remove(s.mesh); S.slots.delete(k); }
+  for (const [k, s] of S.slots) if (!wanted.has(k)) { slotGroup.remove(s.mesh, s.fill, s.ticks); S.slots.delete(k); }
   for (const [k, c] of wanted) if (!S.slots.has(k)) {
     const m = new THREE.Mesh(ringGeo, ringMat), w = toWorld(c.q, c.r);
     m.position.set(w.x, TILE_H + 0.006, w.z);
-    slotGroup.add(m); S.slots.set(k, { q: c.q, r: c.r, mesh: m });
+    const fill = new THREE.Mesh(discGeo, slotLinkFill.road); fill.position.set(w.x, TILE_H + 0.004, w.z); fill.visible = false;
+    const ticks = new THREE.Group(); ticks.position.set(w.x, TILE_H + 0.008, w.z); ticks.visible = false;
+    for (let i = 0; i < 6; i++) { // marquinha curta no meio de cada borda; só as do conflito aparecem
+      const a = edgeAngle(i), tk = new THREE.Mesh(tickGeo, slotTickMat);
+      tk.position.set(Math.cos(a) * 0.74, 0, Math.sin(a) * 0.74); tk.rotation.y = -(a + Math.PI / 2); ticks.add(tk);
+    }
+    slotGroup.add(m, fill, ticks); S.slots.set(k, { q: c.q, r: c.r, mesh: m, fill, ticks, status: 'ok', bad: [] });
   }
+  slotCache = '';
   if (S.selected && !S.slots.has(key(S.selected.q, S.selected.r))) S.selected = null;
 }
 function clearBoard() {
   for (const t of S.tiles.values()) boardGroup.remove(t.group);
-  for (const s of S.slots.values()) slotGroup.remove(s.mesh);
+  for (const s of S.slots.values()) slotGroup.remove(s.mesh, s.fill, s.ticks);
   for (const p of particles) fxGroup.remove(p.m);
   while (fauna.length) dropFlock(fauna.length - 1);
   S.tiles.clear(); S.slots.clear(); S.tileList = []; vehicles.length = 0; clearTrains(); particles.length = 0; anims.length = 0; fx.sides = 0; hoverFx.k = 0; hoverFx.target = 0;
@@ -688,14 +693,14 @@ function clearBoard() {
   for (const p of ringPulses) p.parent.remove(p.m); ringPulses.length = 0;
   stackRoot.clear(); curRoot.clear(); curTileGroup = null; stackTopGroup = null; uiAnims.length = 0;
   for (const hk of [...harmonyFx.keys()]) removeHarmonyFx(hk);
-  if (S.relic) fxGroup.remove(S.relic.beam); S.relic = null; S.sinceRelic = 0;
-  S.selected = null; S.undo = null; S.pendingGain = 0; $('qlabels').innerHTML = ''; document.querySelectorAll('.flyhex').forEach((e) => e.remove());
+  for (const R of S.relics) fxGroup.remove(R.beam); S.relics = []; S.sinceRelic = 0;
+  S.selected = null; S.undo = null; S.pendingGain = 0; $('qlabels').innerHTML = ''; document.querySelectorAll('.flyhex').forEach((e) => { e.getAnimations().forEach((a) => a.cancel()); e.remove(); });
 }
 
 // ---------- peça atual / fantasma ----------
 function setGhost(tile) {
   ghostGroup.clear();
-  if (!tile) { ghostGroup.visible = false; ghostShadow.visible = false; hideFormation(); return; }
+  if (!tile) { S.selected = null; updateGhost(); ghostGroup.visible = false; ghostShadow.visible = false; hideFormation(); return; } // fim de jogo: botão, frisos e faixas apagam
   ghostGroup.add(makeTileGroup(tile, ghostLit, ghostGlow, false), ghostHi);
   updateGhost();
 }
@@ -706,7 +711,7 @@ function updateGhost() {
   ghostLit.opacity = op; ghostGlow.opacity = op; waterGhost.uniforms.opacity.value = op;
   hoverFx.target = 0;
   const bp = $('btn-place');
-  if (!S.selected || !S.current) { ghostGroup.visible = false; ghostShadow.visible = false; seamGhost.group.visible = false; hideFormation(); setSlotMaterials(); bp.disabled = true; bp.innerHTML = 'Escolha uma casa'; return; }
+  if (!S.selected || !S.current) { ghostGroup.visible = false; ghostShadow.visible = false; seamGhost.group.visible = false; hideFormation(); setSlotMaterials(); bp.disabled = true; bp.innerHTML = 'Colocar'; return; }
   const w = toWorld(S.selected.q, S.selected.r);
   if (!ghostGroup.visible) { ghostPos.x.v = w.x; ghostPos.z.v = w.z; ghostPos.x.vel = 0; ghostPos.z.vel = 0; ghostGroup.position.set(w.x, 0.24, w.z); }
   ghostShadow.position.set(w.x, TILE_H + 0.009, w.z);
@@ -715,27 +720,66 @@ function updateGhost() {
   const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot);
   setSeamStates(seamGhost, ev); seamGhost.boost = ev.perfect ? 0.6 : 0;
   if (ev.legal && ev.matches) showFormation(S.selected.q, S.selected.r, ev); else hideFormation();
-  previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev) : new Map());
-  hoverFx.cols = !ev.legal ? ['#ff3b5c'] : ev.sides.map((st, i) => (st === 1 ? hexCss(EDGE_COLORS[ev.types[i]] || 0xffffff) : null)).filter(Boolean);
-  hoverFx.target = hoverFx.cols.length ? (!ev.legal ? 0.5 : ev.perfect ? 1.0 : 0.5 + 0.1 * ev.matches) : 0;
+  previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true) : new Map());
+  previewPendingGoal(ev);
+  hoverFx.cols = ev.sides.map((st, i) => (st === 1 ? hexCss(EDGE_COLORS[ev.types[i]] || 0xffffff) : null)).filter(Boolean);
+  hoverFx.target = hoverFx.cols.length ? (ev.perfect ? 1.0 : 0.5 + 0.1 * ev.matches) : 0;
   if (ghostPos.x.target !== w.x || ghostPos.z.target !== w.z) { ghostPos.x.target = w.x; ghostPos.z.target = w.z; ghostPos.arc = 1; }
-  const tint = ev.legal ? 0xffffff : 0xff7f92;
-  ghostLit.color.setHex(tint); ghostGlow.color.setHex(tint);
+  ghostLit.color.setHex(0xffffff); ghostGlow.color.setHex(0xffffff);
   setSlotMaterials(ev);
-  bp.disabled = !ev.legal;
-  const bonus = ev.legal ? previewBonus(S.selected.q, S.selected.r, S.current, S.rot) : { shut: 0, harmony: 0 }, basePts = ev.matches * 10 + (ev.perfect ? 60 : 0) + bonus.shut + bonus.harmony;
-  bp.innerHTML = ev.legal ? `Colocar <b>+${basePts}</b>${ev.perfect ? ' ★' : ''}${bonus.shut ? ' ⬢' : ''}${bonus.harmony ? ' ✺' : ''}` : `${icon('x', 16)} Bloqueado`;
+  bp.disabled = !ev.legal; // nesta rotação o conector bateria em outra coisa: só gira (o lado ruim fica com friso vermelho baixo)
+  const bonus = ev.legal ? previewBonus(S.selected.q, S.selected.r, S.current, S.rot) : { shut: 0, harmony: 0, terminal: 0, relic: 0 }, basePts = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + bonus.shut + bonus.harmony + bonus.terminal + bonus.relic;
+  bp.innerHTML = ev.legal ? `Colocar <b>+${basePts}</b>${ev.links ? ' ⇢' : ''}${ev.perfect ? ' ★' : ''}${bonus.shut ? ' ⬢' : ''}${bonus.harmony ? ' ✺' : ''}` : 'Gire a peça';
   bp.classList.toggle('perfect', ev.legal && ev.perfect);
 }
-function setSlotMaterials(ev) {
-  for (const [k, s] of S.slots) {
-    if (S.selected && k === key(S.selected.q, S.selected.r) && ev)
-      s.mesh.material = !ev.legal ? ringSel.bad : ev.matches === ev.neighbors ? ringSel.ok : ev.matches > 0 ? ringSel.partial : ringSel.none;
-    else s.mesh.material = ringMat;
+// Para a peça na mão: 'blocked' (nenhuma rotação cabe — escurecida + marquinha nas bordas do conflito), 'link' (alguma rotação
+// liga o conector da peça numa ponta aberta do tabuleiro) ou 'ok'. Recalcula só quando a peça ou o tabuleiro mudam.
+let slotCache = '';
+function updateSlotStatus() {
+  const t = S.current, ck = t ? `${t.id}:${S.tiles.size}:${S.slots.size}` : '';
+  if (ck === slotCache) return; slotCache = ck;
+  const types = t ? [t.conn, t.conn2].filter(Boolean).map((c) => c.type) : [];
+  for (const s of S.slots.values()) {
+    s.status = 'ok'; s.link = null; s.bad = [];
+    if (!t) continue;
+    let legal = false, fewest = 7;
+    for (let rot = 0; rot < 6; rot++) {
+      const ev = evalPlacement(s.q, s.r, t, rot);
+      if (!ev.legal) { // guarda a rotação que erra menos: as bordas dela são "onde não cabe"
+        const bad = ev.sides.map((st, i) => (st === -1 ? i : -1)).filter((i) => i >= 0);
+        if (bad.length < fewest) { fewest = bad.length; s.bad = bad; }
+        continue;
+      }
+      legal = true;
+      const lt = ev.matchedTypes.find((x) => types.includes(x));
+      if (lt) { s.link = lt; break; }
+    }
+    if (legal) s.bad = [];
+    s.status = !legal ? 'blocked' : s.link ? 'link' : 'ok';
   }
+}
+function slotBlocked(cell) { const s = S.slots.get(key(cell.q, cell.r)); return !!(s && s.status === 'blocked'); }
+function setSlotMaterials(ev) {
+  updateSlotStatus();
+  for (const [k, s] of S.slots) {
+    const sel = S.selected && k === key(S.selected.q, S.selected.r) && ev;
+    if (sel) s.mesh.material = !ev.legal ? ringSel.none : ev.matches === ev.neighbors ? ringSel.ok : ev.matches > 0 ? ringSel.partial : ringSel.none;
+    else s.mesh.material = s.status === 'link' ? slotLinkRing[s.link] : s.status === 'blocked' ? slotBlockedRing : ringMat;
+    if (!s.fill) continue;
+    s.fill.visible = !sel && s.status !== 'ok';
+    s.fill.material = s.status === 'link' ? slotLinkFill[s.link] : slotBlockedFill;
+    s.ticks.visible = !sel && s.status === 'blocked';
+    s.ticks.children.forEach((tk, i) => (tk.visible = s.bad.includes(i)));
+  }
+}
+function updateSlotFx(now) { // a casa que continua a rede respira na cor do conector
+  const k = 0.5 + 0.5 * Math.sin(now * 0.005);
+  for (const t in slotLinkRing) { slotLinkRing[t].opacity = 0.45 + 0.4 * k; slotLinkFill[t].opacity = 0.06 + 0.1 * k; }
+  slotTickMat.opacity = 0.6 + 0.2 * k;
 }
 function selectSlot(cell, silent) {
   if (!cell || S.over || !S.current) return;
+  if (slotBlocked(cell)) { if (!silent) play('bad'); return; } // casa proibida para esta peça: o fantasma não vai (som de erro; a casa já está escurecida)
   if (S.selected && S.selected.q === cell.q && S.selected.r === cell.r) return;
   S.selected = { q: cell.q, r: cell.r };
   S.ghostSolid = true;
@@ -771,7 +815,7 @@ function autoPreview(from) {
 function frontier() {
   const groups = {}, ends = [];
   for (const t of S.tiles.values()) for (let i = 0; i < 6; i++) {
-    if (S.tiles.has(key(t.q + DIRS[i][0], t.r + DIRS[i][1]))) continue;
+    if (t.tile.hidden || S.tiles.has(key(t.q + DIRS[i][0], t.r + DIRS[i][1]))) continue; // achado oculto não conta (entregaria o bioma)
     const e = edgeAt(t.tile, t.rot, i), g = groupOf(e);
     groups[g] = (groups[g] || 0) + 1;
     if (isConnector(e)) ends.push({ type: e, ground: t.tile.ground[0] });
@@ -786,20 +830,34 @@ function steerStack() {
   const t = S.stack[2]; if (!t || t.quest || t._steered) return;
   const { ends } = frontier(); if (!ends.length || !S.rng.chance(STEER_CHANCE)) return;
   const e = S.rng.pick(ends), nt = continuationTile(S.rng, e.type, e.ground); nt._steered = true;
+  if (S.undo) S.undo.steer = { from: S.stack[2], to: nt }; // o desfazer devolve a peça original
   S.stack[2] = nt;
 }
 
+// O alvo da missão NÃO olha mais a maior formação do tabuleiro inteiro (dava "142 prédios" para
+// uma bandeira longe da cidade grande): ele se ajusta à formação em que a bandeira entra (rebaseQuest).
+const questContext = () => ({ level: questLevel(S.placed) });
+// Progresso de uma missão sobre um conjunto de casas: cidade conta PRÉDIOS (soma por peça), o resto conta peças.
+const sumBuildings = (keys) => { let n = 0; for (const k of keys) n += buildingsOf(S.tiles.get(k).tile); return n; };
+const questProgress = (qst, keys) => (qst.kind === 'city' ? sumBuildings(keys) : keys.size);
+// A bandeira acabou de entrar no tabuleiro: se ela caiu numa formação que já existia, o alvo passa a
+// ser no mínimo (tamanho dela + o crescimento pedido). Ligar à rede grande vale, mas não cumpre de graça.
+function rebaseQuest(qst) {
+  const p = questProgress(qst, regionKeys(qst.tileKey, qst.group));
+  qst.target = Math.max(qst.target, p + (qst.grow || 0)); qst.progress = p;
+}
 // ---------- missões: nascem na peça que está no topo da pilha (o jogador vê chegando) ----------
 function maybeAssignQuest() {
   const tile = S.stack[0]; if (!tile || tile.quest || S.placed < 2) return;
   S.sinceQuest++;
   const starving = S.quests.length === 0 && (S.sinceQuest >= 5 || S.stack.length <= 8);
-  if (S.quests.length >= QUEST_CAP) return;
+  if (S.quests.length >= questCap()) return;
   if (!(S.rng.chance(0.26) || S.sinceQuest >= 7 || starving)) return;
-  const q = makeQuest(S.rng, tile, buildingsOf(tile), frontier().groups);
+  const q = makeQuest(S.rng, tile, buildingsOf(tile), frontier().groups, questContext());
   if (!q) return;
   q.color = GROUP_INFO[q.group].color; tile.quest = q; tile._geo = null; tile._slab = null; tile._hi = null;
   if (q.kind === 'city') q.progress = buildingsOf(tile);
+  if (S.undo) S.undo.questTile = tile; // o desfazer tira a bandeira que nasceu neste saque
   S.sinceQuest = 0;
 }
 
@@ -809,46 +867,54 @@ function drawNext(from, silentStack) {
   S.current = S.stack.shift() || null;
   S.rot = 0;
   if (!S.current) { setGhost(null); refreshCurrentPreview(); rebuildStack(); updateHUD(); gameOver(); return; }
-  steerStack();
-  maybeAssignQuest();
-  if (S.started && S.tileList.length) spawnRelic();
+  // extras do saque: se um deles falhar, o turno NÃO pode parar no meio (o fantasma ficava com a
+  // peça antiga em cima da recém-colocada e a peça real na mão era outra — 10/10)
+  safely(steerStack); safely(maybeAssignQuest);
+  if (S.started && S.tileList.length) safely(spawnRelic);
   setGhost(S.current); refreshCurrentPreview(); rebuildStack(0, true); updateHUD();
   ghostGroup.rotation.y = 0; if (curTileGroup) curTileGroup.rotation.y = 0;
   autoPreview(from);
   renderQuests(); // a missão da peça na mão aparece como card pendente (sem texto no meio da tela)
 }
+function safely(fn) { try { fn(); } catch (err) { console.error('[punkromantik]', fn.name, err); } }
 const ORD = ['', '', 'DUPLO', 'TRIPLO', 'QUÁDRUPLO', 'QUÍNTUPLO', 'SÊXTUPLO'];
+// Clique duplo em "Colocar" ou espaço segurado colocavam a peça seguinte sem o jogador vê-la (ela já
+// chega sólida numa casa válida). Os comandos do JOGADOR passam por aqui; PR.commitPlacement (bot/auto) não.
+let lastCommit = 0;
+function playerCommit() { const now = performance.now(); if (now - lastCommit < 450) return; lastCommit = now; commitPlacement(); }
 function commitPlacement() {
   if (!S.current || !S.selected || S.over) return;
   const { q, r } = S.selected, tile = S.current, rot = S.rot;
-  const ev = evalPlacement(q, r, tile, rot);
-  if (!ev.legal) { play('bad'); toast(`${icon('x', 14, '#ff5c7a')} conector interrompido`, 1600); return; }
+  const ev = evalPlacement(q, r, tile, rot, true);
+  if (!ev.legal) { play('bad'); return; }
   // instantâneo para o único "desfazer" permitido
-  S.undo = { q, r, tile, rot, score: S.score, placed: S.placed, perfects: S.perfects, questsDone: S.questsDone, questsLost: S.questsLost, quests: S.quests.map((x) => ({ ...x })), gained: 0, sinceQuest: S.sinceQuest, lowWarned: S.lowWarned, hints: S.hints };
+  S.undo = { q, r, tile, rot, score: S.score, placed: S.placed, perfects: S.perfects, questsDone: S.questsDone, questsLost: S.questsLost, quests: S.quests.map((x) => ({ ...x })), gained: 0, sinceQuest: S.sinceQuest, lowWarned: S.lowWarned, hintGain: 0, best: S.best, sinceRelic: S.sinceRelic, gains: { ...S.gains }, rng: S.rng.state };
   addTile(q, r, tile, rot, true, ev);
   S.placed++;
   const w = toWorld(q, r);
-  let pts = ev.matches * 10, gained = 0;
-  if (ev.perfect) { pts += 60; S.perfects++; S.stack.push(genTile(S.rng)); gained++; }
+  let pts = ev.matches * 10 + ev.links * LINK_PTS, gained = 0; // continuar trilho/rodovia/esgoto vale extra
+  if (ev.perfect) { pts += 60; S.perfects++; S.stack.push(genTile(S.rng)); gained++; gain('perfect'); }
   let closed = false;
-  if (isTerminal(tile) && ev.sides[(tile.conn.exits[0] + rot) % 6] === 1) { pts += 20; S.stack.push(genTile(S.rng)); gained++; closed = true; } // fechou uma linha: sensação de "ponto final"
+  if (isTerminal(tile) && ev.sides[(tile.conn.exits[0] + rot) % 6] === 1) { pts += 20; S.stack.push(genTile(S.rng)); gained++; closed = true; gain('terminal'); } // fechou uma linha: sensação de "ponto final"
   const shut = closedRegions(q, r, tile, rot); // regiões que esta peça acabou de cercar por completo
-  for (const c of shut) { pts += c.points; if (c.tiles) { for (let i = 0; i < c.tiles; i++) S.stack.push(genTile(S.rng)); gained += c.tiles; } }
+  for (const c of shut) { pts += c.points; if (c.tiles) { for (let i = 0; i < c.tiles; i++) S.stack.push(genTile(S.rng)); gained += c.tiles; gain('closed', c.tiles); } }
   const harm = newHarmonies(q, r); // peças que acabaram de ficar perfeitamente cercadas pelo mesmo ambiente
   for (const h of harm) { pts += HARMONY_PTS; S.tiles.get(h.k).harmony = h.g; addHarmonyFx(h.k, h.g); }
   S.undo.harmony = harm.map((h) => h.k);
   let relicHit = null;
-  if (S.relic && !S.relic.claimed && relicConnected()) { // ligou o tabuleiro ao achado distante
-    relicHit = S.relic; relicHit.claimed = true; S.undo.relic = relicHit;
-    pts += RELIC_PTS; for (let i = 0; i < RELIC_TILES; i++) S.stack.push(genTile(S.rng)); gained += RELIC_TILES;
+  S.undo.revealed = revealAround(q, r); // achado oculto ao lado acende (o encaixe com ele já contou de verdade em `ev`)
+  S.undo.relics = [];
+  for (const R of S.relics) if (!R.claimed && relicConnected(R)) { // ligou o tabuleiro ao achado distante
+    relicHit = relicHit || R; R.claimed = true; S.undo.relics.push(R);
+    const rt = relicTiles(); relicHit._tiles = rt; pts += RELIC_PTS; for (let i = 0; i < rt; i++) S.stack.push(genTile(S.rng)); gained += rt; gain('relic', rt);
   }
   S.score += pts;
   play('place', ev.matches);
-  if (pts > 0) scoreSign(pts, ev.perfect || harm.length ? 'perfect' : ev.matches >= 3 ? 'good' : ev.matches >= 2 ? 'ok' : '', harm.length ? 'harmonia!' : relicHit ? 'achado distante' : ev.perfect ? 'encaixe perfeito!' : shut.length ? `${GROUP_INFO[shut[0].group].name} fechado` : closed ? 'ponto final' : ev.matches >= 2 ? `encaixe ${ORD[ev.matches].toLowerCase()}` : '', w);
+  if (pts > 0) scoreSign(pts, ev.perfect || harm.length ? 'perfect' : ev.matches >= 3 ? 'good' : ev.matches >= 2 ? 'ok' : '', harm.length ? 'harmonia!' : relicHit ? 'achado distante' : S.undo.revealed.length ? (ev.sides.some((st, i) => st === 1 && S.undo.revealed.some((R) => R.k === key(q + DIRS[i][0], r + DIRS[i][1]))) ? 'bom palpite!' : 'achado revelado') : ev.perfect ? 'encaixe perfeito!' : shut.length ? `${GROUP_INFO[shut[0].group].name} fechado` : closed ? 'ponto final' : ev.links ? (ev.links >= 2 ? 'rede ligada!' : 'rede continua') : ev.matches >= 2 ? `encaixe ${ORD[ev.matches].toLowerCase()}` : '', w);
   spawnBurst(w, ev.matchedTypes.map((t) => TERRAIN[t].color), ev.perfect ? 34 : 4 + ev.matches * 3);
   if (ev.perfect) {
     play('perfect'); pulse(w, 0xffd166); confettiBurst(2);
-    banner(`${icon('star', 18, '#ffd23f')} <b>Perfeito!</b> <b class="big">+1</b> ${icon('tile', 16, '#2fbf86')}`, '', 'perfect', 2600);
+    banner(`★ <b>PERFEITO</b> +1 ${icon('tile', 14)}`, '', 'perfect', 2600);
   } else if (ev.matches >= 3) {
     confettiBurst(ev.matches >= 4 ? 2 : 1); play('confetti');
   }
@@ -856,15 +922,18 @@ function commitPlacement() {
   for (const c of shut) flashRegion(c);
   for (const h of harm) {
     const t = S.tiles.get(h.k), hw = toWorld(t.q, t.r), color = GROUP_INFO[h.g].color;
-    setTimeout(() => { play('harmony'); confettiBurst(3); kick(1.1, [color, '#ffd166', '#ffffff'], 1); pulse(hw, GROUP_HEX[h.g]); pulse(hw, 0xffd166); spawnBurst(hw, [color, '#ffd166', '#ffffff'], 46, 1.3); cameraShake = { t: 0, dur: 0.5, amp: 0.09 }; }, 260);
-    banner(`✺ <b>Harmonia!</b> <b class="big">+${HARMONY_PTS}</b>`, '', 'perfect harmony', 3200);
+    setTimeout(() => {
+      play('harmony'); confettiBurst(1); starBurst(color); pulse(hw, GROUP_HEX[h.g]); pulse(hw, 0xffd166); spawnBurst(hw, [color, '#ffd166', '#ffffff'], 46, 1.3); cameraShake = { t: 0, dur: 0.5, amp: 0.09 };
+      [0, 300, 600, 900].forEach((ms, n) => setTimeout(() => kick(0.38, n % 2 ? ['#ffd166', color] : [color], 1.25), ms)); // flashes curtos na cor do bioma
+    }, 260);
+    banner(`✺ <b>PERFEITO!</b> <small>harmonia ${GROUP_INFO[h.g].name}</small> <b class="big">+${HARMONY_PTS}</b>`, '', 'perfect harmony', 3400);
   }
   if (relicHit) {
     const rw = toWorld(relicHit.q, relicHit.r);
     play('relic'); confettiBurst(2); pulse(rw, GROUP_HEX[relicHit.g]); spawnBurst(rw, [GROUP_INFO[relicHit.g].color, '#ffffff'], 36, 1.1);
-    banner(`${icon('sparkle', 18, '#8f73f0')} <b>Achado!</b> <b class="big">+${RELIC_TILES}</b> ${icon('tile', 18)} <small>+${RELIC_PTS}</small>`, '', 'quest reward', 3200);
+    banner(`✦ <b>ACHADO</b> <b class="big">+${relicHit._tiles}</b> ${icon('tile', 18)} <small>+${RELIC_PTS}</small>`, '', 'quest reward', 3200);
   }
-  if (tile.quest) S.quests.push({ ...tile.quest, tileKey: key(q, r) });
+  if (tile.quest) { const nq = { ...tile.quest, tileKey: key(q, r) }; rebaseQuest(nq); if (nq._coach) nq._coachAt = S.placed; S.quests.push(nq); }
   const fromRect = { x: (window.innerWidth / 2), y: window.innerHeight * 0.36 };
   gained += checkQuests();
   S.undo.gained = gained;
@@ -882,10 +951,19 @@ function commitPlacement() {
 // médio prazo além do encaixe de cada jogada. Gelo conta; Baldio (respiro) e redes não.
 const CLOSABLE = ['plain', 'cyber', 'solar', 'rock'];
 // prevê os bônus (região fechada, harmonia) pondo a peça no tabuleiro por um instante (regionKeys lê S.tiles)
+// Tudo que commitPlacement paga além de encaixe/rede/perfeito — o botão "Colocar +N" tem que bater
+// com o que entra no placar. (Faltavam o ponto final +20 e o achado ligado +80.) Achado ainda oculto
+// fica de fora de propósito: a prévia não entrega o palpite.
 function previewBonus(q, r, tile, rot) {
-  const k = key(q, r); if (S.tiles.has(k)) return { shut: 0, harmony: 0 };
+  const none = { shut: 0, harmony: 0, terminal: 0, relic: 0 };
+  const k = key(q, r); if (S.tiles.has(k)) return none;
+  const ev = evalPlacement(q, r, tile, rot);
+  const terminal = isTerminal(tile) && ev.sides[(tile.conn.exits[0] + rot) % 6] === 1 ? 20 : 0;
   S.tiles.set(k, { q, r, tile, rot });
-  try { return { shut: closedRegions(q, r, tile, rot).reduce((n, c) => n + c.points, 0), harmony: newHarmonies(q, r).length * HARMONY_PTS }; } finally { S.tiles.delete(k); }
+  try {
+    const relic = S.relics.filter((R) => !R.claimed && !R.hidden && relicConnected(R)).length * RELIC_PTS;
+    return { shut: closedRegions(q, r, tile, rot).reduce((n, c) => n + c.points, 0), harmony: newHarmonies(q, r).length * HARMONY_PTS, terminal, relic };
+  } finally { S.tiles.delete(k); }
 }
 function closedRegions(q, r, tile, rot) {
   const k = key(q, r), out = [], seen = new Set();
@@ -907,6 +985,7 @@ function flashRegion(c) {
 // estrada na cidade também conta). Vale 100 pontos uma vez por peça e ela ganha um halo girando.
 // Pode ser disparada pela peça do centro OU pela sexta vizinha que fecha o anel.
 const HARMONY_PTS = 100;
+const LINK_PTS = 15; // por conector (trilho/rodovia/esgoto) que a peça continua
 const harmonyFx = new Map();
 function harmonyGroup(t) {
   let g0 = null;
@@ -964,9 +1043,23 @@ function addHarmonyFx(k, g) {
     sp.scale.setScalar(0.09); sp.layers.enable(BLOOM); sp.userData = { t: i / 10, a: Math.random() * Math.PI * 2, r: 0.15 + Math.random() * 0.6, sp: 0.18 + Math.random() * 0.12 };
     grp.add(sp); motes.push(sp);
   }
-  grp.userData = { rim, rimIn, beads, gem, mist, motes, born: 0 };
+  // cintilas: brilhos de quatro pontas girando em volta da joia — de longe é o que diz "esta é especial"
+  const sparks = [];
+  for (let i = 0; i < 5; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkleTex, color: i % 2 ? 0xffd166 : c.clone().lerp(new THREE.Color(0xffffff), 0.4), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    sp.layers.enable(BLOOM); sp.userData = { a: (i / 5) * Math.PI * 2, r: 0.42 + 0.12 * (i % 2), y: 0.55 + 0.25 * ((i * 0.61) % 1), ph: i * 1.3 };
+    grp.add(sp); sparks.push(sp);
+  }
+  grp.userData = { rim, rimIn, beads, gem, mist, motes, sparks, born: 0, ring: 0.6, color: GROUP_HEX[g] };
   grp.scale.setScalar(0.01); fxGroup.add(grp); harmonyFx.set(k, grp);
 }
+const sparkleTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 10); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64); x.fillStyle = '#fff';
+  x.beginPath(); x.moveTo(32, 2); x.quadraticCurveTo(35, 29, 62, 32); x.quadraticCurveTo(35, 35, 32, 62); x.quadraticCurveTo(29, 35, 2, 32); x.quadraticCurveTo(29, 29, 32, 2); x.fill();
+  return new THREE.CanvasTexture(c);
+})();
 function removeHarmonyFx(k) { const g = harmonyFx.get(k); if (g) { fxGroup.remove(g); harmonyFx.delete(k); } }
 function updateHarmonyFx(dt, now) {
   const t = now * 0.001;
@@ -983,6 +1076,12 @@ function updateHarmonyFx(dt, now) {
       m.scale.setScalar(d.s * (1 + 0.08 * Math.sin(t * 0.9 + d.ph)));
       m.material.opacity = u.born * (0.17 + 0.06 * Math.sin(t * 0.8 + d.ph));
     }
+    for (const m of u.sparks) {
+      const d = m.userData, a = d.a + t * 0.6, tw = Math.max(0, Math.sin(t * 2.6 + d.ph));
+      m.position.set(Math.cos(a) * d.r, d.y + 0.05 * Math.sin(t * 1.3 + d.ph), Math.sin(a) * d.r);
+      m.scale.setScalar(0.08 + 0.16 * tw * tw); m.material.opacity = u.born * (0.25 + 0.75 * tw);
+    }
+    if ((u.ring -= dt) <= 0) { u.ring = 2.6; spawnRingPulse(scene, g.position.x, TILE_H + 0.03, g.position.z, u.color, true); } // anel na cor do bioma, de tempos em tempos
     for (const m of u.motes) {
       const d = m.userData; d.t = (d.t + dt * d.sp) % 1;
       m.position.set(Math.cos(d.a + d.t * 2) * d.r, 0.1 + d.t * 1.1, Math.sin(d.a + d.t * 2) * d.r);
@@ -991,54 +1090,82 @@ function updateHarmonyFx(dt, now) {
   }
 }
 
-// ---------- achados distantes: lá pelo meio/fim da partida surge uma peça solta longe do tabuleiro ----------
+// ---------- achados distantes: peças soltas longe do tabuleiro, ocultas em cinza ----------
 // (como as peças especiais do Dorfromantik): um hexágono inteiro de um bioma, com marco, sob um
-// facho de luz. Dá para construir ao lado dela desde já; quando o tabuleiro principal se LIGA a
-// ela (qualquer caminho de peças encostadas), rende pontos e peças. As regiões dela contam para
-// as missões como qualquer outra — é um bioma pronto esperando para ser aproveitado.
-const RELIC_FROM = 22, RELIC_PTS = 80, RELIC_TILES = 2;
+// facho de luz branca. Ela chega DESLIGADA — toda cinza, só a silhueta — e o jogador deduz o bioma
+// pelo ambiente em volta (o bioma é sorteado com peso pelas peças do tabuleiro mais próximas).
+// Encostar uma peça nela ativa a casa: a cor aparece e o encaixe conta de verdade (acertou o palpite,
+// ganha os pontos do lado). Antes de ativar, o encaixe com ela fica "?" — friso branco, sem prévia de
+// pontos, e a dica não sabe a resposta. Quando o tabuleiro principal se LIGA a ela, rende pontos e
+// peças. Pode haver até RELIC_MAX esperando ao mesmo tempo, espalhados como faróis: dão um norte.
+const RELIC_FROM = 18, RELIC_PTS = 80, RELIC_MAX = 2, RELIC_BEAM = 0xc8ccd6;
+const relicTiles = () => (questLevel(S.placed) < 4 ? 2 : 1); // como as missões: no fim da partida o achado paga menos peças
 const hexDist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
 const relicBeamGeo = new THREE.CylinderGeometry(0.06, 0.32, 9, 14, 1, true);
+const relicAt = (k) => S.relics.find((R) => R.k === k);
 function spawnRelic(force) {
-  if (!force && ((S.relic && !S.relic.claimed) || S.placed < RELIC_FROM || S.stack.length < 6 || ++S.sinceRelic < 8 || !S.rng.chance(0.3))) return false;
-  const fr = frontier().groups, opts = ['cyber', 'solar', 'rock', 'plain'];
-  const g = S.rng.weighted(opts.map((x) => [x, 1 + (fr[x] || 0)]));
-  const list = S.tileList;
-  for (let tries = 0; tries < 80; tries++) {
-    const base = list[S.rng.int(list.length)], d = S.rng.int(6), dist = 3 + S.rng.int(2), side = S.rng.chance(0.5) ? DIRS[(d + 1) % 6] : [0, 0];
+  const waiting = S.relics.filter((R) => !R.claimed).length, since0 = S.sinceRelic;
+  if (!force && (waiting >= RELIC_MAX || S.placed < RELIC_FROM || S.stack.length < 6 || ++S.sinceRelic < 9 || !S.rng.chance(0.25))) return false;
+  const list = S.tileList, opts = ['cyber', 'solar', 'rock', 'plain'];
+  for (let tries = 0; tries < 120; tries++) {
+    const base = list[S.rng.int(list.length)], d = S.rng.int(6), dist = 5 + S.rng.int(3), side = S.rng.chance(0.5) ? DIRS[(d + 1) % 6] : [0, 0];
     const c = { q: base.q + DIRS[d][0] * dist + side[0], r: base.r + DIRS[d][1] * dist + side[1] };
-    if (list.some((t) => hexDist(t, c) < 3)) continue; // longe de verdade: pelo menos duas casas vazias no meio
+    if (list.some((t) => hexDist(t, c) < 4)) continue; // longe de verdade: pelo menos três casas vazias no meio
+    if (S.relics.some((R) => !R.claimed && hexDist(R, c) < 5)) continue; // faróis espalhados, não em cacho
+    // o ambiente decide: as peças mais próximas pesam mais (quem olha em volta consegue adivinhar)
+    const w = {}, near = Math.min(...list.map((t) => hexDist(t, c)));
+    for (const t of list) { const dd = hexDist(t, c); if (dd > near + 2) continue; for (const gr of t.tile.ground) { const g0 = groupOf(gr); if (opts.includes(g0)) w[g0] = (w[g0] || 0) + 1 / (1 + dd - near); } }
+    const g = S.rng.weighted(opts.map((x) => [x, 0.4 + (w[x] || 0)]));
     const tile = genTile(S.rng, { simple: true });
-    tile.ground = new Array(6).fill(g); tile.edges = tile.ground.slice(); tile.conn = null; tile.relic = true; tile._geo = null;
+    tile.ground = new Array(6).fill(g); tile.edges = tile.ground.slice(); tile.conn = null; tile.relic = true; tile.hidden = true; tile._geo = null;
     addTile(c.q, c.r, tile, S.rng.int(6), false); refreshSlots();
-    const w = toWorld(c.q, c.r), beam = new THREE.Mesh(relicBeamGeo, new THREE.MeshBasicMaterial({ color: GROUP_HEX[g], transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
-    beam.position.set(w.x, TILE_H + 4.5, w.z); beam.layers.enable(BLOOM); fxGroup.add(beam);
-    if (S.relic) fxGroup.remove(S.relic.beam); // o facho do achado anterior (já ligado) sai de cena
-    S.relic = { k: key(c.q, c.r), q: c.q, r: c.r, g, beam, claimed: false, pulse: 0 };
+    const wp = toWorld(c.q, c.r), beam = new THREE.Mesh(relicBeamGeo, new THREE.MeshBasicMaterial({ color: RELIC_BEAM, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    beam.position.set(wp.x, TILE_H + 4.5, wp.z); beam.layers.enable(BLOOM); fxGroup.add(beam);
+    S.relics.push({ k: key(c.q, c.r), q: c.q, r: c.r, g, beam, claimed: false, hidden: true, pulse: 0 });
+    if (S.undo && !force) S.undo.spawned = { R: S.relics[S.relics.length - 1], since: since0 }; // o desfazer apaga o achado deste saque
     S.sinceRelic = 0;
-    spawnBurst(w, [GROUP_INFO[g].color, '#ffffff'], 18, 0.8); play('appear');
+    spawnBurst(wp, ['#c8ccd6', '#ffffff'], 18, 0.8); play('appear');
     return true;
   }
   return false;
 }
-function relicConnected() { // o tabuleiro principal (a partir da peça inicial) já encosta no achado?
+// liga/desliga a casa do achado: troca a peça pela versão colorida (ou cinza, no desfazer)
+function setRelicHidden(R, hidden) {
+  const t = S.tiles.get(R.k); if (!t || R.hidden === hidden) return;
+  R.hidden = hidden; t.tile.hidden = hidden;
+  removeTile(R.k); addTile(R.q, R.r, t.tile, t.rot, false);
+  R.beam.material.color.setHex(hidden ? RELIC_BEAM : GROUP_HEX[R.g]);
+  if (!hidden) {
+    const w = toWorld(R.q, R.r), color = GROUP_INFO[R.g].color;
+    pulse(w, GROUP_HEX[R.g]); spawnBurst(w, [color, '#ffffff'], 28, 1); play('appear');
+    popup(GROUP_INFO[R.g].name, w, 'good', 0.9); // o jogador confere o palpite
+  }
+}
+// achados ocultos encostados na casa (q,r): acendem quando uma peça é colocada ao lado
+function revealAround(q, r) {
+  const out = [];
+  for (const d of DIRS) { const R = relicAt(key(q + d[0], r + d[1])); if (R && R.hidden) { setRelicHidden(R, false); out.push(R); } }
+  return out;
+}
+function relicConnected(R) { // o tabuleiro principal (a partir da peça inicial) já encosta no achado?
   const seen = new Set([key(0, 0)]), stack = [{ q: 0, r: 0 }];
   while (stack.length) {
     const c = stack.pop();
-    for (const d of DIRS) { const q = c.q + d[0], r = c.r + d[1], k = key(q, r); if (seen.has(k) || !S.tiles.has(k)) continue; if (k === S.relic.k) return true; seen.add(k); stack.push({ q, r }); }
+    for (const d of DIRS) { const q = c.q + d[0], r = c.r + d[1], k = key(q, r); if (seen.has(k) || !S.tiles.has(k)) continue; if (k === R.k) return true; seen.add(k); stack.push({ q, r }); }
   }
   return false;
 }
 function updateRelic(dt, now) {
-  const R = S.relic; if (!R) return;
-  // o facho chama o jogador até lá; assim que ele começa a construir encostado no achado (mesmo antes
-  // de ligar ao tabuleiro principal), já cumpriu o papel e se dissolve. Desfeita a peça, volta.
-  const used = R.claimed || DIRS.some((d) => S.tiles.has(key(R.q + d[0], R.r + d[1])));
-  R.beam.visible = R.beam.material.opacity > 0.002;
-  if (used) { R.beam.material.opacity = Math.max(0, R.beam.material.opacity - dt * 0.4); R.beam.scale.x = R.beam.scale.z = 1 + (0.32 - R.beam.material.opacity) * 6; return; }
-  R.beam.scale.set(1, 1, 1); R.beam.visible = true;
-  R.beam.material.opacity = 0.26 + 0.1 * Math.sin(now * 0.003); R.beam.rotation.y += dt * 0.4;
-  if ((R.pulse -= dt) <= 0) { R.pulse = 1.4; const w = toWorld(R.q, R.r); spawnRingPulse(scene, w.x, TILE_H + 0.02, w.z, GROUP_HEX[R.g], true); }
+  for (const R of S.relics) {
+    // o facho chama o jogador até lá; assim que ele começa a construir encostado no achado (mesmo antes
+    // de ligar ao tabuleiro principal), já cumpriu o papel e se dissolve. Desfeita a peça, volta.
+    const used = R.claimed || DIRS.some((d) => S.tiles.has(key(R.q + d[0], R.r + d[1])));
+    R.beam.visible = R.beam.material.opacity > 0.002;
+    if (used) { R.beam.material.opacity = Math.max(0, R.beam.material.opacity - dt * 0.4); R.beam.scale.x = R.beam.scale.z = 1 + (0.32 - R.beam.material.opacity) * 6; continue; }
+    R.beam.scale.set(1, 1, 1); R.beam.visible = true;
+    R.beam.material.opacity = 0.2 + 0.08 * Math.sin(now * 0.003 + R.q); R.beam.rotation.y += dt * 0.4;
+    if ((R.pulse -= dt) <= 0) { R.pulse = 1.8; const w = toWorld(R.q, R.r); spawnRingPulse(scene, w.x, TILE_H + 0.02, w.z, R.hidden ? RELIC_BEAM : GROUP_HEX[R.g], true); }
+  }
 }
 
 // ponto da tela de uma posição do tabuleiro
@@ -1051,8 +1178,13 @@ function screenOf(w, y = 0.3) {
 function undoLast() {
   const u = S.undo; if (!u || S.over || !S.started) return;
   for (const hk of u.harmony || []) { removeHarmonyFx(hk); const ht = S.tiles.get(hk); if (ht) ht.harmony = null; }
-  if (u.relic) { u.relic.claimed = false; u.relic.beam.material.opacity = 0.32; u.relic.beam.scale.set(1, 1, 1); S.relic = u.relic; }
+  for (const R of u.relics || []) { R.claimed = false; R.beam.material.opacity = 0.32; R.beam.scale.set(1, 1, 1); }
+  for (const R of u.revealed || []) setRelicHidden(R, true); // o palpite volta a ficar em aberto
   const k = key(u.q, u.r), t = removeTile(k); if (!t) { S.undo = null; updateUndoButton(); return; }
+  // desfaz também o que aconteceu ao sacar a peça seguinte: achado novo, bandeira nova, peça trocada
+  if (u.spawned) { const R = u.spawned.R; removeTile(R.k); fxGroup.remove(R.beam); S.relics.splice(S.relics.indexOf(R), 1); S.sinceRelic = u.spawned.since; }
+  if (u.questTile) { const qt = u.questTile; qt.quest = null; qt._geo = null; qt._slab = null; qt._hi = null; }
+  if (u.steer) { const i = S.stack.indexOf(u.steer.to); if (i >= 0) S.stack[i] = u.steer.from; }
   play('appear');
   const w = toWorld(u.q, u.r);
   spawnBurst(w, ['#ffffff', '#9ff5ff'], 10, 0.7);
@@ -1060,11 +1192,14 @@ function undoLast() {
   const ghostCopy = t.group; ghostCopy.position.y = 0; scene.add(ghostCopy);
   anims.push({ obj: ghostCopy, prop: 'undo', t: 0, dur: 0.4 });
   S.score = u.score; scoreShown = S.score; scoreRoll = null; $('score').textContent = S.score; $('score-box').classList.remove('rolling'); syncRecord();
-  S.placed = u.placed; S.perfects = u.perfects; S.questsDone = u.questsDone; S.questsLost = u.questsLost; S.sinceQuest = u.sinceQuest; S.lowWarned = u.lowWarned; S.hints = u.hints; updateHintButton();
+  S.placed = u.placed; S.perfects = u.perfects; S.questsDone = u.questsDone; S.questsLost = u.questsLost; S.sinceQuest = u.sinceQuest; S.lowWarned = u.lowWarned; S.hints -= u.hintGain; updateHintButton(); // só tira a dica que a missão deu: a usada depois não volta
+  S.best = u.best; try { localStorage.setItem('pr_best', S.best); } catch (e) {} syncRecord();
+  S.sinceRelic = u.sinceRelic; S.gains = u.gains; S.rng.state = u.rng; // mesmo sorteio ao refazer: nada de re-roll
   S.quests = u.quests.map((x) => ({ ...x }));
-  if (u.gained) S.stack.splice(S.stack.length - u.gained, u.gained);
-  document.querySelectorAll('.flyhex').forEach((e) => e.remove()); S.pendingGain = 0;
+  // devolve a peça sacada ANTES de tirar as ganhas: se a pilha estava vazia, a peça sacada era uma das ganhas
   if (S.current) S.stack.unshift(S.current);
+  if (u.gained) S.stack.splice(S.stack.length - u.gained, u.gained);
+  document.querySelectorAll('.flyhex').forEach((e) => { e.getAnimations().forEach((a) => a.cancel()); e.remove(); }); S.pendingGain = 0;
   S.current = u.tile; S.rot = u.rot;
   S.undo = null;
   refreshSlots();
@@ -1078,8 +1213,7 @@ function checkQuests() {
   for (const qst of S.quests) {
     const keys = regionKeys(qst.tileKey, qst.group);
     const before = qst.progress;
-    if (qst.kind === 'city') { let sum = 0; for (const k of keys) sum += buildingsOf(S.tiles.get(k).tile); qst.progress = sum; }
-    else qst.progress = keys.size;
+    qst.progress = questProgress(qst, keys);
     if (qst.progress !== before) qst._bump = true;
     // "N+" cumpre ao chegar OU passar do número (ligar numa rede maior também vale); "N" exige o número exato
     if (qst.exact ? qst.progress === qst.target : qst.progress >= qst.target) done.push(qst);
@@ -1088,10 +1222,11 @@ function checkQuests() {
   for (const qst of done) {
     S.quests.splice(S.quests.indexOf(qst), 1);
     S.questsDone++;
+    try { localStorage.setItem('pr_qdone', '1'); } catch (e) { /* sem storage: continua aprendiz */ }
     S.score += qst.reward.points;
     for (let i = 0; i < qst.reward.tiles; i++) S.stack.push(genTile(S.rng));
-    gained += qst.reward.tiles;
-    if (qst.reward.hints) { S.hints += qst.reward.hints; updateHintButton(); }
+    gained += qst.reward.tiles; gain('quest', qst.reward.tiles);
+    if (qst.reward.hints) { S.hints += qst.reward.hints; if (S.undo) S.undo.hintGain += qst.reward.hints; updateHintButton(); }
     const t = S.tiles.get(qst.tileKey), w = toWorld(t.q, t.r);
     play('quest'); confettiBurst(2); kick(0.6, ['#c4ff2a', qst.color], 0.3);
     scoreSign(qst.reward.points, 'quest', `${icon(questIcon(qst), 16)} missão`, w);
@@ -1104,15 +1239,15 @@ function checkQuests() {
     S.quests.splice(S.quests.indexOf(qst), 1);
     S.questsLost++;
     play('bad');
-    banner(`${icon(questIcon(qst), 20, '#d63a5e')} <b>missão perdida</b>`, '', 'warn', 2600);
+    banner(`${icon('x', 16, '#ff5c7a')} ${icon(questIcon(qst), 20, '#ff5c7a')} <b>missão perdida</b> <small>${questName(qst)} ficou cercado</small>`, '', 'warn', 3000);
     if (qst._card) { qst._card.classList.add('lost'); const c = qst._card; setTimeout(() => c.remove(), 900); qst._card = null; }
     const t = S.tiles.get(qst.tileKey); if (t) spawnBurst(toWorld(t.q, t.r), ['#ff5c7a', '#55506a'], 14, 0.6);
   }
-  renderQuests(done.length || lost.length ? 0 : 400);
+  renderQuests(done.length || lost.length ? 900 : 400); // espera o cartão cumprido/perdido terminar a animação
   return gained;
 }
 function rewardBanner(q) {
-  banner(`${icon('check', 18, '#2fbf86')} <b>missão!</b> <b class="big">+${q.reward.tiles}</b> ${icon('tile', 18)} <small>+${q.reward.points}</small>`, '', 'quest reward', 3600);
+  banner(`${icon('check', 18, '#c4ff2a')} ${icon(questIcon(q), 22, q.color)} <b class="big">+${q.reward.tiles}</b> ${icon('tile', 18)} <small>+${q.reward.points}</small>`, '', 'quest reward', 3600);
 }
 function gameOver() {
   if (S.over) return;
@@ -1122,7 +1257,7 @@ function gameOver() {
   $('end-title').textContent = S.daily ? `Desafio do dia · ${dayLabel(S.daily)}` : 'Acabaram as peças';
   $('end-score').textContent = S.score;
   $('end-best').textContent = S.best;
-  $('end-stats').innerHTML = `<span>${icon('tile', 14)} ${S.tiles.size}</span><span>${icon('star', 15, '#ffd23f')} ${S.perfects}</span><span>${icon('flag', 14)} ${S.questsDone}</span>`;
+  $('end-stats').innerHTML = `<span>${icon('tile', 14)} ${S.tiles.size}</span><span>★ ${S.perfects}</span><span>${icon('flag', 14)} ${S.questsDone}</span>`;
   setTimeout(() => { showOverlay('overlay-end'); prepareRankForm(); }, 700);
 }
 
@@ -1135,11 +1270,11 @@ const dayLabel = (str) => str.slice(8, 10) + '/' + str.slice(5, 7);
 function newGame(seed, daily = null) {
   clearBoard();
   S.daily = daily;
-  $('daily-chip').innerHTML = daily ? `${icon('calendar', 13)} desafio ${dayLabel(daily)}` : ''; $('daily-chip').classList.toggle('hidden', !daily);
+  $('daily-chip').textContent = daily ? `📅 desafio ${dayLabel(daily)}` : ''; $('daily-chip').classList.toggle('hidden', !daily);
   if (daily) seed = dailySeed(daily);
   S.rng = new RNG(seed != null ? seed >>> 0 : (Date.now() ^ (Math.random() * 1e9)) >>> 0);
   S.stack = makeStack(S.rng, STACK_SIZE);
-  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null;
+  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.coached = 0; S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null; S.gains = {};
   updateHintButton(); updateUndoButton();
   addTile(0, 0, starterTile(S.rng), 0, false);
   refreshSlots();
@@ -1162,7 +1297,7 @@ function demoBoard(n) {
     if (!b) break;
     addTile(b.q, b.r, tile, b.rot, false); refreshSlots();
   }
-  for (const s of S.slots.values()) slotGroup.remove(s.mesh);
+  for (const s of S.slots.values()) slotGroup.remove(s.mesh, s.fill, s.ticks);
   S.slots.clear();
   rig.autoOrbit = true; rig.dist = isNarrow() ? 16 : 13; rig.polar = 0.95;
 }
@@ -1191,6 +1326,7 @@ function spawnBurst(w, colors, n, power = 1) {
 function spawnAmbient() {
   const list = S.tileList; if (!list.length) return;
   const t = list[(Math.random() * list.length) | 0], w = toWorld(t.q, t.r);
+  if (t.tile.hidden) return; // achado oculto: partícula do bioma entregaria o palpite
   if (Math.hypot(w.x - rig.target.x, w.z - rig.target.z) > rig.dist * 1.5) return;
   const rot = (t.rot * Math.PI) / 3, geo = t.tile._geo;
   const local = (x, z) => ({ x: w.x + x * Math.cos(rot) - z * Math.sin(rot), z: w.z + x * Math.sin(rot) + z * Math.cos(rot) });
@@ -1251,7 +1387,7 @@ function faunaMesh(kind, v) {
   }
   return g;
 }
-const walkableEdge = (t, i, group) => groupOf(edgeAt(t.tile, t.rot, i)) === group;
+const walkableEdge = (t, i, group) => !t.tile.hidden && groupOf(edgeAt(t.tile, t.rot, i)) === group; // bicho entrando no achado oculto entregaria o bioma
 // Escolhe a próxima travessia da peça, entrando pela aresta `entry`. Entre as saídas possíveis,
 // puxa para as que CONTINUAM na peça vizinha: a graça é o bando atravessando a formação inteira,
 // não indo bater na borda e dando meia-volta.
@@ -1421,8 +1557,10 @@ function updateVehicles(dt) {
 // mesma vida: um rebocador neon soltando bolhas, ou um patinho de borracha amarelo — às vezes
 // com a ninhada atrás. Barco não entra no tanque nem bate na torre do filtro: dá meia-volta.
 const CONVOY = {
-  rail:   { minNet: 2, speed: 0.85, gap: 0.215, scale: 1.18, every: [9, 19], ends: 'stop', life: 70 },
-  sewage: { minNet: 1, speed: 0.26, gap: 0.085, scale: 1.25, every: [7, 15], ends: 'turn', life: 55 },
+  // Antes o trem exigia rede de 2+ peças e saía a cada 9-19 s: como as redes ficam picadas em
+  // pedaços de uma peça boa parte da partida, trem e barco quase nunca apareciam ("sumiram").
+  rail:   { minNet: 1, speed: 0.85, gap: 0.215, scale: 1.18, every: [5, 11], ends: 'stop', life: 70 },
+  sewage: { minNet: 1, speed: 0.26, gap: 0.085, scale: 1.25, every: [4, 9], ends: 'turn', life: 55 },
 };
 const trains = [];
 let trainGeos = null, boatGeos = {};
@@ -1492,7 +1630,7 @@ function trailAt(tr, d) { // ponto do rastro na distância percorrida `d` (inter
 function updateTrains(dt, now) {
   if (!S.started && !S.tiles.size) return;
   for (const type in CONVOY) {
-    const live = trains.filter((x) => x.type === type).length, max = 1 + (S.tiles.size >= 40 ? 1 : 0), ev = CONVOY[type].every;
+    const live = trains.filter((x) => x.type === type).length, max = 1 + (S.tiles.size >= 25 ? 1 : 0) + (S.tiles.size >= 55 ? 1 : 0), ev = CONVOY[type].every;
     if (live < max && (nextIn[type] -= dt) <= 0) nextIn[type] = spawnConvoy(type) ? ev[0] + Math.random() * (ev[1] - ev[0]) : 2;
   }
   for (let i = trains.length - 1; i >= 0; i--) {
@@ -1586,7 +1724,7 @@ function updateOverlay(dt, now) {
   const t = now * 0.001, dpr = Math.min(devicePixelRatio || 1, 2), W = cfx.width, Hh = cfx.height;
   if (fx.sides > 0) fx.sides = Math.max(0, fx.sides - dt);
   hoverFx.k += (hoverFx.target - hoverFx.k) * Math.min(1, dt * 6);
-  const hasFx = fx.sides > 0 || hoverFx.k > 0.01 || confetti.length > 0;
+  const hasFx = fx.sides > 0 || hoverFx.k > 0.01 || confetti.length > 0 || stars.length > 0;
   if (!hasFx) { if (cfx._dirty) { cctx.clearRect(0, 0, W, Hh); cfx._dirty = false; } return; }
   cctx.clearRect(0, 0, W, Hh); cfx._dirty = true;
   cctx.save(); cctx.scale(dpr, dpr);
@@ -1606,25 +1744,44 @@ function updateOverlay(dt, now) {
     p.vy += 900 * dt; p.vx *= 1 - 1.4 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
     if (p.t >= p.life || p.y > innerHeight + 30) { confetti.splice(i, 1); continue; }
     cctx.save(); cctx.globalAlpha = Math.min(1, (p.life - p.t) / 0.5); cctx.translate(p.x * dpr, p.y * dpr); cctx.rotate(p.rot); cctx.scale(dpr, dpr);
-    cctx.fillStyle = p.c;
-    if (p.s) { // coraçãozinho ou estrelinha (vira de lado como papel)
-      const k = p.w * 0.11; cctx.scale(k * (0.35 + 0.65 * Math.abs(Math.cos(p.t * 6 + p.rot))), k); cctx.fill(p.s === 1 ? CONF_HEART : CONF_STAR);
-    } else cctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * (0.4 + 0.6 * Math.abs(Math.cos(p.t * 9 + p.rot))));
+    cctx.fillStyle = p.c; cctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * (0.4 + 0.6 * Math.abs(Math.cos(p.t * 9 + p.rot)))); cctx.restore();
+  }  updateStars(dt, dpr);
+}
+// Estrelas da harmonia: sobem pelas duas laterais da tela, girando e cintilando na cor do bioma
+// completado (com algumas douradas), enquanto as faixas laterais piscam em flashes curtos da mesma cor.
+const stars = [];
+function starBurst(color, n = 26) {
+  const W = innerWidth, H = innerHeight;
+  for (const side of [0, 1]) for (let i = 0; i < n; i++) {
+    const dir = side ? -1 : 1;
+    stars.push({ x: side ? W - 6 - Math.random() * 40 : 6 + Math.random() * 40, y: H * (0.55 + Math.random() * 0.5), vx: dir * (30 + Math.random() * 140), vy: -(260 + Math.random() * 420),
+      r: 7 + Math.random() * 11, rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 6, c: Math.random() < 0.3 ? '#ffd166' : color, t: -Math.random() * 0.5, life: 1.3 + Math.random() * 0.9, ph: Math.random() * 6 });
+  }
+}
+function drawStar(ctx, r) {
+  ctx.beginPath();
+  for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r * 0.45 : r; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+  ctx.closePath(); ctx.fill();
+}
+function updateStars(dt, dpr) {
+  for (let i = stars.length - 1; i >= 0; i--) {
+    const p = stars[i]; p.t += dt; if (p.t < 0) continue;
+    p.vy += 160 * dt; p.vx *= 1 - 1.2 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+    if (p.t >= p.life) { stars.splice(i, 1); continue; }
+    const fade = Math.min(1, (p.life - p.t) / 0.5, p.t / 0.12), tw = 0.7 + 0.3 * Math.sin(p.t * 22 + p.ph);
+    cctx.save(); cctx.globalCompositeOperation = 'lighter'; cctx.globalAlpha = fade * tw;
+    cctx.translate(p.x * dpr, p.y * dpr); cctx.rotate(p.rot); cctx.scale(dpr, dpr);
+    cctx.shadowColor = p.c; cctx.shadowBlur = 14; cctx.fillStyle = p.c; drawStar(cctx, p.r);
+    cctx.shadowBlur = 0; cctx.fillStyle = '#ffffff'; cctx.globalAlpha = fade * tw * 0.8; drawStar(cctx, p.r * 0.4);
     cctx.restore();
   }
 }
-// confete kawaii: papel em tons pastel + uns neon da cena, e ~30% vira coração ou estrela
-const CONF_COLORS = ['#ff9ccd', '#ffe066', '#7fd8ff', '#b9a3ff', '#6fe3b0', '#ffb38a', '#ffffff', '#ff2bd6', '#22f3ff'];
-const CONF_HEART = new Path2D('M0 3.5C-4.5 0-6-2-6-4a3 3 0 0 1 6-1a3 3 0 0 1 6 1c0 2-1.5 4-6 7.5z');
-const CONF_STAR = new Path2D('M0-6l1.8 3.8 4.2.5-3.1 2.9.8 4.1L0 3.3-3.7 5.3l.8-4.1L-6-1.7l4.2-.5z');
 function confettiBurst(strength = 1) {
   const W = innerWidth, H = innerHeight, n = 40 * strength;
   for (const side of [0, 1]) for (let i = 0; i < n; i++) {
     const dir = side ? -1 : 1;
     confetti.push({ x: side ? W + 8 : -8, y: H * (0.3 + Math.random() * 0.35), vx: dir * (260 + Math.random() * 520), vy: -(250 + Math.random() * 450), rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 14,
-      w: 5 + Math.random() * 6, h: 9 + Math.random() * 8, c: CONF_COLORS[(Math.random() * CONF_COLORS.length) | 0], t: 0, life: 2 + Math.random() * 1.2,
-      s: Math.random() < 0.3 ? 1 + (Math.random() < 0.5 ? 1 : 0) : 0 });
-    if (confetti[confetti.length - 1].s) confetti[confetti.length - 1].w += 6;
+      w: 5 + Math.random() * 6, h: 9 + Math.random() * 8, c: NEON[(Math.random() * NEON.length) | 0], t: 0, life: 2 + Math.random() * 1.2 });
   }
 }
 
@@ -1665,12 +1822,11 @@ function bumpScore(cls = '') {
   sb.classList.remove('pulse'); void sb.offsetWidth; sb.classList.add('pulse', 'rolling');
   scoreRoll = { from: scoreShown, to: S.score, t: 0 };
   if (gain <= 0) return;
-  if (!$('banners').children.length) hexiMood(cls === 'perfect' || gain >= 40 ? 'star' : 'happy');
   const kind = cls === 'perfect' ? 'perfect' : cls === 'quest' ? 'quest' : '';
   sb.querySelectorAll('.sb-gain').forEach(g => g.remove());
   const g = document.createElement('div'); g.className = `sb-gain ${kind}`; g.textContent = `+${gain}`;
   sb.appendChild(g); setTimeout(() => g.remove(), 1150);
-  const colors = kind === 'perfect' ? ['#6fe3b0', '#7fd8ff', '#ffe066'] : kind === 'quest' ? ['#b9a3ff', '#ffe066', '#ff9ccd'] : ['#ffe066', '#ff9ccd', '#7fd8ff', '#b9a3ff'];
+  const colors = kind === 'perfect' ? ['#7dff9a', '#22f3ff', '#fff'] : kind === 'quest' ? ['#c4ff2a', '#ffe93a', '#fff'] : ['#ffe93a', '#ff2bd6', '#22f3ff', '#fff'];
   const n = Math.min(18, 8 + Math.round(gain / 10)), w = sb.offsetWidth;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + Math.random() * 0.4, d = w * (0.45 + Math.random() * 0.35);
@@ -1694,9 +1850,7 @@ function banner(title, sub, cls = '', ms = 3000) {
   while (box.children.length >= 1) box.firstChild.remove();
   const el = document.createElement('div');
   el.className = 'banner ' + cls.split(' ').filter(Boolean).map((c) => 'bn-' + c).join(' ');
-  const mood = /warn/.test(cls) ? 'sad' : /perfect|harmony|reward/.test(cls) ? 'star' : 'happy';
-  el.innerHTML = `${HEXI_SVG('', mood)}<div><div class="bt">${title}</div>${sub ? `<span>${sub}</span>` : ''}</div>`;
-  hexiMood(mood, ms * 0.6);
+  el.innerHTML = `<div class="bt">${title}</div>${sub ? `<span>${sub}</span>` : ''}`;
   box.appendChild(el);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, ms);
 }
@@ -1727,9 +1881,19 @@ function questText(q) {
   if (q.kind === 'city') return q.exact ? `cidade com <b>exatamente ${q.target}</b> prédios` : `cidade com <b>pelo menos ${q.target}</b> prédios`;
   return `ligue <b>${q.target} ou mais</b> peças de <b>${GROUP_INFO[q.group].name}</b>`;
 }
-// balão: ícone do grupo num disco da cor do grupo + número escuro sobre fundo amarelo
+// balão: ícone do grupo num disco da cor do grupo + "falta N" escuro sobre fundo amarelo
 const labelHTML = (q, num) => `<i class="qarrow"></i><span class="qlic">${icon(questIcon(q), 15)}</span>${num}${icon(q.kind === 'city' ? 'city' : 'tile', 11, 'currentColor', 'unit')}`;
 const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+// Playtest 11/10: o cartão fechado mostrava só "1+" — era quanto FALTA, mas lia como a meta "pelo menos 1",
+// e não dizia o bioma nem o que fazer. Agora o "N+" fica só na meta; o que falta vem escrito por extenso.
+const unitWord = (q, n) => (q.kind === 'city' ? (n === 1 ? 'prédio' : 'prédios') : n === 1 ? 'peça' : 'peças');
+const questName = (q) => (q.kind === 'city' ? 'Prédios Cyberpunk' : GROUP_INFO[q.group].name);
+const leftText = (q, n, to = '') => (n === 0 ? '<b>pronto!</b>' : `${n === 1 ? 'falta' : 'faltam'} <b>${n}</b> ${unitWord(q, n)}${to}`);
+const rewardHTML = (q) => `+${q.reward.tiles}${icon('tile', 11)}${q.reward.hints ? ` +${q.reward.hints}${icon('bulb', 11)}` : ''}`;
+// Quem nunca cumpriu uma missão é tratado como aprendiz: as duas primeiras missões de cada partida abrem
+// o cartão sozinhas (a da mão enquanto ela está na mão; a do tabuleiro durante a jogada seguinte).
+const learner = () => { try { return !localStorage.getItem('pr_qdone'); } catch (e) { return false; } };
+const balloonLeft = (n, to = '') => `<small>${n === 1 ? 'falta' : 'faltam'}</small><b>${n}${to}</b>`;
 let pendLabel = null;
 function renderQuests(delayMs = 0) {
   const el = $('quests'), lab = $('qlabels');
@@ -1737,47 +1901,48 @@ function renderQuests(delayMs = 0) {
     el.innerHTML = ''; lab.innerHTML = '';
     const pend = S.current && S.current.quest && !S.over ? S.current.quest : null;
     if (pend) { // missão da peça na mão: card tracejado com ícone, alvo e recompensa (começa quando a peça for colocada)
-      const d = document.createElement('div'); d.className = 'quest pending'; d.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
-      d.innerHTML = `<div class="qhead"><span class="qicon">${icon(questIcon(pend), 21)}</span><span class="qleft">${questGoal(pend)}</span><span class="qunit">${icon(pend.kind === 'city' ? 'city' : 'tile', 13)}</span><span class="qrew">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +${pend.reward.hints}${icon('bulb', 11)}` : ''}</span></div>
-        <div class="qbody"><div class="qin"><p>Nova missão: ${questText(pend)} a partir desta peça.</p><p class="qr">Recompensa: <b>+${pend.reward.points}</b> pts · <b>+${pend.reward.tiles}</b> peças${pend.reward.hints ? ' · <b>+1</b> dica' : ''}</p></div></div>`;
-      d.addEventListener('click', () => d.classList.toggle('open'));
+      if (pend._coach == null) pend._coach = learner() && S.coached < 2 && !!++S.coached;
+      const d = document.createElement('div'); d.className = 'quest pending' + (pend._coach ? ' open' : ''); d.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
+      d.innerHTML = `<div class="qhead"><span class="qicon">${icon(questIcon(pend), 21)}</span><span class="qtxt"><span class="qname">nova missão · ${questName(pend)}</span><span class="qleft">ligar <b>${pendGoal(pend)}</b> ${unitWord(pend, 2)}</span></span><span class="qrew">${rewardHTML(pend)}</span></div>
+        <div class="qbody"><div class="qin"><p>A peça na sua mão tem uma <b>bandeira</b>. Coloque-a e vá juntando a ela ${pend.kind === 'city' ? `peças de <b>Cyberpunk</b> até a cidade somar <b>${pendGoal(pend)}</b> prédios (cada peça mostra quantos tem)` : `peças de <b>${GROUP_INFO[pend.group].name}</b>, uma encostada na outra, até a formação ter <b>${pendGoal(pend)}</b> peças (a da bandeira conta)`}.</p><p class="qr">Cumpriu: <b>+${pend.reward.tiles}</b> peças na pilha · <b>+${pend.reward.points}</b> pts${pend.reward.hints ? ' · <b>+1</b> dica' : ''}</p></div></div>`;
+      d.addEventListener('click', () => { pend._coach = false; d.classList.toggle('open'); });
       el.appendChild(d);
     }
     for (const q of S.quests) {
       const info = GROUP_INFO[q.group], left = questLeft(q), pct = Math.max(0, Math.min(1, q.progress / q.target)), ic = questIcon(q);
-      const d = document.createElement('div'); d.className = 'quest' + (q._open ? ' open' : ''); d.style.setProperty('--qc', q.color || info.color);
+      const d = document.createElement('div'); d.className = 'quest' + (q._open || (q._coachAt === S.placed && !(pend && pend._coach)) ? ' open' : ''); // um cartão aberto por vez d.style.setProperty('--qc', q.color || info.color);
       const R = 17, C = 2 * Math.PI * R;
       d.innerHTML = `<div class="qhead">
           <span class="qicon"><svg class="qring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="${R}"/><circle cx="20" cy="20" r="${R}" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct)}"/></svg>${icon(ic, 21)}</span>
-          <span class="qleft${q._bump ? ' bump' : ''}">${left}${plus(q)}</span><span class="qunit">${icon(q.kind === 'city' ? 'city' : 'tile', 13)}</span>
-          <span class="qrew">+${q.reward.tiles}${icon('tile', 11)}${q.reward.hints ? ` +${q.reward.hints}${icon('bulb', 11)}` : ''}</span>
+          <span class="qtxt"><span class="qname">${questName(q)} · ${q.progress}/${q.target}</span><span class="qleft${q._bump ? ' bump' : ''}">${leftText(q, left)}</span></span>
+          <span class="qrew">${rewardHTML(q)}</span>
         </div>
         <div class="qbody"><div class="qin">
-          <p>${cap(questText(q))} a partir da bandeira — já são <b>${q.progress}</b>, faltam <b>${left}</b>.</p>
-          <p class="qr">Recompensa: <b>+${q.reward.points}</b> pts · <b>+${q.reward.tiles}</b> peças${q.reward.hints ? ' · <b>+1</b> dica' : ''}${q.exact ? ' · passar do número cancela a missão' : ' · passar do número também vale'}</p>
+          <p>${q.kind === 'city' ? `Junte peças de <b>Cyberpunk</b> à cidade da bandeira até ela somar <b>${q.target}+</b> prédios` : `Encoste peças de <b>${info.name}</b> na formação da bandeira até ela ter <b>${q.target}+</b> peças`} — já são <b>${q.progress}</b>.</p>
+          <p class="qr">Cumpriu: <b>+${q.reward.tiles}</b> peças na pilha · <b>+${q.reward.points}</b> pts${q.reward.hints ? ' · <b>+1</b> dica' : ''}. Passar do número também vale; se a formação ficar cercada, a missão se perde.</p>
           <button class="qgo" type="button">${icon('pin', 14)} ir até a bandeira</button>
         </div></div>`;
       q._bump = false;
       d.addEventListener('click', (e) => {
         if (e.target.closest('.qgo')) { const t = S.tiles.get(q.tileKey); if (t) { const w = toWorld(t.q, t.r); rig.flyTo(w.x, w.z); pulse(w, new THREE.Color(q.color).getHex()); } return; }
         const open = !d.classList.contains('open');
-        for (const o of S.quests) o._open = false; el.querySelectorAll('.quest.open').forEach((x) => x.classList.remove('open'));
+        for (const o of S.quests) { o._open = false; o._coachAt = -1; } el.querySelectorAll('.quest.open').forEach((x) => x.classList.remove('open'));
         q._open = open; d.classList.toggle('open', open);
       });
       q._card = d; el.appendChild(d);
       const l = document.createElement('div'); l.className = 'qlabel'; l.style.setProperty('--qc', q.color || info.color);
-      l.innerHTML = labelHTML(q, `<b>${left}${plus(q)}</b>`);
+      l.innerHTML = labelHTML(q, balloonLeft(left));
       l.addEventListener('click', () => { const t = S.tiles.get(q.tileKey); if (t) { const w = toWorld(t.q, t.r); rig.flyTo(w.x, w.z); pulse(w, new THREE.Color(q.color).getHex()); } });
       q._label = l; lab.appendChild(l);
     }
     pendLabel = null;
     if (pend) { // a peça na mão também ganha o balão: a bandeira sozinha não dizia que ali tem peças a ganhar
       const l = document.createElement('div'); l.className = 'qlabel pending'; l.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
-      l.innerHTML = labelHTML(pend, `<b>${questGoal(pend)}</b>`) + `<span class="qgain">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +1${icon('bulb', 11)}` : ''}</span>`;
+      l.innerHTML = labelHTML(pend, `<small>meta</small><b>${pendGoal(pend)}</b>`) + `<span class="qgain">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +1${icon('bulb', 11)}` : ''}</span>`;
       pendLabel = l; lab.appendChild(l);
     }
     $('quests-title').classList.toggle('hidden', S.quests.length === 0 && !pend);
-    if (S.selected && S.current && !S.over) { const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot); previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev) : new Map()); }
+    if (S.selected && S.current && !S.over) { const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot); previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true) : new Map()); }
   };
   if (delayMs) setTimeout(build, delayMs); else build();
 }
@@ -1787,15 +1952,28 @@ function previewQuests(byGroup) {
     const keys = byGroup.get(q.group);
     let proj = null;
     if (keys && keys.has(q.tileKey) && S.current) {
-      if (q.kind === 'city') { let sum = buildingsOf(S.current); for (const k of keys) sum += buildingsOf(S.tiles.get(k).tile); proj = sum; }
-      else proj = keys.size + 1;
+      proj = questProgress(q, keys) + (q.kind === 'city' ? buildingsOf(S.current) : 1); // + a peça na mão
     }
     const left = questLeft(q), raw = proj == null ? null : q.target - proj, newLeft = raw == null ? null : q.exact ? raw : Math.max(0, raw);
     const cls = newLeft == null ? '' : newLeft === 0 ? 'hit' : newLeft < 0 ? 'over' : '';
-    const html = newLeft == null || newLeft === left ? `<b>${left}${plus(q)}</b>` : `<b>${left}${plus(q)}<span class="to">→ ${newLeft < 0 ? '✕' : newLeft === 0 ? '✓' : newLeft}</span></b>`;
-    if (q._label) { q._label.innerHTML = labelHTML(q, html); q._label.className = 'qlabel ' + cls; }
-    if (q._card) { const ql = q._card.querySelector('.qleft'); if (ql) { ql.innerHTML = html.replace(/^<b>|<\/b>$/g, ''); ql.classList.toggle('hit', cls === 'hit'); ql.classList.toggle('over', cls === 'over'); } }
+    const to = newLeft == null || newLeft === left ? '' : `<span class="to">→ ${newLeft < 0 ? '✕' : newLeft === 0 ? '✓' : newLeft}</span>`;
+    if (q._label) { q._label.innerHTML = labelHTML(q, balloonLeft(left, to)); q._label.className = 'qlabel ' + cls; }
+    if (q._card) { const ql = q._card.querySelector('.qleft'); if (ql) { ql.innerHTML = leftText(q, left, to); ql.classList.toggle('hit', cls === 'hit'); ql.classList.toggle('over', cls === 'over'); } }
   }
+}
+// A missão da peça na mão mostra o alvo que ela TERÁ na casa onde o fantasma está: se a bandeira cai
+// numa formação que já existe, rebaseQuest sobe o alvo — antes o balão dizia "5+" e virava "9" ao colocar.
+const pendGoal = (q) => `${q._shown || q.target}+`;
+function previewPendingGoal(ev) {
+  const q = S.current && S.current.quest; if (!q) return;
+  let shown = q.target;
+  if (ev.legal) {
+    const keys = formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true).get(q.group) || new Set();
+    const p = (q.kind === 'city' ? sumBuildings(keys) + buildingsOf(S.current) : keys.size + 1);
+    shown = Math.max(q.target, p + (q.grow || 0));
+  }
+  if (shown === (q._shown || q.target)) return;
+  q._shown = shown; renderQuests(0);
 }
 function updateQuestLabels() {
   if (pendLabel) { // balão da peça na mão acompanha o fantasma
@@ -1846,10 +2024,11 @@ function updateHUD(animateCount = true) {
   if (total > 5) S.lowWarned = false;
 }
 function showOverlay(id) { document.querySelectorAll('.overlay').forEach((o) => o.classList.add('hidden')); if (id) $(id).classList.remove('hidden'); }
-function syncSoundIcon() { $('btn-sound').innerHTML = icon(isMuted() ? 'mute' : 'sound', 22); }
 function syncMenuToggles() {
-  const tg = (id, on) => { $(id).classList.toggle('on', on); $(id).setAttribute('aria-pressed', on); };
-  tg('tg-bloom', prefs.bloom); tg('tg-sound', !isMuted()); tg('tg-lens', prefs.lens); tg('tg-grain', prefs.grain);
+  $('tg-bloom').textContent = `Brilho neon: ${prefs.bloom ? 'ligado' : 'desligado'}`;
+  $('tg-sound').textContent = `Som: ${isMuted() ? 'desligado' : 'ligado'}`;
+  $('tg-lens').textContent = `Efeito de lente: ${prefs.lens ? 'ligado' : 'desligado'}`;
+  $('tg-grain').textContent = `Granulação: ${prefs.grain ? 'ligada' : 'desligada'}`;
   $('grain').classList.toggle('hidden', !prefs.grain);
 }
 
@@ -1886,7 +2065,7 @@ async function submitScore(e) {
     const res = await fetch(RANK_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, score: S.score, tiles: S.tiles.size, perfects: S.perfects, quests: S.questsDone, daily: S.daily || undefined }) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    $('rank-status').innerHTML = `${icon('trophy', 18)} você ficou em <b>${data.rank}º</b> de ${data.total}${S.daily ? ` no desafio de ${dayLabel(S.daily)}` : ''}`;
+    $('rank-status').innerHTML = `${icon('trophy', 16, '#ffe93a')} você ficou em <b>${data.rank}º</b> de ${data.total}${S.daily ? ` no desafio de ${dayLabel(S.daily)}` : ''}`;
     renderRankList($('rank-list'), data.top, name, data.rank);
   } catch (err) {
     $('rank-status').textContent = 'ranking indisponível agora — seu recorde ficou salvo neste navegador';
@@ -1923,7 +2102,7 @@ attachInput(canvas, rig, {
     if (!S.started || S.over) return;
     const c = cellAt(x, y);
     if (!c) return;
-    if (S.selected && S.selected.q === c.q && S.selected.r === c.r) commitPlacement();
+    if (S.selected && S.selected.q === c.q && S.selected.r === c.r) playerCommit();
     else selectSlot(c);
   },
   onRotate(dir) { rotate(dir); },
@@ -1939,9 +2118,10 @@ let wheelAcc = 0;
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
+  if (k !== 'escape' && [...document.querySelectorAll('.overlay')].some((o) => !o.classList.contains('hidden'))) return; // menu/ajuda aberto: o jogo fica parado
   if (k === 'r' || k === 'e') rotate(1);
   else if (k === 'q') rotate(-1);
-  else if (k === ' ' || k === 'enter') { e.preventDefault(); commitPlacement(); }
+  else if (k === ' ' || k === 'enter') { e.preventDefault(); if (!e.repeat) playerCommit(); }
   else if (k === 'h') hint();
   else if (k === 'z' || k === 'u' || k === 'backspace') { e.preventDefault(); undoLast(); }
   else if (k === 'arrowleft' || k === 'a') rig.pan(-40, 0);
@@ -1950,7 +2130,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'arrowdown' || k === 's') rig.pan(0, 40);
   else if (k === '+' || k === '=') rig.zoom(0.85);
   else if (k === '-') rig.zoom(1.18);
-  else if (k === 'escape') { const open = [...document.querySelectorAll('.overlay')].some((o) => !o.classList.contains('hidden')); if (open) showOverlay(null); else if (S.started) { syncMenuToggles(); showOverlay('overlay-menu'); } }
+  else if (k === 'escape') { const open = [...document.querySelectorAll('.overlay')].some((o) => !o.classList.contains('hidden')); if (open) showOverlay(S.started ? null : 'overlay-start'); else if (S.started) { syncMenuToggles(); showOverlay('overlay-menu'); } }
 });
 // Move a peça atual para o melhor encaixe (usado pela dica e pela demonstração automática)
 function applyBest() {
@@ -1970,20 +2150,24 @@ function hint() {
 }
 function updateHintButton() {
   const b = $('btn-hint');
-  b.innerHTML = `<span class="row">${icon('bulb', 19)}<b>${S.hints}</b></span><span class="lbl">dica</span>`;
+  b.innerHTML = `${icon('bulb', 18)}<b>${S.hints}</b>`;
   b.disabled = S.hints <= 0;
 }
 
 $('rot-l').addEventListener('click', () => rotate(-1));
 $('current-area').addEventListener('click', () => rotate(1));
-$('current-area').addEventListener('wheel', (e) => { e.preventDefault(); rotate(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+$('current-area').addEventListener('wheel', (e) => { // mesmo acumulador do tabuleiro: trackpad não gira 4 passos de uma vez
+  e.preventDefault(); if (!e.deltaY) return;
+  if (Math.abs(e.deltaY) >= 50) { wheelAcc = 0; rotate(e.deltaY > 0 ? 1 : -1); return; }
+  wheelAcc += e.deltaY; while (wheelAcc >= 60) { wheelAcc -= 60; rotate(1); } while (wheelAcc <= -60) { wheelAcc += 60; rotate(-1); }
+}, { passive: false });
 $('rot-r').addEventListener('click', () => rotate(1));
-$('btn-place').addEventListener('click', commitPlacement);
+$('btn-place').addEventListener('click', playerCommit);
 $('btn-hint').addEventListener('click', hint);
 $('btn-undo').addEventListener('click', undoLast);
 $('btn-help').addEventListener('click', () => showOverlay('overlay-help'));
 $('btn-menu').addEventListener('click', () => { syncMenuToggles(); showOverlay('overlay-menu'); });
-$('btn-sound').addEventListener('click', () => { setMuted(!isMuted()); syncSoundIcon(); });
+$('btn-sound').addEventListener('click', () => { setMuted(!isMuted()); $('btn-sound').textContent = isMuted() ? '🔇' : '🔊'; });
 $('btn-start').addEventListener('click', () => { initAudio(); showOverlay(null); newGame(); });
 $('btn-rank').addEventListener('click', openRanking);
 $('btn-daily').addEventListener('click', () => { initAudio(); showOverlay(null); newGame(null, todayStr()); });
@@ -1998,12 +2182,10 @@ $('menu-rank').addEventListener('click', openRanking);
 $('tg-bloom').addEventListener('click', () => { prefs.bloom = !prefs.bloom; localStorage.setItem('pr_bloom', prefs.bloom ? '1' : '0'); syncMenuToggles(); });
 $('tg-grain').addEventListener('click', () => { prefs.grain = !prefs.grain; localStorage.setItem('pr_grain', prefs.grain ? '1' : '0'); syncMenuToggles(); });
 $('tg-lens').addEventListener('click', () => { prefs.lens = !prefs.lens; localStorage.setItem('pr_lens', prefs.lens ? '1' : '0'); syncMenuToggles(); });
-$('tg-sound').addEventListener('click', () => { setMuted(!isMuted()); syncSoundIcon(); syncMenuToggles(); });
+$('tg-sound').addEventListener('click', () => { setMuted(!isMuted()); $('btn-sound').textContent = isMuted() ? '🔇' : '🔊'; syncMenuToggles(); });
 document.querySelectorAll('.close-overlay').forEach((b) => b.addEventListener('click', () => showOverlay(null)));
 document.querySelectorAll('.to-start').forEach((b) => b.addEventListener('click', () => showOverlay(S.started ? null : 'overlay-start')));
 document.querySelectorAll('.ic-slot').forEach((el) => { el.innerHTML = icon(el.dataset.icon, +(el.dataset.size || 18)); });
-document.querySelectorAll('.hexi-slot').forEach((el) => { el.outerHTML = el.id ? `<span id="${el.id}">${HEXI_SVG(el.dataset.cls, el.dataset.mood)}</span>` : HEXI_SVG(el.dataset.cls, el.dataset.mood); });
-syncSoundIcon();
 
 // ---------- laço ----------
 function resize() {
@@ -2077,6 +2259,7 @@ function loop(now) {
     const a = anims[i]; a.t += dt;
     const p = Math.min(1, a.t / a.dur), e = 1 - Math.pow(1 - p, 3);
     if (a.prop === 'y') a.obj.position.y = a.from + (a.to - a.from) * e;
+    else if (a.prop === 'nudge') { const k = (1 - p) * Math.sin(p * Math.PI * 6); a.obj.rotation.y = k * 0.35; a.obj.scale.setScalar(1 + 0.35 * (1 - p)); if (p >= 1) { a.obj.rotation.y = 0; a.obj.scale.setScalar(1); anims.splice(i, 1); continue; } }
     else if (a.prop === 'settle') { if (a.t >= 0) a.obj.position.y = -a.amp * Math.sin(Math.PI * p); if (p >= 1) a.obj.position.y = 0; }
     else if (a.prop === 'undo') { // antecipação (afunda um tiquinho) -> sobe acelerando, gira e encolhe
       const o = a.obj;
@@ -2134,7 +2317,7 @@ function loop(now) {
   }
   updateVehicles(dt);
   updateTrains(dt, now);
-  updateHarmonyFx(dt, now); updateRelic(dt, now);
+  updateHarmonyFx(dt, now); updateRelic(dt, now); updateSlotFx(now);
   updateFauna(dt);
   for (let i = 0; i < DUST_N; i++) {
     const d = dustVel[i]; let x = dustPos[i * 3], y = dustPos[i * 3 + 1] + d.vy * dt, z = dustPos[i * 3 + 2];
@@ -2159,7 +2342,7 @@ function loop(now) {
 }
 
 // acesso para testes/automação no console
-window.PR = { S, addHarmonyFx, bumpScore, rig, camera, trains, connNetworks, spawnConvoy, harmonyGroup, spawnRelic, previewBonus, renderQuests, closedRegions, frontier, toWorld, selectSlot, commitPlacement, hint, applyBest, rotate, evalPlacement, bestPlacement, newGame, confettiBurst, banner, vehicles, fauna, fx, hoverFx, kick, undoLast, rewardTiles, checkQuests, regionKeys, buildingsOf, tileGeo, showOverlay, addTile, refreshSlots, genTile, RNG };
+window.PR = { S, addHarmonyFx, starBurst, revealAround, setRelicHidden, bumpScore, rig, camera, trains, connNetworks, spawnConvoy, harmonyGroup, spawnRelic, previewBonus, renderQuests, closedRegions, frontier, toWorld, selectSlot, commitPlacement, hint, applyBest, rotate, evalPlacement, bestPlacement, newGame, confettiBurst, banner, vehicles, fauna, fx, hoverFx, kick, undoLast, rewardTiles, checkQuests, regionKeys, buildingsOf, tileGeo, showOverlay, addTile, refreshSlots, genTile, RNG };
 const params = new URLSearchParams(location.search);
 if (params.has('nobloom')) prefs.bloom = false;
 if (params.has('nolens')) prefs.lens = false;

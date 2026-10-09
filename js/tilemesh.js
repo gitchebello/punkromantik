@@ -1377,8 +1377,58 @@ function drawSewage(B, rng, lay) {
       B.sphere(B.glow, 0, H + 0.19, 0, 0.04, col(PAL.algae), 8, 4);
       for (let k = 0; k < 3; k++) { const ang = freeAng(); barrel(B, rng, Math.cos(ang) * 0.45, Math.sin(ang) * 0.45); }
     }
-  } else { // ponto final: tanque de decantação redondo
-    const path = lay.polys[0], a = lay.end.a, c = Math.cos(a), s = Math.sin(a);
+  } else sewageEnd(B, rng, lay);
+}
+// Ponta do esgoto: cada estilo lê tanto como NASCENTE (o canal sai dali) quanto como ENCERRAMENTO
+// (o canal termina ali), conforme o lado em que o jogador encaixa. Antes só havia o tanque.
+function sewageEnd(B, rng, lay) {
+  const path = lay.polys[0], a = lay.end.a, c = Math.cos(a), s = Math.sin(a), wallc = col(PAL.curb);
+  const style = rng.int(4);
+  if (style === 1) { // emissário: muro de arrimo com a boca de um tubulão despejando a água do subsolo
+    B.boatStop = 0.24;
+    sewageChannel(B, rng, radial(lay.exits[0], 1, 0.12));
+    const bx = -c * 0.14, bz = -s * 0.14, my = H + 0.125, R = 0.11;
+    B.extrude(B.lit, chamfer(bx, bz, 0.14, 1.04, a, 0.03), H, 0.27, wallc, { topCol: shade(wallc, 1.2), sideShade: true });
+    for (let k = -4; k <= 4; k++) B.extrude(B.glow, rect(bx + s * k * 0.11, bz - c * k * 0.11, 0.15, 0.05, a), H + 0.27, 0.006, col(k % 2 ? PAL.hazard : PAL.post));
+    B.tube(B.lit, [[bx, my, bz], [c * 0.03, my, s * 0.03]], [R + 0.025, R + 0.025], 14, col(PAL.pipe));
+    B.sphere(B.lit, c * 0.02, my, s * 0.02, R, col('#06120f'), 12, 5); // breu do tubulão
+    const ring = []; for (let k = 0; k <= 16; k++) { const t = (k / 16) * PI2; ring.push([c * 0.035 - s * Math.cos(t) * (R + 0.03), my + Math.sin(t) * (R + 0.03), s * 0.035 + c * Math.cos(t) * (R + 0.03)]); }
+    B.tube(B.glow, ring, [0.011], 6, col(PAL.barrelRing));
+    const lip = (d, w) => [c * d - s * w, s * d + c * w], y0 = my - R + 0.01; // lâmina d'água caindo da boca até o canal
+    B.quad(B.water, [lip(0.04, -0.09)[0], y0, lip(0.04, -0.09)[1]], [lip(0.04, 0.09)[0], y0, lip(0.04, 0.09)[1]], [lip(0.2, 0.12)[0], H + 0.012, lip(0.2, 0.12)[1]], [lip(0.2, -0.12)[0], H + 0.012, lip(0.2, -0.12)[1]], col('#ffffff'), [c, 1, s]);
+    for (let k = 0; k < 7; k++) B.sphere(B.glow, c * rng.range(0.18, 0.32) - s * rng.range(-0.1, 0.1), H + 0.016, s * rng.range(0.18, 0.32) + c * rng.range(-0.1, 0.1), rng.range(0.012, 0.024), col(PAL.algae), 6, 3); // espuma
+    for (const k of [-1, 1]) { const lx = bx + s * k * 0.46, lz = bz - c * k * 0.46; B.extrude(B.lit, ngon(lx, lz, 0.012, 6), H + 0.27, 0.12, col(PAL.post)); B.sphere(B.glow, lx, H + 0.4, lz, 0.022, col(PAL.barrelRing), 6, 3); }
+    barrel(B, rng, -c * 0.42 - s * 0.32, -s * 0.42 + c * 0.32);
+  } else if (style === 2) { // sumidouro: o canal mergulha num poço com grade e redemoinho neon
+    B.boatStop = 0.4;
+    sewageChannel(B, rng, path);
+    B.extrude(B.lit, ngon(0, 0, 0.38, 14), H, 0.004, col(PAL.concrete));
+    B.extrude(B.lit, ngon(0, 0, 0.35, 14), H, 0.035, wallc, { topCol: shade(wallc, 1.15), sideShade: true });
+    B.extrude(B.water, ngon(0, 0, 0.3, 14), H + 0.03, 0.006, col('#ffffff'));
+    B.extrude(B.lit, ngon(0, 0, 0.11, 12), H + 0.03, 0.009, col('#06120f')); // a boca do poço
+    for (let k = 0; k < 40; k++) { const t = k / 40, ang = a + t * PI2 * 2.2, r = 0.12 + 0.17 * t; B.sphere(B.glow, Math.cos(ang) * r, H + 0.04, Math.sin(ang) * r, 0.008 + 0.01 * t, col(k % 5 ? PAL.algae : PAL.barrelRing), 5, 2); } // espiral do redemoinho
+    for (let k = 0; k < 6; k++) B.extrude(B.lit, rect(0, 0, 0.012, 0.24, a + (k * Math.PI) / 6), H + 0.045, 0.008, col(PAL.pipe)); // grade
+    B.annulus(B.glow, 0, H + 0.067, 0, 0.3, 0.315, 14, col(PAL.hazard));
+    const vx = -c * 0.36 + s * 0.3, vz = -s * 0.36 - c * 0.3; // registro de volante
+    B.extrude(B.lit, ngon(vx, vz, 0.02, 8), H, 0.14, col(PAL.pipe));
+    B.tube(B.glow, Array.from({ length: 13 }, (_, k) => { const t = (k / 12) * PI2; return [vx + Math.cos(t) * 0.05, H + 0.15, vz + Math.sin(t) * 0.05]; }), [0.008], 5, col('#ff3b5c'));
+    barrel(B, rng, -c * 0.42 - s * 0.26, -s * 0.42 + c * 0.26);
+  } else if (style === 3) { // fonte: um cano sobe do subsolo e transborda numa bacia — o esgoto nasce ali
+    B.boatStop = 0.42;
+    sewageChannel(B, rng, path);
+    B.extrude(B.lit, ngon(0, 0, 0.37, 10), H, 0.004, col(PAL.concrete));
+    B.extrude(B.lit, ngon(0, 0, 0.34, 10), H, 0.07, wallc, { topCol: shade(wallc, 1.15), sideShade: true });
+    B.extrude(B.water, ngon(0, 0, 0.28, 10), H + 0.06, 0.012, col('#ffffff'));
+    B.frustum(B.lit, 0, H + 0.06, 0, 0.06, 0.05, 0.2, 10, col(PAL.pipe));
+    for (const y of [0.1, 0.18]) B.annulus(B.glow, 0, H + y, 0, 0.05, 0.062, 10, col(y > 0.15 ? PAL.barrelRing : PAL.hazard));
+    B.sphere(B.water, 0, H + 0.26, 0, 0.075, col('#ffffff'), 10, 4, { dome: true, sy: 0.55 }); // borbulhão transbordando
+    for (let k = 0; k < 5; k++) { // jorros em arco caindo na bacia
+      const ang = a + Math.PI / 5 + (k / 5) * PI2, dx = Math.cos(ang), dz = Math.sin(ang);
+      B.tube(B.glow, [[dx * 0.05, H + 0.27, dz * 0.05], [dx * 0.14, H + 0.3, dz * 0.14], [dx * 0.22, H + 0.07, dz * 0.22]], [0.012, 0.01, 0.006], 5, col(PAL.algae));
+    }
+    for (let k = 0; k < 5; k++) { const ang = (k / 5) * PI2 + a; B.extrude(B.glow, rect(Math.cos(ang) * 0.31, Math.sin(ang) * 0.31, 0.05, 0.03, ang + Math.PI / 2), H + 0.07, 0.004, col(k % 2 ? PAL.hazard : PAL.barrelRing)); }
+    for (const k of [-1, 1]) barrel(B, rng, -c * 0.44 + s * k * 0.16, -s * 0.44 - c * k * 0.16);
+  } else { // tanque de decantação redondo (o estilo original)
     B.boatStop = 0.44; // barco dá meia-volta antes da mureta do tanque
     sewageChannel(B, rng, path);
     const wallc = col(PAL.curb);
