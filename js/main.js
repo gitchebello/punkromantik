@@ -150,9 +150,14 @@ const ringSel = {
 const EDGE_COLORS = { plain: 0x6fd2f5, grass: 0xffd98a, cyber: 0xff2bd6, solar: 0x7dff4a, rock: 0xff9a3c, pool: 0x2dffb8, sewage: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x3a1f4f, transparent: true, opacity: 0.22, depthWrite: false });
 // Conector só encosta em conector do mesmo tipo (estrada com estrada, trilho com trilho...): casa onde
-// nenhuma rotação cabe é proibida, mas SEM marcação (nada de X ou vermelho — poluía o tabuleiro); o
-// fantasma simplesmente não vai até ela. O que aparece é o convite: casas onde a peça na mão CONTINUA
-// uma rede aberta ganham contorno na cor do conector, pulsando, e continuar a rede vale bônus (LINK_PTS).
+// nenhuma rotação cabe é proibida e fica sutil — escurecida, com uma marquinha vermelha curta só na(s)
+// borda(s) que causam o conflito (nada de X nem anel vermelho, que poluíam o tabuleiro); o fantasma não
+// vai até ela. O convite continua: casas onde a peça na mão CONTINUA uma rede aberta ganham contorno na
+// cor do conector, pulsando, e continuar a rede vale bônus (LINK_PTS).
+const slotBlockedRing = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, depthWrite: false }); // contorno quase sumido (faded)
+const slotBlockedFill = new THREE.MeshBasicMaterial({ color: 0x07040d, transparent: true, opacity: 0.5, depthWrite: false });
+const slotTickMat = new THREE.MeshBasicMaterial({ color: 0xff3b5c, transparent: true, opacity: 0.55, depthWrite: false });
+const tickGeo = new THREE.BoxGeometry(0.36, 0.006, 0.07);
 const slotLinkRing = {}, slotLinkFill = {};
 for (const t of ['sewage', 'rail', 'road']) {
   slotLinkRing[t] = new THREE.MeshBasicMaterial({ color: EDGE_COLORS[t], transparent: true, opacity: 0.7, depthWrite: false });
@@ -190,7 +195,7 @@ const seamGhost = makeSeamSet(), seamPlaced = makeSeamSet();
 function setSeamStates(set, ev) {
   ev.sides.forEach((st, i) => {
     const it = set.items[i]; it.st = st;
-    const hex = st === 2 ? 0x55506a : st === 3 ? 0xdfe3ee : (EDGE_COLORS[ev.types[i]] || 0xffffff);
+    const hex = st === -1 ? 0xff3b5c : st === 2 ? 0x55506a : st === 3 ? 0xdfe3ee : (EDGE_COLORS[ev.types[i]] || 0xffffff);
     it.base.setHex(hex);
     it.strip.visible = st !== 0; it.mirror.visible = st === 1; it.flash.visible = st === 1;
   });
@@ -211,6 +216,8 @@ function updateSeams(set, now, dt) {
       it.flash.material.opacity = Math.min(1, f) * fade;
       it.flash.position.y = it.y0 + (Math.random() - 0.5) * 0.012; it.flash.scale.set(1 + 0.04 * Math.sin(t * 31 + it.ph), 1 + 0.1 * Math.sin(t * 23 + it.ph), 1);
       it.strip.scale.y = 1 + 1.5 * Math.abs(Math.sin(t * 13 + it.ph)); it.mirror.scale.y = it.strip.scale.y;
+    } else if (it.st === -1) { // lado que não cabe: vermelho baixo respirando devagar (sem estrobo, sem flash)
+      it.strip.material.color.copy(it.base).multiplyScalar(0.6 + 0.25 * Math.sin(t * 3 + it.ph)); it.strip.material.opacity = 0.7 * fade; it.strip.scale.y = 1;
     } else if (it.st === 3) { // encosta num achado oculto: friso branco respirando devagar, sem resposta
       it.strip.material.color.copy(it.base).multiplyScalar(0.55 + 0.45 * Math.sin(t * 2.4 + it.ph)); it.strip.material.opacity = 0.85 * fade; it.strip.scale.y = 1;
     } else { // não casa: friso apagado
@@ -579,9 +586,10 @@ function evalPlacement(q, r, tile, rot, peek = false) {
     if (!nb) { sides.push(0); continue; }
     neighbors++;
     const mine = edgeAt(tile, rot, i), theirs = edgeAt(nb.tile, nb.rot, opp(i));
-    if (nb.tile.hidden && !peek) { if (isConnector(mine)) legal = false; sides.push(3); continue; }
+    if (nb.tile.hidden && !peek) { if (isConnector(mine)) { legal = false; sides.push(-1); } else sides.push(3); continue; }
     if (compatible(mine, theirs)) { matches++; matchedTypes.push(mine); sides.push(1); if (isConnector(mine)) links++; }
-    else { if (isConnector(mine) || isConnector(theirs)) legal = false; sides.push(2); } // conector interrompido: proibido (friso só apagado, sem vermelho)
+    else if (isConnector(mine) || isConnector(theirs)) { legal = false; sides.push(-1); } // conector interrompido: proibido (friso vermelho baixo)
+    else sides.push(2);
   }
   // `links` = conectores que a peça continua
   return { legal, matches, neighbors, links, matchedTypes, sides, types, perfect: neighbors === 6 && matches === 6 };
@@ -658,19 +666,24 @@ function refreshSlots() {
   const wanted = new Map();
   for (const t of S.tiles.values())
     for (const d of DIRS) { const q = t.q + d[0], r = t.r + d[1], k = key(q, r); if (!S.tiles.has(k) && !wanted.has(k)) wanted.set(k, { q, r }); }
-  for (const [k, s] of S.slots) if (!wanted.has(k)) { slotGroup.remove(s.mesh, s.fill); S.slots.delete(k); }
+  for (const [k, s] of S.slots) if (!wanted.has(k)) { slotGroup.remove(s.mesh, s.fill, s.ticks); S.slots.delete(k); }
   for (const [k, c] of wanted) if (!S.slots.has(k)) {
     const m = new THREE.Mesh(ringGeo, ringMat), w = toWorld(c.q, c.r);
     m.position.set(w.x, TILE_H + 0.006, w.z);
     const fill = new THREE.Mesh(discGeo, slotLinkFill.road); fill.position.set(w.x, TILE_H + 0.004, w.z); fill.visible = false;
-    slotGroup.add(m, fill); S.slots.set(k, { q: c.q, r: c.r, mesh: m, fill, status: 'ok' });
+    const ticks = new THREE.Group(); ticks.position.set(w.x, TILE_H + 0.008, w.z); ticks.visible = false;
+    for (let i = 0; i < 6; i++) { // marquinha curta no meio de cada borda; só as do conflito aparecem
+      const a = edgeAngle(i), tk = new THREE.Mesh(tickGeo, slotTickMat);
+      tk.position.set(Math.cos(a) * 0.74, 0, Math.sin(a) * 0.74); tk.rotation.y = -(a + Math.PI / 2); ticks.add(tk);
+    }
+    slotGroup.add(m, fill, ticks); S.slots.set(k, { q: c.q, r: c.r, mesh: m, fill, ticks, status: 'ok', bad: [] });
   }
   slotCache = '';
   if (S.selected && !S.slots.has(key(S.selected.q, S.selected.r))) S.selected = null;
 }
 function clearBoard() {
   for (const t of S.tiles.values()) boardGroup.remove(t.group);
-  for (const s of S.slots.values()) slotGroup.remove(s.mesh, s.fill);
+  for (const s of S.slots.values()) slotGroup.remove(s.mesh, s.fill, s.ticks);
   for (const p of particles) fxGroup.remove(p.m);
   while (fauna.length) dropFlock(fauna.length - 1);
   S.tiles.clear(); S.slots.clear(); S.tileList = []; vehicles.length = 0; clearTrains(); particles.length = 0; anims.length = 0; fx.sides = 0; hoverFx.k = 0; hoverFx.target = 0;
@@ -712,12 +725,12 @@ function updateGhost() {
   if (ghostPos.x.target !== w.x || ghostPos.z.target !== w.z) { ghostPos.x.target = w.x; ghostPos.z.target = w.z; ghostPos.arc = 1; }
   ghostLit.color.setHex(0xffffff); ghostGlow.color.setHex(0xffffff);
   setSlotMaterials(ev);
-  bp.disabled = !ev.legal; // nesta rotação o conector bateria em outra coisa: só gira (sem X, sem vermelho)
+  bp.disabled = !ev.legal; // nesta rotação o conector bateria em outra coisa: só gira (o lado ruim fica com friso vermelho baixo)
   const bonus = ev.legal ? previewBonus(S.selected.q, S.selected.r, S.current, S.rot) : { shut: 0, harmony: 0 }, basePts = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + bonus.shut + bonus.harmony;
   bp.innerHTML = ev.legal ? `Colocar <b>+${basePts}</b>${ev.links ? ' ⇢' : ''}${ev.perfect ? ' ★' : ''}${bonus.shut ? ' ⬢' : ''}${bonus.harmony ? ' ✺' : ''}` : 'Gire a peça';
   bp.classList.toggle('perfect', ev.legal && ev.perfect);
 }
-// Para a peça na mão: 'blocked' (nenhuma rotação cabe — sem marcação visual), 'link' (alguma rotação
+// Para a peça na mão: 'blocked' (nenhuma rotação cabe — escurecida + marquinha nas bordas do conflito), 'link' (alguma rotação
 // liga o conector da peça numa ponta aberta do tabuleiro) ou 'ok'. Recalcula só quando a peça ou o tabuleiro mudam.
 let slotCache = '';
 function updateSlotStatus() {
@@ -725,15 +738,21 @@ function updateSlotStatus() {
   if (ck === slotCache) return; slotCache = ck;
   const types = t ? [t.conn, t.conn2].filter(Boolean).map((c) => c.type) : [];
   for (const s of S.slots.values()) {
-    s.status = 'ok'; s.link = null;
+    s.status = 'ok'; s.link = null; s.bad = [];
     if (!t) continue;
-    let legal = false;
+    let legal = false, fewest = 7;
     for (let rot = 0; rot < 6; rot++) {
-      const ev = evalPlacement(s.q, s.r, t, rot); if (!ev.legal) continue;
+      const ev = evalPlacement(s.q, s.r, t, rot);
+      if (!ev.legal) { // guarda a rotação que erra menos: as bordas dela são "onde não cabe"
+        const bad = ev.sides.map((st, i) => (st === -1 ? i : -1)).filter((i) => i >= 0);
+        if (bad.length < fewest) { fewest = bad.length; s.bad = bad; }
+        continue;
+      }
       legal = true;
       const lt = ev.matchedTypes.find((x) => types.includes(x));
       if (lt) { s.link = lt; break; }
     }
+    if (legal) s.bad = [];
     s.status = !legal ? 'blocked' : s.link ? 'link' : 'ok';
   }
 }
@@ -743,19 +762,22 @@ function setSlotMaterials(ev) {
   for (const [k, s] of S.slots) {
     const sel = S.selected && k === key(S.selected.q, S.selected.r) && ev;
     if (sel) s.mesh.material = !ev.legal ? ringSel.none : ev.matches === ev.neighbors ? ringSel.ok : ev.matches > 0 ? ringSel.partial : ringSel.none;
-    else s.mesh.material = s.status === 'link' ? slotLinkRing[s.link] : ringMat;
+    else s.mesh.material = s.status === 'link' ? slotLinkRing[s.link] : s.status === 'blocked' ? slotBlockedRing : ringMat;
     if (!s.fill) continue;
-    s.fill.visible = !sel && s.status === 'link';
-    if (s.link) s.fill.material = slotLinkFill[s.link];
+    s.fill.visible = !sel && s.status !== 'ok';
+    s.fill.material = s.status === 'link' ? slotLinkFill[s.link] : slotBlockedFill;
+    s.ticks.visible = !sel && s.status === 'blocked';
+    s.ticks.children.forEach((tk, i) => (tk.visible = s.bad.includes(i)));
   }
 }
 function updateSlotFx(now) { // a casa que continua a rede respira na cor do conector
   const k = 0.5 + 0.5 * Math.sin(now * 0.005);
   for (const t in slotLinkRing) { slotLinkRing[t].opacity = 0.45 + 0.4 * k; slotLinkFill[t].opacity = 0.06 + 0.1 * k; }
+  slotTickMat.opacity = 0.6 + 0.2 * k;
 }
 function selectSlot(cell, silent) {
   if (!cell || S.over || !S.current) return;
-  if (slotBlocked(cell)) { if (!silent) play('bad'); return; } // casa proibida para esta peça: o fantasma não vai (só o som, sem X)
+  if (slotBlocked(cell)) { if (!silent) play('bad'); return; } // casa proibida para esta peça: o fantasma não vai (som de erro; a casa já está escurecida)
   if (S.selected && S.selected.q === cell.q && S.selected.r === cell.r) return;
   S.selected = { q: cell.q, r: cell.r };
   S.ghostSolid = true;

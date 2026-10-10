@@ -5,8 +5,10 @@
 
 API (mesma origem, sem dependências):
     GET  /api/scores?limit=30   -> {"top": [{"rank","name","score","tiles","perfects","quests","ts"}...], "total": N}
-    POST /api/scores            <- {"name","score","tiles","perfects","quests"}
+    GET  /api/scores?daily=AAAA-MM-DD  -> só as partidas do desafio daquele dia
+    POST /api/scores            <- {"name","score","tiles","perfects","quests"[, "daily": "AAAA-MM-DD"]}
                                 -> {"rank": posição desta partida, "total": N, "top": [...]}
+                                   (com "daily", posição e lista são as do desafio do dia)
 Os resultados ficam em scores.json ao lado deste arquivo (gravação atômica, com trava).
 """
 import json
@@ -24,6 +26,8 @@ DB = os.path.join(DIR, 'scores.json')
 LOCK = threading.Lock()
 MAX_KEEP = 2000          # partidas guardadas (as melhores)
 MAX_BODY = 4096
+DAILY_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+DAILY_KEEP_S = 30 * 86400  # partidas de desafio diário ficam 30 dias, além das MAX_KEEP melhores
 NAME_RE = re.compile(r'[^\w \-\.\'!?@#áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇñÑüÜ]', re.UNICODE)
 HIDDEN = ('server.py', 'serve.sh', 'scores.json', 'README.md')
 
@@ -62,6 +66,17 @@ def ranked(rows):
     return rows
 
 
+def trimmed(rows):
+    rows = ranked(rows)
+    keep, now = set(id(r) for r in rows[:MAX_KEEP]), time.time()
+    return [r for r in rows if id(r) in keep or (r.get('daily') and now - r['ts'] < DAILY_KEEP_S)]
+
+
+def clean_daily(raw):
+    raw = str(raw or '')
+    return raw if DAILY_RE.match(raw) else None
+
+
 class Handler(SimpleHTTPRequestHandler):
     server_version = 'Punkromantik/1.0'
 
@@ -81,15 +96,18 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def end_headers(self):
-        if self.path.startswith('/api/') or self.path.endswith(('.html', '/')) or self.path == '':
-            self.send_header('Cache-Control', 'no-cache')
+        # no-cache em TUDO (inclusive .js/.css): o navegador revalida a cada carga (304 se nada mudou).
+        # Sem isso ele guardava os módulos por horas e podia rodar main.js novo com tilegen.js velho,
+        # o que quebrava o turno no meio (peça fantasma duplicada sobre a recém-colocada, 10/10).
+        self.send_header('Cache-Control', 'no-cache')
         super().end_headers()
 
     # ----- API -----
     def api_get(self, qs):
         limit = clamp_int((qs.get('limit') or ['30'])[0], 1, 100)
+        daily = clean_daily((qs.get('daily') or [''])[0])
         with LOCK:
-            rows = ranked(load())
+            rows = ranked([r for r in load() if not daily or r.get('daily') == daily])
             top = [dict(r, rank=i + 1) for i, r in enumerate(rows[:limit])]
             total = len(rows)
         self.send_json({'top': top, 'total': total})
@@ -115,11 +133,16 @@ class Handler(SimpleHTTPRequestHandler):
             'quests': clamp_int(data.get('quests'), 0, 9999),
             'ts': int(time.time()),
         }
+        daily = clean_daily(data.get('daily'))
+        if daily:
+            row['daily'] = daily
         with LOCK:
             rows = load()
             rows.append(row)
-            rows = ranked(rows)[:MAX_KEEP]
+            rows = trimmed(rows)
             save(rows)
+            if daily:
+                rows = [r for r in rows if r.get('daily') == daily]
             rank = 1 + sum(1 for r in rows if r['score'] > row['score'])
             top = [dict(r, rank=i + 1) for i, r in enumerate(rows[:30])]
             total = len(rows)
