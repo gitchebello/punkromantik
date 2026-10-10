@@ -149,19 +149,15 @@ const ringSel = {
 };
 const EDGE_COLORS = { plain: 0x6fd2f5, grass: 0xffd98a, cyber: 0xff2bd6, solar: 0x7dff4a, rock: 0xff9a3c, pool: 0x2dffb8, sewage: 0x2dffb8, rail: 0x22f3ff, road: 0xffe36a };
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x3a1f4f, transparent: true, opacity: 0.22, depthWrite: false });
-// Casas proibidas para a peça na mão (nenhuma rotação cabe: um conector bateria num lado que não é
-// conector, ou vice-versa) ficam escurecidas com contorno vermelho apagado e um X; casas onde a peça
-// CONTINUA uma rede aberta ganham contorno na cor do conector, pulsando. Ensina sem texto onde a
-// estrada/trilho/esgoto pode ir — como no Dorfromantik, que nem deixa tentar a casa errada.
-const slotBlockedRing = new THREE.MeshBasicMaterial({ color: 0xff3b5c, transparent: true, opacity: 0.16, depthWrite: false });
-const slotBlockedFill = new THREE.MeshBasicMaterial({ color: 0x07040d, transparent: true, opacity: 0.55, depthWrite: false });
-const slotCrossMat = new THREE.MeshBasicMaterial({ color: 0xff3b5c, transparent: true, opacity: 0.5, depthWrite: false });
+// Conector só encosta em conector do mesmo tipo (estrada com estrada, trilho com trilho...): casa onde
+// nenhuma rotação cabe é proibida, mas SEM marcação (nada de X ou vermelho — poluía o tabuleiro); o
+// fantasma simplesmente não vai até ela. O que aparece é o convite: casas onde a peça na mão CONTINUA
+// uma rede aberta ganham contorno na cor do conector, pulsando, e continuar a rede vale bônus (LINK_PTS).
 const slotLinkRing = {}, slotLinkFill = {};
 for (const t of ['sewage', 'rail', 'road']) {
   slotLinkRing[t] = new THREE.MeshBasicMaterial({ color: EDGE_COLORS[t], transparent: true, opacity: 0.7, depthWrite: false });
   slotLinkFill[t] = new THREE.MeshBasicMaterial({ color: EDGE_COLORS[t], transparent: true, opacity: 0.1, depthWrite: false });
 }
-const crossBarGeo = new THREE.BoxGeometry(0.7, 0.004, 0.09);
 
 const BLOOM = 1, bloomLayer = new THREE.Layers(); bloomLayer.set(BLOOM);
 const boardGroup = new THREE.Group(), slotGroup = new THREE.Group(), ghostGroup = new THREE.Group(), fxGroup = new THREE.Group();
@@ -194,9 +190,9 @@ const seamGhost = makeSeamSet(), seamPlaced = makeSeamSet();
 function setSeamStates(set, ev) {
   ev.sides.forEach((st, i) => {
     const it = set.items[i]; it.st = st;
-    const hex = st === -1 ? 0xff3b5c : st === 2 ? 0x55506a : st === 3 ? 0xdfe3ee : (EDGE_COLORS[ev.types[i]] || 0xffffff);
+    const hex = st === 2 ? 0x55506a : st === 3 ? 0xdfe3ee : (EDGE_COLORS[ev.types[i]] || 0xffffff);
     it.base.setHex(hex);
-    it.strip.visible = st !== 0; it.mirror.visible = st === 1 || st === -1; it.flash.visible = st === 1 || st === -1;
+    it.strip.visible = st !== 0; it.mirror.visible = st === 1; it.flash.visible = st === 1;
   });
   set.group.visible = true;
 }
@@ -215,10 +211,6 @@ function updateSeams(set, now, dt) {
       it.flash.material.opacity = Math.min(1, f) * fade;
       it.flash.position.y = it.y0 + (Math.random() - 0.5) * 0.012; it.flash.scale.set(1 + 0.04 * Math.sin(t * 31 + it.ph), 1 + 0.1 * Math.sin(t * 23 + it.ph), 1);
       it.strip.scale.y = 1 + 1.5 * Math.abs(Math.sin(t * 13 + it.ph)); it.mirror.scale.y = it.strip.scale.y;
-    } else if (it.st === -1) { // proibido: estrobo vermelho
-      const on = Math.sin(t * 40) > 0 ? 1 : 0.15;
-      it.strip.material.color.copy(it.base).multiplyScalar(on * 1.3); it.strip.material.opacity = fade;
-      it.flash.material.color.copy(it.base); it.flash.material.opacity = on * 0.9 * fade; it.flash.position.y = it.y0;
     } else if (it.st === 3) { // encosta num achado oculto: friso branco respirando devagar, sem resposta
       it.strip.material.color.copy(it.base).multiplyScalar(0.55 + 0.45 * Math.sin(t * 2.4 + it.ph)); it.strip.material.opacity = 0.85 * fade; it.strip.scale.y = 1;
     } else { // não casa: friso apagado
@@ -579,7 +571,7 @@ function makeTileGroup(tile, lit, glow, live) {
 // `peek`: só na hora de colocar de verdade. Antes disso, o lado que dá para um achado oculto fica
 // em aberto (estado 3): sem prévia de pontos nem friso colorido — senão a prévia entregava o bioma.
 function evalPlacement(q, r, tile, rot, peek = false) {
-  let matches = 0, neighbors = 0, legal = true;
+  let matches = 0, neighbors = 0, links = 0, legal = true;
   const matchedTypes = [], sides = [], types = [];
   for (let i = 0; i < 6; i++) {
     const nb = S.tiles.get(key(q + DIRS[i][0], r + DIRS[i][1]));
@@ -587,12 +579,12 @@ function evalPlacement(q, r, tile, rot, peek = false) {
     if (!nb) { sides.push(0); continue; }
     neighbors++;
     const mine = edgeAt(tile, rot, i), theirs = edgeAt(nb.tile, nb.rot, opp(i));
-    if (nb.tile.hidden && !peek) { if (isConnector(mine)) { legal = false; sides.push(-1); } else sides.push(3); continue; }
-    if (compatible(mine, theirs)) { matches++; matchedTypes.push(mine); sides.push(1); }
-    else if (isConnector(mine) || isConnector(theirs)) { legal = false; sides.push(-1); }
-    else sides.push(2);
+    if (nb.tile.hidden && !peek) { if (isConnector(mine)) legal = false; sides.push(3); continue; }
+    if (compatible(mine, theirs)) { matches++; matchedTypes.push(mine); sides.push(1); if (isConnector(mine)) links++; }
+    else { if (isConnector(mine) || isConnector(theirs)) legal = false; sides.push(2); } // conector interrompido: proibido (friso só apagado, sem vermelho)
   }
-  return { legal, matches, neighbors, matchedTypes, sides, types, perfect: neighbors === 6 && matches === 6 };
+  // `links` = conectores que a peça continua
+  return { legal, matches, neighbors, links, matchedTypes, sides, types, perfect: neighbors === 6 && matches === 6 };
 }
 // lado local de uma aresta do mundo
 const local = (i, rot) => (((i - rot) % 6) + 6) % 6;
@@ -628,7 +620,7 @@ function bestPlacement(tile, cells) {
     for (let rot = 0; rot < 6; rot++) {
       const ev = evalPlacement(cell.q, cell.r, tile, rot);
       if (!ev.legal) continue;
-      const score = ev.matches * 10 + (ev.perfect ? 60 : 0) + (ev.matches === ev.neighbors ? 3 : 0) + S.rng.float();
+      const score = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + (ev.matches === ev.neighbors ? 3 : 0) + S.rng.float();
       if (!best || score > best.score) best = { q: cell.q, r: cell.r, rot, score, ev };
     }
   }
@@ -666,21 +658,19 @@ function refreshSlots() {
   const wanted = new Map();
   for (const t of S.tiles.values())
     for (const d of DIRS) { const q = t.q + d[0], r = t.r + d[1], k = key(q, r); if (!S.tiles.has(k) && !wanted.has(k)) wanted.set(k, { q, r }); }
-  for (const [k, s] of S.slots) if (!wanted.has(k)) { slotGroup.remove(s.mesh, s.fill, s.cross); S.slots.delete(k); }
+  for (const [k, s] of S.slots) if (!wanted.has(k)) { slotGroup.remove(s.mesh, s.fill); S.slots.delete(k); }
   for (const [k, c] of wanted) if (!S.slots.has(k)) {
     const m = new THREE.Mesh(ringGeo, ringMat), w = toWorld(c.q, c.r);
     m.position.set(w.x, TILE_H + 0.006, w.z);
-    const fill = new THREE.Mesh(discGeo, slotBlockedFill); fill.position.set(w.x, TILE_H + 0.004, w.z); fill.visible = false;
-    const cross = new THREE.Group(); cross.position.set(w.x, TILE_H + 0.008, w.z); cross.visible = false;
-    for (const a of [Math.PI / 4, -Math.PI / 4]) { const bar = new THREE.Mesh(crossBarGeo, slotCrossMat); bar.rotation.y = a; cross.add(bar); }
-    slotGroup.add(m, fill, cross); S.slots.set(k, { q: c.q, r: c.r, mesh: m, fill, cross, status: 'ok' });
+    const fill = new THREE.Mesh(discGeo, slotLinkFill.road); fill.position.set(w.x, TILE_H + 0.004, w.z); fill.visible = false;
+    slotGroup.add(m, fill); S.slots.set(k, { q: c.q, r: c.r, mesh: m, fill, status: 'ok' });
   }
   slotCache = '';
   if (S.selected && !S.slots.has(key(S.selected.q, S.selected.r))) S.selected = null;
 }
 function clearBoard() {
   for (const t of S.tiles.values()) boardGroup.remove(t.group);
-  for (const s of S.slots.values()) slotGroup.remove(s.mesh, s.fill, s.cross);
+  for (const s of S.slots.values()) slotGroup.remove(s.mesh, s.fill);
   for (const p of particles) fxGroup.remove(p.m);
   while (fauna.length) dropFlock(fauna.length - 1);
   S.tiles.clear(); S.slots.clear(); S.tileList = []; vehicles.length = 0; clearTrains(); particles.length = 0; anims.length = 0; fx.sides = 0; hoverFx.k = 0; hoverFx.target = 0;
@@ -717,19 +707,18 @@ function updateGhost() {
   setSeamStates(seamGhost, ev); seamGhost.boost = ev.perfect ? 0.6 : 0;
   if (ev.legal && ev.matches) showFormation(S.selected.q, S.selected.r, ev); else hideFormation();
   previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev) : new Map());
-  hoverFx.cols = !ev.legal ? ['#ff3b5c'] : ev.sides.map((st, i) => (st === 1 ? hexCss(EDGE_COLORS[ev.types[i]] || 0xffffff) : null)).filter(Boolean);
-  hoverFx.target = hoverFx.cols.length ? (!ev.legal ? 0.5 : ev.perfect ? 1.0 : 0.5 + 0.1 * ev.matches) : 0;
+  hoverFx.cols = ev.sides.map((st, i) => (st === 1 ? hexCss(EDGE_COLORS[ev.types[i]] || 0xffffff) : null)).filter(Boolean);
+  hoverFx.target = hoverFx.cols.length ? (ev.perfect ? 1.0 : 0.5 + 0.1 * ev.matches) : 0;
   if (ghostPos.x.target !== w.x || ghostPos.z.target !== w.z) { ghostPos.x.target = w.x; ghostPos.z.target = w.z; ghostPos.arc = 1; }
-  const tint = ev.legal ? 0xffffff : 0xff7f92;
-  ghostLit.color.setHex(tint); ghostGlow.color.setHex(tint);
+  ghostLit.color.setHex(0xffffff); ghostGlow.color.setHex(0xffffff);
   setSlotMaterials(ev);
-  bp.disabled = !ev.legal;
-  const bonus = ev.legal ? previewBonus(S.selected.q, S.selected.r, S.current, S.rot) : { shut: 0, harmony: 0 }, basePts = ev.matches * 10 + (ev.perfect ? 60 : 0) + bonus.shut + bonus.harmony;
-  bp.innerHTML = ev.legal ? `Colocar <b>+${basePts}</b>${ev.perfect ? ' ★' : ''}${bonus.shut ? ' ⬢' : ''}${bonus.harmony ? ' ✺' : ''}` : `${icon('x', 16)} Bloqueado`;
+  bp.disabled = !ev.legal; // nesta rotação o conector bateria em outra coisa: só gira (sem X, sem vermelho)
+  const bonus = ev.legal ? previewBonus(S.selected.q, S.selected.r, S.current, S.rot) : { shut: 0, harmony: 0 }, basePts = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + bonus.shut + bonus.harmony;
+  bp.innerHTML = ev.legal ? `Colocar <b>+${basePts}</b>${ev.links ? ' ⇢' : ''}${ev.perfect ? ' ★' : ''}${bonus.shut ? ' ⬢' : ''}${bonus.harmony ? ' ✺' : ''}` : 'Gire a peça';
   bp.classList.toggle('perfect', ev.legal && ev.perfect);
 }
-// Para a peça na mão: 'blocked' (nenhuma rotação cabe), 'link' (alguma rotação liga o conector da
-// peça numa ponta aberta do tabuleiro) ou 'ok'. Recalcula só quando a peça ou o tabuleiro mudam.
+// Para a peça na mão: 'blocked' (nenhuma rotação cabe — sem marcação visual), 'link' (alguma rotação
+// liga o conector da peça numa ponta aberta do tabuleiro) ou 'ok'. Recalcula só quando a peça ou o tabuleiro mudam.
 let slotCache = '';
 function updateSlotStatus() {
   const t = S.current, ck = t ? `${t.id}:${S.tiles.size}:${S.slots.size}` : '';
@@ -753,26 +742,20 @@ function setSlotMaterials(ev) {
   updateSlotStatus();
   for (const [k, s] of S.slots) {
     const sel = S.selected && k === key(S.selected.q, S.selected.r) && ev;
-    if (sel) s.mesh.material = !ev.legal ? ringSel.bad : ev.matches === ev.neighbors ? ringSel.ok : ev.matches > 0 ? ringSel.partial : ringSel.none;
-    else s.mesh.material = s.status === 'blocked' ? slotBlockedRing : s.status === 'link' ? slotLinkRing[s.link] : ringMat;
+    if (sel) s.mesh.material = !ev.legal ? ringSel.none : ev.matches === ev.neighbors ? ringSel.ok : ev.matches > 0 ? ringSel.partial : ringSel.none;
+    else s.mesh.material = s.status === 'link' ? slotLinkRing[s.link] : ringMat;
     if (!s.fill) continue;
-    s.fill.visible = !sel && s.status !== 'ok';
-    s.fill.material = s.status === 'link' ? slotLinkFill[s.link] : slotBlockedFill;
-    s.cross.visible = !sel && s.status === 'blocked';
+    s.fill.visible = !sel && s.status === 'link';
+    if (s.link) s.fill.material = slotLinkFill[s.link];
   }
 }
 function updateSlotFx(now) { // a casa que continua a rede respira na cor do conector
   const k = 0.5 + 0.5 * Math.sin(now * 0.005);
   for (const t in slotLinkRing) { slotLinkRing[t].opacity = 0.45 + 0.4 * k; slotLinkFill[t].opacity = 0.06 + 0.1 * k; }
-  slotCrossMat.opacity = 0.42 + 0.12 * k;
-}
-function nudgeBlocked(cell) { // tocou numa casa proibida: tranco no X, som de erro
-  const s = S.slots.get(key(cell.q, cell.r)); if (!s) return;
-  play('bad'); anims.push({ obj: s.cross, prop: 'nudge', t: 0, dur: 0.35 });
 }
 function selectSlot(cell, silent) {
   if (!cell || S.over || !S.current) return;
-  if (slotBlocked(cell)) { if (!silent) nudgeBlocked(cell); return; } // casa proibida para esta peça: nem o fantasma vai
+  if (slotBlocked(cell)) { if (!silent) play('bad'); return; } // casa proibida para esta peça: o fantasma não vai (só o som, sem X)
   if (S.selected && S.selected.q === cell.q && S.selected.r === cell.r) return;
   S.selected = { q: cell.q, r: cell.r };
   S.ghostSolid = true;
@@ -872,13 +855,13 @@ function commitPlacement() {
   if (!S.current || !S.selected || S.over) return;
   const { q, r } = S.selected, tile = S.current, rot = S.rot;
   const ev = evalPlacement(q, r, tile, rot, true);
-  if (!ev.legal) { play('bad'); toast(`${icon('x', 14, '#ff5c7a')} conector interrompido`, 1600); return; }
+  if (!ev.legal) { play('bad'); return; }
   // instantâneo para o único "desfazer" permitido
   S.undo = { q, r, tile, rot, score: S.score, placed: S.placed, perfects: S.perfects, questsDone: S.questsDone, questsLost: S.questsLost, quests: S.quests.map((x) => ({ ...x })), gained: 0, sinceQuest: S.sinceQuest, lowWarned: S.lowWarned, hints: S.hints };
   addTile(q, r, tile, rot, true, ev);
   S.placed++;
   const w = toWorld(q, r);
-  let pts = ev.matches * 10, gained = 0;
+  let pts = ev.matches * 10 + ev.links * LINK_PTS, gained = 0; // continuar trilho/rodovia/esgoto vale extra
   if (ev.perfect) { pts += 60; S.perfects++; S.stack.push(genTile(S.rng)); gained++; gain('perfect'); }
   let closed = false;
   if (isTerminal(tile) && ev.sides[(tile.conn.exits[0] + rot) % 6] === 1) { pts += 20; S.stack.push(genTile(S.rng)); gained++; closed = true; gain('terminal'); } // fechou uma linha: sensação de "ponto final"
@@ -896,7 +879,7 @@ function commitPlacement() {
   }
   S.score += pts;
   play('place', ev.matches);
-  if (pts > 0) scoreSign(pts, ev.perfect || harm.length ? 'perfect' : ev.matches >= 3 ? 'good' : ev.matches >= 2 ? 'ok' : '', harm.length ? 'harmonia!' : relicHit ? 'achado distante' : S.undo.revealed.length ? (ev.sides.some((st, i) => st === 1 && S.undo.revealed.some((R) => R.k === key(q + DIRS[i][0], r + DIRS[i][1]))) ? 'bom palpite!' : 'achado revelado') : ev.perfect ? 'encaixe perfeito!' : shut.length ? `${GROUP_INFO[shut[0].group].name} fechado` : closed ? 'ponto final' : ev.matches >= 2 ? `encaixe ${ORD[ev.matches].toLowerCase()}` : '', w);
+  if (pts > 0) scoreSign(pts, ev.perfect || harm.length ? 'perfect' : ev.matches >= 3 ? 'good' : ev.matches >= 2 ? 'ok' : '', harm.length ? 'harmonia!' : relicHit ? 'achado distante' : S.undo.revealed.length ? (ev.sides.some((st, i) => st === 1 && S.undo.revealed.some((R) => R.k === key(q + DIRS[i][0], r + DIRS[i][1]))) ? 'bom palpite!' : 'achado revelado') : ev.perfect ? 'encaixe perfeito!' : shut.length ? `${GROUP_INFO[shut[0].group].name} fechado` : closed ? 'ponto final' : ev.links ? (ev.links >= 2 ? 'rede ligada!' : 'rede continua') : ev.matches >= 2 ? `encaixe ${ORD[ev.matches].toLowerCase()}` : '', w);
   spawnBurst(w, ev.matchedTypes.map((t) => TERRAIN[t].color), ev.perfect ? 34 : 4 + ev.matches * 3);
   if (ev.perfect) {
     play('perfect'); pulse(w, 0xffd166); confettiBurst(2);
@@ -962,6 +945,7 @@ function flashRegion(c) {
 // estrada na cidade também conta). Vale 100 pontos uma vez por peça e ela ganha um halo girando.
 // Pode ser disparada pela peça do centro OU pela sexta vizinha que fecha o anel.
 const HARMONY_PTS = 100;
+const LINK_PTS = 15; // por conector (trilho/rodovia/esgoto) que a peça continua
 const harmonyFx = new Map();
 function harmonyGroup(t) {
   let g0 = null;
