@@ -138,7 +138,7 @@ button { font: inherit; cursor: pointer; border: 0; color: #fff; }
 
 .hud-bottom { display: flex; align-items: center; justify-content: center; gap: 26px; position: relative; padding-bottom: 6px; }
 /* pilha 3D (desenhada no canvas atrás desta área): alta o bastante para a peça que paira aparecer inteira */
-.stack-area { position: absolute; left: -6px; bottom: 0; width: 300px; height: 330px; pointer-events: auto; }
+.stack-area { position: absolute; left: -6px; bottom: 0; width: 300px; height: 330px; pointer-events: none; } /* só visual: não pode engolir toques/arrastos no tabuleiro */
 /* contador de peças: grande, no alto da pilha; o número rola ao mudar */
 .stack-count { position: absolute; right: 6px; top: 6px; transform-origin: right center; display: flex; align-items: center; gap: 6px; padding: 5px 16px 5px 12px; border-radius: 999px;
   background: rgba(10, 8, 20, 0.85); border: 1.5px solid var(--acid); color: var(--acid); box-shadow: 0 0 16px rgba(196, 255, 42, 0.45), inset 0 0 10px rgba(196, 255, 42, 0.12); backdrop-filter: blur(6px); }
@@ -354,7 +354,7 @@ kbd { background: rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 0 5px;
 }
 @media (max-height: 520px) and (orientation: landscape) {
   .quests-wrap { display: none; }
-  .current { width: 80px; height: 80px; }
+  .current-area { width: 80px; height: 80px; }
 }
 
 /* desafio do dia */

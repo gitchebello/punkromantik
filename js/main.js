@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011b';
-import { RNG } from './rng.js?v=20261011b';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011b';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011b';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011b';
-import { CameraRig, attachInput } from './controls.js?v=20261011b';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011d';
+import { RNG } from './rng.js?v=20261011d';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011d';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011d';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011d';
+import { CameraRig, attachInput } from './controls.js?v=20261011d';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -499,6 +499,8 @@ const S = {
   best: +(localStorage.getItem('pr_best') || 0), tips: new Set(), lowWarned: false, tileList: [], hints: 5, undo: null, sinceQuest: 0, pendingGain: 0, relics: [], sinceRelic: 0, gains: {},
 };
 const HINTS_PER_GAME = 5, QUEST_CAP = 4;
+// no começo menos missões abertas ao mesmo tempo (3 nas primeiras 40 peças, depois 4): o jogador sente que dá conta
+const questCap = () => (questLevel(S.placed) < 2 ? 3 : QUEST_CAP);
 const gain = (src, n = 1) => { S.gains[src] = (S.gains[src] || 0) + n; }; // de onde vêm as peças extras (balanceamento)
 const anims = [], particles = [], vehicles = [];
 let ghostAnim = null, ambAcc = 0;
@@ -850,7 +852,7 @@ function maybeAssignQuest() {
   const tile = S.stack[0]; if (!tile || tile.quest || S.placed < 2) return;
   S.sinceQuest++;
   const starving = S.quests.length === 0 && (S.sinceQuest >= 5 || S.stack.length <= 8);
-  if (S.quests.length >= QUEST_CAP) return;
+  if (S.quests.length >= questCap()) return;
   if (!(S.rng.chance(0.26) || S.sinceQuest >= 7 || starving)) return;
   const q = makeQuest(S.rng, tile, buildingsOf(tile), frontier().groups, questContext());
   if (!q) return;
