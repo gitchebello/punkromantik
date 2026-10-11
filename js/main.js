@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011f';
-import { RNG } from './rng.js?v=20261011f';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011f';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011f';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011f';
-import { CameraRig, attachInput } from './controls.js?v=20261011f';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011h';
+import { RNG } from './rng.js?v=20261011h';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011h';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011h';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011h';
+import { CameraRig, attachInput } from './controls.js?v=20261011h';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -446,6 +446,34 @@ function renderUI() {
   curCam.position.set(50 + 2.4, 2.9, 2.4); curCam.lookAt(50, 0.36, 0);
   draw($('stack-area'), stackCam, 40, 30); draw($('current-area'), curCam, 33, 26);
   renderer.setScissorTest(false); renderer.setViewport(0, 0, W, Hh); renderer.autoClear = true;
+}
+// Menu inicial: miniatura 3D de cada peça, renderizada uma vez com a própria geometria do jogo
+// (os hexágonos chapados da legenda antiga não diziam nada). Conectores aparecem retos sobre Baldio.
+function renderBiomeThumbs() {
+  const figs = document.querySelectorAll('#overlay-start [data-thumb]'); if (!figs.length) return;
+  const N = 256, rt = new THREE.WebGLRenderTarget(N, N), px = new Uint8Array(N * N * 4);
+  const sc = new THREE.Scene();
+  sc.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2038, 0.85));
+  const sn = new THREE.DirectionalLight(0xfff1dc, 0.9); sn.position.set(3, 6, 4); sc.add(sn);
+  const fl = new THREE.DirectionalLight(0x4a7dff, 0.3); fl.position.set(-4, 3, -3); sc.add(fl);
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 60); cam.position.set(2.55, 2.9, 2.55); cam.lookAt(0, 0.28, 0);
+  const rng = new RNG(4242), prevC = renderer.getClearColor(new THREE.Color()), prevA = renderer.getClearAlpha();
+  renderer.setClearColor(0x000000, 0);
+  for (const fig of figs) {
+    const t = fig.dataset.thumb, conn = TERRAIN[t].connector, g6 = new Array(6).fill(conn ? 'grass' : t), edges = g6.slice();
+    if (conn) { edges[1] = edges[4] = t; }
+    const tile = { id: -1, ground: g6, edges, conn: conn ? { type: t, exits: [1, 4] } : null, quest: null, seed: rng.int(2 ** 31) };
+    const grp = makeTileGroup(tile, litMat, glowMat, false); sc.add(grp);
+    renderer.setRenderTarget(rt); renderer.clear(); renderer.render(sc, cam);
+    renderer.readRenderTargetPixels(rt, 0, 0, N, N, px);
+    sc.remove(grp);
+    const tmp = document.createElement('canvas'); tmp.width = tmp.height = N;
+    const img = tmp.getContext('2d').createImageData(N, N);
+    for (let y = 0; y < N; y++) img.data.set(px.subarray((N - 1 - y) * N * 4, (N - y) * N * 4), y * N * 4); // GL lê de baixo para cima
+    tmp.getContext('2d').putImageData(img, 0, 0);
+    const cv = fig.querySelector('canvas'); cv.width = cv.height = 160; cv.getContext('2d').drawImage(tmp, 0, 0, 160, 160);
+  }
+  renderer.setRenderTarget(null); renderer.setClearColor(prevC, prevA); rt.dispose();
 }
 // Anéis radiais saindo do centro do hexágono: chamam a atenção para uma peça com missão (pilha, mão e tabuleiro)
 const ringPulseGeo = (() => { const g = new THREE.RingGeometry(0.9, 1.0, 6, 1); g.rotateX(-Math.PI / 2); g.rotateY(Math.PI / 6); return g; })();
@@ -910,11 +938,12 @@ function commitPlacement() {
   }
   S.score += pts;
   play('place', ev.matches);
-  if (pts > 0) scoreSign(pts, ev.perfect || harm.length ? 'perfect' : ev.matches >= 3 ? 'good' : ev.matches >= 2 ? 'ok' : '', harm.length ? 'harmonia!' : relicHit ? 'achado distante' : S.undo.revealed.length ? (ev.sides.some((st, i) => st === 1 && S.undo.revealed.some((R) => R.k === key(q + DIRS[i][0], r + DIRS[i][1]))) ? 'bom palpite!' : 'achado revelado') : ev.perfect ? 'encaixe perfeito!' : shut.length ? `${GROUP_INFO[shut[0].group].name} fechado` : closed ? 'ponto final' : ev.links ? (ev.links >= 2 ? 'rede ligada!' : 'rede continua') : ev.matches >= 2 ? `encaixe ${ORD[ev.matches].toLowerCase()}` : '', w);
+  const medal = ev.perfect || harm.length || relicHit;
+  if (pts > 0) scoreSign(pts, ev.perfect || harm.length ? 'perfect' : ev.matches >= 3 ? 'good' : ev.matches >= 2 ? 'ok' : '', harm.length ? 'harmonia!' : relicHit ? 'achado distante' : S.undo.revealed.length ? (ev.sides.some((st, i) => st === 1 && S.undo.revealed.some((R) => R.k === key(q + DIRS[i][0], r + DIRS[i][1]))) ? 'bom palpite!' : 'achado revelado') : ev.perfect ? 'encaixe perfeito!' : shut.length ? `${GROUP_INFO[shut[0].group].name} fechado` : closed ? 'ponto final' : ev.links ? (ev.links >= 2 ? 'rede ligada!' : 'rede continua') : ev.matches >= 2 ? `encaixe ${ORD[ev.matches].toLowerCase()}` : '', medal && isNarrow() ? null : w);
   spawnBurst(w, ev.matchedTypes.map((t) => TERRAIN[t].color), ev.perfect ? 34 : 4 + ev.matches * 3);
   if (ev.perfect) {
     play('perfect'); pulse(w, 0xffd166); confettiBurst(2);
-    banner(`★ <b>PERFEITO</b> +1 ${icon('tile', 14)}`, '', 'perfect', 2600);
+    rewardBurst(w, 'perfect', '#7dff9a', '<b class="rb-star">★</b>', `+1${icon('tile', 13)}`);
   } else if (ev.matches >= 3) {
     confettiBurst(ev.matches >= 4 ? 2 : 1); play('confetti');
   }
@@ -926,14 +955,14 @@ function commitPlacement() {
       play('harmony'); confettiBurst(1); starBurst(color); pulse(hw, GROUP_HEX[h.g]); pulse(hw, 0xffd166); spawnBurst(hw, [color, '#ffd166', '#ffffff'], 46, 1.3); cameraShake = { t: 0, dur: 0.5, amp: 0.09 };
       [0, 300, 600, 900].forEach((ms, n) => setTimeout(() => kick(0.38, n % 2 ? ['#ffd166', color] : [color], 1.25), ms)); // flashes curtos na cor do bioma
     }, 260);
-    banner(`✺ <b>PERFEITO!</b> <small>harmonia ${GROUP_INFO[h.g].name}</small> <b class="big">+${HARMONY_PTS}</b>`, '', 'perfect harmony', 3400);
+    rewardBurst(hw0(h), 'harmony', '#ffd166', '<b class="rb-star">✺</b>', `+${HARMONY_PTS}`, 260);
   }
   if (relicHit) {
     const rw = toWorld(relicHit.q, relicHit.r);
     play('relic'); confettiBurst(2); pulse(rw, GROUP_HEX[relicHit.g]); spawnBurst(rw, [GROUP_INFO[relicHit.g].color, '#ffffff'], 36, 1.1);
-    banner(`✦ <b>ACHADO</b> <b class="big">+${relicHit._tiles}</b> ${icon('tile', 18)} <small>+${RELIC_PTS}</small>`, '', 'quest reward', 3200);
+    rewardBurst(rw, 'relic', GROUP_INFO[relicHit.g].color, '<b class="rb-star">✦</b>', `+${relicHit._tiles}${icon('tile', 13)}`);
   }
-  if (tile.quest) { const nq = { ...tile.quest, tileKey: key(q, r) }; rebaseQuest(nq); if (nq._coach) nq._coachAt = S.placed; S.quests.push(nq); }
+  if (tile.quest) { const nq = { ...tile.quest, tileKey: key(q, r) }; rebaseQuest(nq); S.quests.push(nq); }
   const fromRect = { x: (window.innerWidth / 2), y: window.innerHeight * 0.36 };
   gained += checkQuests();
   S.undo.gained = gained;
@@ -1229,8 +1258,8 @@ function checkQuests() {
     if (qst.reward.hints) { S.hints += qst.reward.hints; if (S.undo) S.undo.hintGain += qst.reward.hints; updateHintButton(); }
     const t = S.tiles.get(qst.tileKey), w = toWorld(t.q, t.r);
     play('quest'); confettiBurst(2); kick(0.6, ['#c4ff2a', qst.color], 0.3);
-    scoreSign(qst.reward.points, 'quest', `${icon(questIcon(qst), 16)} missão`, w);
-    rewardBanner(qst);
+    scoreSign(qst.reward.points, 'quest', `${icon(questIcon(qst), 16)} missão`, isNarrow() ? null : w);
+    rewardBurst(w, 'quest', qst.color, `${icon(questIcon(qst), 26)}<i class="rb-badge">${icon('check', 12)}</i>`, `+${qst.reward.tiles}${icon('tile', 13)}${qst.reward.hints ? ` +${qst.reward.hints}${icon('bulb', 13)}` : ''}`, 120);
     pulse(w, new THREE.Color(qst.color).getHex());
     spawnBurst(w, [qst.color, '#ffffff'], 40);
     if (qst._card) { qst._card.classList.add('done'); const c = qst._card; setTimeout(() => c.remove(), 900); qst._card = null; }
@@ -1239,15 +1268,12 @@ function checkQuests() {
     S.quests.splice(S.quests.indexOf(qst), 1);
     S.questsLost++;
     play('bad');
-    banner(`${icon('x', 16, '#ff5c7a')} ${icon(questIcon(qst), 20, '#ff5c7a')} <b>missão perdida</b> <small>${questName(qst)} ficou cercado</small>`, '', 'warn', 3000);
+    { const t = S.tiles.get(qst.tileKey); if (t) rewardBurst(toWorld(t.q, t.r), 'lost', qst.color, `${icon(questIcon(qst), 26)}<i class="rb-badge">${icon('x', 12)}</i>`, ''); }
     if (qst._card) { qst._card.classList.add('lost'); const c = qst._card; setTimeout(() => c.remove(), 900); qst._card = null; }
     const t = S.tiles.get(qst.tileKey); if (t) spawnBurst(toWorld(t.q, t.r), ['#ff5c7a', '#55506a'], 14, 0.6);
   }
   renderQuests(done.length || lost.length ? 900 : 400); // espera o cartão cumprido/perdido terminar a animação
   return gained;
-}
-function rewardBanner(q) {
-  banner(`${icon('check', 18, '#c4ff2a')} ${icon(questIcon(q), 22, q.color)} <b class="big">+${q.reward.tiles}</b> ${icon('tile', 18)} <small>+${q.reward.points}</small>`, '', 'quest reward', 3600);
 }
 function gameOver() {
   if (S.over) return;
@@ -1274,7 +1300,7 @@ function newGame(seed, daily = null) {
   if (daily) seed = dailySeed(daily);
   S.rng = new RNG(seed != null ? seed >>> 0 : (Date.now() ^ (Math.random() * 1e9)) >>> 0);
   S.stack = makeStack(S.rng, STACK_SIZE);
-  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.coached = 0; S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null; S.gains = {};
+  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null; S.gains = {};
   updateHintButton(); updateUndoButton();
   addTile(0, 0, starterTile(S.rng), 0, false);
   refreshSlots();
@@ -1795,14 +1821,40 @@ function popup(text, w, cls = '', y = 0.5) {
   $('popups').appendChild(el);
   setTimeout(() => el.remove(), 1500);
 }
+// Medalha de recompensa (missão, perfeito, harmonia, achado): nasce sobre a casa do tabuleiro, nunca no
+// topo da tela — antes os banners e o letreiro brigavam com o placar. A posição é presa a uma área livre
+// entre o HUD de cima (placar + cartões de missão) e o de baixo; medalhas simultâneas ficam lado a lado.
+const bursts = [];
+const hw0 = (h) => { const t = S.tiles.get(h.k); return toWorld(t.q, t.r); };
+function rewardBurst(w, kind, color, medal, chip, delay = 0) {
+  const p = screenOf(w, 0.9); if (!p) return;
+  const el = document.createElement('div');
+  el.className = `rburst ${kind}`; el.style.setProperty('--c', color); el.style.setProperty('--delay', `${delay}ms`);
+  el.innerHTML = `<div class="rb-medal"><i class="rb-ring"></i><i class="rb-rays"></i>${medal}</div>${chip ? `<div class="rb-chip">${chip}</div>` : ''}`;
+  $('popups').appendChild(el);
+  const W = 100, H = chip ? 122 : 88;
+  const top0 = document.querySelector('.hud-top').getBoundingClientRect().bottom + 8, bottom = document.querySelector('.hud-bottom').getBoundingClientRect().top - 8;
+  // obstáculos no alto da tela: coluna de cartões de missão e o letreiro de pontos (desktop)
+  const obst = [$('quests'), ...document.querySelectorAll('#signs .sign')].map((e) => e.getBoundingClientRect()).filter((r) => r.height);
+  let x = p.x, y = p.y - H / 2 - 10; // logo acima da peça
+  for (const o of bursts) if (Math.abs(o.x - x) < W && Math.abs(o.y - y) < H) x = o.x + (x >= o.x ? W : -W);
+  x = Math.max(W / 2 + 8, Math.min(innerWidth - W / 2 - 8, x));
+  let top = top0;
+  for (const r of obst) if (x + W / 2 > r.left - 8 && x - W / 2 < r.right + 8) top = Math.max(top, r.bottom + 26); // folga para o anel e os raios
+  y = Math.max(top + H / 2, Math.min(bottom - H / 2, y));
+  el.style.left = `${x}px`; el.style.top = `${y}px`;
+  const b = { x, y }; bursts.push(b); $('qlabels').classList.add('dim'); // balões das bandeiras recuam enquanto a medalha está na tela
+  setTimeout(() => { el.remove(); bursts.splice(bursts.indexOf(b), 1); if (!bursts.length) $('qlabels').classList.remove('dim'); }, 2200 + delay);
+}
 // Letreiro neon animado com os pontos: letras pulam uma a uma, o letreiro voa até o placar e o número rola
 let scoreShown = 0, scoreRoll = null;
 function scoreSign(pts, cls = '', sub = '', w = null) {
-  if (isNarrow() && w) { // celular: nada no meio da tela — número pequeno sobe da peça e o placar rola
-    popup(`+${pts}`, w, cls === 'perfect' ? 'perfect' : cls === 'quest' ? 'pquest' : pts >= 30 ? 'good' : '');
+  if (isNarrow()) { // celular: nada no meio da tela — número pequeno sobe da peça (se não houver medalha ali) e o placar rola
+    if (w) popup(`+${pts}`, w, cls === 'perfect' ? 'perfect' : cls === 'quest' ? 'pquest' : pts >= 30 ? 'good' : '');
     setTimeout(() => bumpScore(cls), 500);
     return;
   }
+  document.querySelectorAll('#signs .sign').forEach((o) => o.remove()); // um letreiro por vez: dois empilhados se cobriam
   const el = document.createElement('div');
   el.className = `sign ${cls}`;
   const chars = `+${pts}`.split('');
@@ -1876,72 +1928,77 @@ function rewardTiles(n, from) {
     };
   }
 }
-// texto da missão: "ligue 8+ peças de Sandpunk" / "cidade com exatamente 14 prédios"
-function questText(q) {
-  if (q.kind === 'city') return q.exact ? `cidade com <b>exatamente ${q.target}</b> prédios` : `cidade com <b>pelo menos ${q.target}</b> prédios`;
-  return `ligue <b>${q.target} ou mais</b> peças de <b>${GROUP_INFO[q.group].name}</b>`;
-}
-// balão: ícone do grupo num disco da cor do grupo + "falta N" escuro sobre fundo amarelo
-const labelHTML = (q, num) => `<i class="qarrow"></i><span class="qlic">${icon(questIcon(q), 15)}</span>${num}${icon(q.kind === 'city' ? 'city' : 'tile', 11, 'currentColor', 'unit')}`;
-const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
-// Playtest 11/10: o cartão fechado mostrava só "1+" — era quanto FALTA, mas lia como a meta "pelo menos 1",
-// e não dizia o bioma nem o que fazer. Agora o "N+" fica só na meta; o que falta vem escrito por extenso.
-const unitWord = (q, n) => (q.kind === 'city' ? (n === 1 ? 'prédio' : 'prédios') : n === 1 ? 'peça' : 'peças');
-const questName = (q) => (q.kind === 'city' ? 'Prédios Cyberpunk' : GROUP_INFO[q.group].name);
-const leftText = (q, n, to = '') => (n === 0 ? '<b>pronto!</b>' : `${n === 1 ? 'falta' : 'faltam'} <b>${n}</b> ${unitWord(q, n)}${to}`);
+// Missões sem texto (pedido do usuário, 11/10): o desenho diz tudo. Balão e cartão = ícone do bioma +
+// número + ícone da unidade (peça/prédio). Na peça da mão o número é a meta (anel tracejado, vazio);
+// no tabuleiro é quanto falta (anel enchendo). Recompensa = selo verde "+N peças". Toque = ir até a bandeira.
+const unitIcon = (q, s) => icon(q.kind === 'city' ? 'city' : 'tile', s, 'currentColor', 'unit');
+const labelHTML = (q, num) => `<i class="qarrow"></i><span class="qlic">${icon(questIcon(q), 15)}</span><b>${num}</b>${unitIcon(q, 11)}`;
 const rewardHTML = (q) => `+${q.reward.tiles}${icon('tile', 11)}${q.reward.hints ? ` +${q.reward.hints}${icon('bulb', 11)}` : ''}`;
-// Quem nunca cumpriu uma missão é tratado como aprendiz: as duas primeiras missões de cada partida abrem
-// o cartão sozinhas (a da mão enquanto ela está na mão; a do tabuleiro durante a jogada seguinte).
-const learner = () => { try { return !localStorage.getItem('pr_qdone'); } catch (e) { return false; } };
-const balloonLeft = (n, to = '') => `<small>${n === 1 ? 'falta' : 'faltam'}</small><b>${n}${to}</b>`;
+const ringSVG = (pct, dashed) => { const R = 17, C = 2 * Math.PI * R; return `<svg class="qring${dashed ? ' dashed' : ''}" viewBox="0 0 40 40"><circle cx="20" cy="20" r="${R}"/><circle cx="20" cy="20" r="${R}" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct)}"/></svg>`; };
+const flyToQuest = (q) => { const t = S.tiles.get(q.tileKey); if (t) { const w = toWorld(t.q, t.r); rig.flyTo(w.x, w.z); pulse(w, new THREE.Color(q.color).getHex()); } };
 let pendLabel = null;
+// O jogador ordena as missões por prioridade arrastando o cartão para cima/baixo na coluna (mouse e toque).
+// A ordem é a de S.quests; missões novas entram no fim. Enquanto arrasta, a coluna não é reconstruída.
+const questDrag = { q: null, moved: false, pending: false };
+function startQuestDrag(e, q, d) {
+  if (e.button > 0 || S.quests.length < 2) return;
+  const cards = S.quests.map((o) => o._card).filter(Boolean), from = cards.indexOf(d); if (from < 0) return;
+  const rects = cards.map((c) => c.getBoundingClientRect()), step = rects.length > 1 ? rects[1].top - rects[0].top : rects[0].height + 5;
+  const y0 = e.clientY; let to = from;
+  questDrag.q = q; questDrag.moved = false;
+  const move = (ev) => {
+    const dy = ev.clientY - y0;
+    if (!questDrag.moved && Math.abs(dy) < 6) return;
+    if (!questDrag.moved) { questDrag.moved = true; d.classList.add('dragging'); d.parentNode.classList.add('sorting'); play('appear'); }
+    const lo = -from * step - 6, hi = (cards.length - 1 - from) * step + 6, cy = Math.max(lo, Math.min(hi, dy));
+    d.style.transform = `translateY(${cy}px) scale(1.08)`;
+    const nt = Math.max(0, Math.min(cards.length - 1, from + Math.round(cy / step)));
+    if (nt !== to) { to = nt; play('rotate'); }
+    cards.forEach((c, i) => { if (c === d) return; const sh = from < to && i > from && i <= to ? -step : from > to && i < from && i >= to ? step : 0; c.style.transform = sh ? `translateY(${sh}px)` : ''; });
+  };
+  const up = () => {
+    removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+    if (questDrag.moved) {
+      if (to !== from) { const [m] = S.quests.splice(from, 1); S.quests.splice(to, 0, m); }
+      cards.forEach((c) => { c.style.transform = ''; }); d.classList.remove('dragging'); d.parentNode.classList.remove('sorting');
+      questDrag.pending = true;
+      setTimeout(() => { questDrag.moved = false; }, 0); // o click que vem logo depois do soltar não voa até a bandeira
+    }
+    questDrag.q = null;
+    if (questDrag.pending) { questDrag.pending = false; renderQuests(0); }
+  };
+  addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+}
 function renderQuests(delayMs = 0) {
   const el = $('quests'), lab = $('qlabels');
   const build = () => {
+    if (questDrag.q) { questDrag.pending = true; return; } // não destrói o cartão que está na mão do jogador
     el.innerHTML = ''; lab.innerHTML = '';
     const pend = S.current && S.current.quest && !S.over ? S.current.quest : null;
-    if (pend) { // missão da peça na mão: card tracejado com ícone, alvo e recompensa (começa quando a peça for colocada)
-      if (pend._coach == null) pend._coach = learner() && S.coached < 2 && !!++S.coached;
-      const d = document.createElement('div'); d.className = 'quest pending' + (pend._coach ? ' open' : ''); d.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
-      d.innerHTML = `<div class="qhead"><span class="qicon">${icon(questIcon(pend), 21)}</span><span class="qtxt"><span class="qname">nova missão · ${questName(pend)}</span><span class="qleft">ligar <b>${pendGoal(pend)}</b> ${unitWord(pend, 2)}</span></span><span class="qrew">${rewardHTML(pend)}</span></div>
-        <div class="qbody"><div class="qin"><p>A peça na sua mão tem uma <b>bandeira</b>. Coloque-a e vá juntando a ela ${pend.kind === 'city' ? `peças de <b>Cyberpunk</b> até a cidade somar <b>${pendGoal(pend)}</b> prédios (cada peça mostra quantos tem)` : `peças de <b>${GROUP_INFO[pend.group].name}</b>, uma encostada na outra, até a formação ter <b>${pendGoal(pend)}</b> peças (a da bandeira conta)`}.</p><p class="qr">Cumpriu: <b>+${pend.reward.tiles}</b> peças na pilha · <b>+${pend.reward.points}</b> pts${pend.reward.hints ? ' · <b>+1</b> dica' : ''}</p></div></div>`;
-      d.addEventListener('click', () => { pend._coach = false; d.classList.toggle('open'); });
+    if (pend) { // missão da peça na mão: cartão tracejado, anel vazio, meta (começa quando a peça for colocada)
+      const d = document.createElement('div'); d.className = 'quest pending'; d.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
+      d.innerHTML = `<span class="qicon">${ringSVG(0, true)}${icon(questIcon(pend), 21)}<i class="qflag">${icon('flag', 9)}</i></span><span class="qleft">${pendGoal(pend)}</span>${unitIcon(pend, 13)}<span class="qrew">${rewardHTML(pend)}</span>`;
       el.appendChild(d);
     }
     for (const q of S.quests) {
-      const info = GROUP_INFO[q.group], left = questLeft(q), pct = Math.max(0, Math.min(1, q.progress / q.target)), ic = questIcon(q);
-      const d = document.createElement('div'); d.className = 'quest' + (q._open || (q._coachAt === S.placed && !(pend && pend._coach)) ? ' open' : ''); // um cartão aberto por vez d.style.setProperty('--qc', q.color || info.color);
-      const R = 17, C = 2 * Math.PI * R;
-      d.innerHTML = `<div class="qhead">
-          <span class="qicon"><svg class="qring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="${R}"/><circle cx="20" cy="20" r="${R}" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct)}"/></svg>${icon(ic, 21)}</span>
-          <span class="qtxt"><span class="qname">${questName(q)} · ${q.progress}/${q.target}</span><span class="qleft${q._bump ? ' bump' : ''}">${leftText(q, left)}</span></span>
-          <span class="qrew">${rewardHTML(q)}</span>
-        </div>
-        <div class="qbody"><div class="qin">
-          <p>${q.kind === 'city' ? `Junte peças de <b>Cyberpunk</b> à cidade da bandeira até ela somar <b>${q.target}+</b> prédios` : `Encoste peças de <b>${info.name}</b> na formação da bandeira até ela ter <b>${q.target}+</b> peças`} — já são <b>${q.progress}</b>.</p>
-          <p class="qr">Cumpriu: <b>+${q.reward.tiles}</b> peças na pilha · <b>+${q.reward.points}</b> pts${q.reward.hints ? ' · <b>+1</b> dica' : ''}. Passar do número também vale; se a formação ficar cercada, a missão se perde.</p>
-          <button class="qgo" type="button">${icon('pin', 14)} ir até a bandeira</button>
-        </div></div>`;
+      const info = GROUP_INFO[q.group], left = questLeft(q), pct = Math.max(0, Math.min(1, q.progress / q.target));
+      const d = document.createElement('div'); d.className = 'quest'; d.style.setProperty('--qc', q.color || info.color);
+      d.innerHTML = `<span class="qicon">${ringSVG(pct)}${icon(questIcon(q), 21)}</span><span class="qleft${q._bump ? ' bump' : ''}">${left}</span>${unitIcon(q, 13)}<span class="qrew">${rewardHTML(q)}</span>`;
       q._bump = false;
-      d.addEventListener('click', (e) => {
-        if (e.target.closest('.qgo')) { const t = S.tiles.get(q.tileKey); if (t) { const w = toWorld(t.q, t.r); rig.flyTo(w.x, w.z); pulse(w, new THREE.Color(q.color).getHex()); } return; }
-        const open = !d.classList.contains('open');
-        for (const o of S.quests) { o._open = false; o._coachAt = -1; } el.querySelectorAll('.quest.open').forEach((x) => x.classList.remove('open'));
-        q._open = open; d.classList.toggle('open', open);
-      });
+      d.addEventListener('click', () => { if (!questDrag.moved) flyToQuest(q); });
+      d.addEventListener('pointerdown', (e) => startQuestDrag(e, q, d));
       q._card = d; el.appendChild(d);
       const l = document.createElement('div'); l.className = 'qlabel'; l.style.setProperty('--qc', q.color || info.color);
-      l.innerHTML = labelHTML(q, balloonLeft(left));
-      l.addEventListener('click', () => { const t = S.tiles.get(q.tileKey); if (t) { const w = toWorld(t.q, t.r); rig.flyTo(w.x, w.z); pulse(w, new THREE.Color(q.color).getHex()); } });
+      l.innerHTML = labelHTML(q, left);
+      l.addEventListener('click', () => flyToQuest(q));
       q._label = l; lab.appendChild(l);
     }
     pendLabel = null;
     if (pend) { // a peça na mão também ganha o balão: a bandeira sozinha não dizia que ali tem peças a ganhar
       const l = document.createElement('div'); l.className = 'qlabel pending'; l.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
-      l.innerHTML = labelHTML(pend, `<small>meta</small><b>${pendGoal(pend)}</b>`) + `<span class="qgain">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +1${icon('bulb', 11)}` : ''}</span>`;
+      l.innerHTML = labelHTML(pend, pendGoal(pend)) + `<span class="qgain">${rewardHTML(pend)}</span>`;
       pendLabel = l; lab.appendChild(l);
     }
-    $('quests-title').classList.toggle('hidden', S.quests.length === 0 && !pend);
     if (S.selected && S.current && !S.over) { const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot); previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true) : new Map()); }
   };
   if (delayMs) setTimeout(build, delayMs); else build();
@@ -1957,13 +2014,13 @@ function previewQuests(byGroup) {
     const left = questLeft(q), raw = proj == null ? null : q.target - proj, newLeft = raw == null ? null : q.exact ? raw : Math.max(0, raw);
     const cls = newLeft == null ? '' : newLeft === 0 ? 'hit' : newLeft < 0 ? 'over' : '';
     const to = newLeft == null || newLeft === left ? '' : `<span class="to">→ ${newLeft < 0 ? '✕' : newLeft === 0 ? '✓' : newLeft}</span>`;
-    if (q._label) { q._label.innerHTML = labelHTML(q, balloonLeft(left, to)); q._label.className = 'qlabel ' + cls; }
-    if (q._card) { const ql = q._card.querySelector('.qleft'); if (ql) { ql.innerHTML = leftText(q, left, to); ql.classList.toggle('hit', cls === 'hit'); ql.classList.toggle('over', cls === 'over'); } }
+    if (q._label) { q._label.innerHTML = labelHTML(q, left + to); q._label.className = 'qlabel ' + cls; }
+    if (q._card) { const ql = q._card.querySelector('.qleft'); if (ql) { ql.innerHTML = left + to; ql.classList.toggle('hit', cls === 'hit'); ql.classList.toggle('over', cls === 'over'); } }
   }
 }
 // A missão da peça na mão mostra o alvo que ela TERÁ na casa onde o fantasma está: se a bandeira cai
 // numa formação que já existe, rebaseQuest sobe o alvo — antes o balão dizia "5+" e virava "9" ao colocar.
-const pendGoal = (q) => `${q._shown || q.target}+`;
+const pendGoal = (q) => `${q._shown || q.target}`;
 function previewPendingGoal(ev) {
   const q = S.current && S.current.quest; if (!q) return;
   let shown = q.target;
@@ -2186,6 +2243,7 @@ $('tg-sound').addEventListener('click', () => { setMuted(!isMuted()); $('btn-sou
 document.querySelectorAll('.close-overlay').forEach((b) => b.addEventListener('click', () => showOverlay(null)));
 document.querySelectorAll('.to-start').forEach((b) => b.addEventListener('click', () => showOverlay(S.started ? null : 'overlay-start')));
 document.querySelectorAll('.ic-slot').forEach((el) => { el.innerHTML = icon(el.dataset.icon, +(el.dataset.size || 18)); });
+renderBiomeThumbs();
 
 // ---------- laço ----------
 function resize() {
@@ -2342,7 +2400,7 @@ function loop(now) {
 }
 
 // acesso para testes/automação no console
-window.PR = { S, addHarmonyFx, starBurst, revealAround, setRelicHidden, bumpScore, rig, camera, trains, connNetworks, spawnConvoy, harmonyGroup, spawnRelic, previewBonus, renderQuests, closedRegions, frontier, toWorld, selectSlot, commitPlacement, hint, applyBest, rotate, evalPlacement, bestPlacement, newGame, confettiBurst, banner, vehicles, fauna, fx, hoverFx, kick, undoLast, rewardTiles, checkQuests, regionKeys, buildingsOf, tileGeo, showOverlay, addTile, refreshSlots, genTile, RNG };
+window.PR = { S, addHarmonyFx, starBurst, revealAround, setRelicHidden, bumpScore, rig, camera, trains, connNetworks, spawnConvoy, harmonyGroup, spawnRelic, previewBonus, renderQuests, closedRegions, frontier, toWorld, selectSlot, commitPlacement, hint, applyBest, rotate, evalPlacement, bestPlacement, newGame, confettiBurst, banner, rewardBurst, scoreSign, questIcon, icon, vehicles, fauna, fx, hoverFx, kick, undoLast, rewardTiles, checkQuests, regionKeys, buildingsOf, tileGeo, showOverlay, addTile, refreshSlots, genTile, RNG };
 const params = new URLSearchParams(location.search);
 if (params.has('nobloom')) prefs.bloom = false;
 if (params.has('nolens')) prefs.lens = false;

@@ -29,7 +29,6 @@
 
   <div id="banners" class="banners"></div>
   <div class="quests-wrap">
-    <div id="quests-title" class="quests-title hidden"><span class="ic-slot" data-icon="flag" data-size="12"></span> missões · toque para ler</div>
     <div id="quests" class="quests"></div>
   </div>
 
@@ -64,28 +63,30 @@
 <div id="overlay-start" class="overlay">
   <div class="card">
     <div class="title">PUNK<span>ROMANTIK</span></div>
-    <p class="tagline">Um quebra-cabeça calmo de paisagens poly em quatro vertentes punk — cyberpunk, solarpunk, sandpunk e snowpunk — ligadas por trens-bala, rodovias e esgotos radioativos flutuando no escuro.</p>
-    <div class="legend">
-      <div><i style="background:#141626;box-shadow:0 0 0 2px #ff2bd6 inset"></i><b>Cyberpunk</b><small>torres neon, pagodas, drones</small></div>
-      <div><i style="background:#4fc43f;box-shadow:0 0 0 2px #9dff4a inset"></i><b>Solarpunk</b><small>jardins, girassóis, painéis solares</small></div>
-      <div><i style="background:#8c5a33;box-shadow:0 0 0 2px #ff9a3c inset"></i><b>Sandpunk</b><small>zigurates, sucata, coletores de umidade</small></div>
-      <div><i style="background:#0c5a4a;box-shadow:0 0 0 2px #2dffb8 inset"></i><b>Esgoto Radioativo</b><small>canais, bacias, lagoas</small></div>
-      <div><i style="background:#7a7d8f;box-shadow:0 0 0 2px #d5d9e6 inset"></i><b>Trem-bala</b><small>precisa continuar</small></div>
-      <div><i style="background:#2b2e42;box-shadow:0 0 0 2px #ffe36a inset"></i><b>Rodovia</b><small>precisa continuar</small></div>
-      <div><i style="background:#a9c7dd;box-shadow:0 0 0 2px #9ff5ff inset"></i><b>Snowpunk</b><small>gelo, iglus, aurora, robôs de neve</small></div>
-      <div><i style="background:#cdb68c;box-shadow:0 0 0 2px #ffd98a inset"></i><b>Baldio</b><small>terreno quase vazio, florzinhas</small></div>
+    <p class="tagline">Encaixe peças. Lados iguais pontuam.</p>
+    <div class="biomes" id="biomes">
+      <figure data-thumb="cyber"><canvas></canvas><figcaption style="--c:#ff2bd6">Cyberpunk</figcaption></figure>
+      <figure data-thumb="solar"><canvas></canvas><figcaption style="--c:#7dff4a">Solarpunk</figcaption></figure>
+      <figure data-thumb="rock"><canvas></canvas><figcaption style="--c:#ff9a3c">Sandpunk</figcaption></figure>
+      <figure data-thumb="plain"><canvas></canvas><figcaption style="--c:#bfe9ff">Snowpunk</figcaption></figure>
+      <figure data-thumb="grass"><canvas></canvas><figcaption style="--c:#ffd98a">Baldio</figcaption></figure>
     </div>
-    <ul class="rules">
-      <li><b>+10</b> por lado encaixado com o mesmo terreno · <b>6 lados</b> = <b>+60</b> e <b>+1 peça</b>.</li>
-      <li>Peças com <b>bandeira</b> trazem missões, e o balão amarelo mostra <b>quanto falta</b>. <b>8+</b> = pelo menos 8 (passar também vale). Cyberpunk conta <b>prédios</b> (cada peça mostra quantos tem); os outros biomas contam peças. Cumpriu → peças extras. Formação cercada → missão some.</li>
-      <li>Esgoto, trilhos e rodovias <b>não podem ser interrompidos</b>; eles <b>bifurcam</b> e têm <b>pontos finais</b> (fechar uma linha vale +1 peça).</li>
-      <li>Fechou por completo uma área de um bioma? <b>+5 por peça</b> (8 ou mais peças: <b>+1 peça</b>).</li>
-      <li>Errou? <b>Desfazer</b> (Z) devolve a última peça à mão — só a última.</li>
-    </ul>
+    <div class="biomes links">
+      <figure data-thumb="rail"><canvas></canvas><figcaption style="--c:#dfe3ee">Trem-bala</figcaption></figure>
+      <figure data-thumb="road"><canvas></canvas><figcaption style="--c:#ffe36a">Rodovia</figcaption></figure>
+      <figure data-thumb="sewage"><canvas></canvas><figcaption style="--c:#2dffb8">Esgoto</figcaption></figure>
+      <p class="links-note">⟿ não podem ser interrompidos</p>
+    </div>
+    <div class="howto">
+      <div><span class="ic-slot" data-icon="tile" data-size="18"></span><b>+10</b><small>lado igual</small></div>
+      <div><span class="hx6">★</span><b>+60</b><small>6 lados</small></div>
+      <div><span class="ic-slot" data-icon="flag" data-size="18"></span><b>+<span class="ic-slot" data-icon="tile" data-size="13"></span></b><small>missão</small></div>
+    </div>
     <button id="btn-start" class="primary">Jogar</button>
-    <button id="btn-daily" class="ghost-btn daily-btn">📅 Desafio do dia <small>mesmas peças para todo mundo</small></button>
-    <button id="btn-rank" class="ghost-btn">🏆 Ranking</button>
-    <p class="hint-text">Toque na casa (ou em <b>Colocar</b>) para fixar. No PC a <b>roda do mouse gira a peça</b> (Ctrl+roda = zoom). Arraste para mover a câmera, pinça para zoom, botão direito ou dois dedos para orbitar.</p>
+    <div class="start-row">
+      <button id="btn-daily" class="ghost-btn daily-btn">📅 Desafio do dia</button>
+      <button id="btn-rank" class="ghost-btn">🏆 Ranking</button>
+    </div>
   </div>
 </div>
 
@@ -93,15 +94,18 @@
 <div id="overlay-help" class="overlay hidden">
   <div class="card small">
     <h2>Como jogar</h2>
-    <ul class="rules">
-      <li><b>Prever:</b> toque numa casa livre (anel branco). No PC, basta passar o mouse. Tudo que se liga à peça <b>brilha</b> na cor do terreno.</li>
-      <li><b>Colocar:</b> toque de novo na casa, <b>Colocar</b> ou <kbd>Espaço</kbd>. <b>Desfazer:</b> ↶ ou <kbd>Z</kbd> (só a última peça).</li>
-      <li><b>Girar:</b> roda do mouse, ⟲ ⟳, <kbd>Q</kbd>/<kbd>R</kbd>, ou clique direito.</li>
-      <li><b>Câmera:</b> arraste = mover · <kbd>Ctrl</kbd>+roda ou pinça = zoom · botão direito / dois dedos = orbitar · <kbd>WASD</kbd>.</li>
-      <li><b>Missões:</b> o balão amarelo sobre a bandeira mostra <b>quanto falta</b>; toque no cartão para ler os detalhes. <b>N+</b> é "pelo menos N": ligar numa rede que já passou do número cumpre a missão. Missão de Cyberpunk conta <b>prédios</b> (o selo da peça mostra quantos); as outras contam peças. Missão só se perde quando a formação fica cercada.</li>
-      <li><b>Pilha</b> (esquerda): o número é quanto resta; a peça que paira é a próxima e dá para espiar a seguinte. Recompensas caem nela.</li>
-      <li><b>Dica</b> 💡: melhor encaixe — 5 por partida.</li>
-    </ul>
+    <div class="keys">
+      <div><span>👆</span><b>tocar na casa</b><small>prever · tocar de novo fixa · <kbd>Espaço</kbd></small></div>
+      <div><span>⟳</span><b>girar</b><small>roda do mouse · ⟲ ⟳ · <kbd>Q</kbd> <kbd>R</kbd></small></div>
+      <div><span>✋</span><b>câmera</b><small>arrastar · pinça / <kbd>Ctrl</kbd>+roda · dois dedos orbitam</small></div>
+      <div><span>↶</span><b>desfazer</b><small>só a última peça · <kbd>Z</kbd></small></div>
+      <div><span>💡</span><b>dica</b><small>melhor encaixe · 5 por partida</small></div>
+    </div>
+    <div class="howto">
+      <div><span class="qdemo" style="--qc:#ffd98a"><span class="ic-slot" data-icon="grass" data-size="15"></span><b>3</b></span><small>faltam 3 peças</small></div>
+      <div><span class="qdemo" style="--qc:#ff2bd6"><span class="ic-slot" data-icon="city" data-size="15"></span><b>12</b></span><small>prédios</small></div>
+      <div><span class="qdemo dash" style="--qc:#7dff4a"><span class="ic-slot" data-icon="solar" data-size="15"></span><b>6</b></span><small>bandeira na mão</small></div>
+    </div>
     <button class="primary close-overlay">Voltar</button>
   </div>
 </div>
@@ -160,6 +164,6 @@
 <script src="vendor/ShaderPass.js"></script>
 <script src="vendor/MaskPass.js"></script>
 <script src="vendor/UnrealBloomPass.js"></script>
-<script type="module" src="js/main.js?v=20261011d"></script>
+<script type="module" src="js/main.js?v=20261011h"></script>
 </body>
 </html>

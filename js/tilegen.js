@@ -1,4 +1,4 @@
-import { RNG } from './rng.js?v=20261011b';
+import { RNG } from './rng.js?v=20261011h';
 
 // Terrenos. Cada bioma é uma vertente -punk da mesma proposta estética (é daí que vem o nome
 // do jogo): Cyberpunk, Solarpunk, Sandpunk e Snowpunk. Regiões preenchem setores; conectores atravessam a peça de uma
@@ -161,9 +161,11 @@ export function questCandidates(tile) {
 // conectores dependem de peças certas aparecerem: alvo menor que o das regiões
 // (cyber não entra aqui: a missão dele conta PRÉDIOS, ver makeQuestFor). Baldio e Snowpunk são os
 // biomas mais comuns da pilha, mas se espalham em manchas pequenas: alvo igual ao do Sandpunk.
-const QUEST_BASE = { plain: 5, grass: 5, solar: 6, rock: 5, toxic: 4, rail: 3, road: 3 };
+// 11/10: começo mais leve (era plain/grass/rock 5, solar 6, toxic 4) — a 1ª missão pedia mais peças do que o jogador tinha na mão
+const QUEST_BASE = { plain: 4, grass: 4, solar: 5, rock: 4, toxic: 3, rail: 3, road: 3 };
 // quanto a missão pede para CRESCER (em peças) além da formação em que a bandeira entrou
-const QUEST_GROW = { plain: 3, grass: 3, cyber: 3, solar: 3, rock: 3, toxic: 2, rail: 2, road: 2 };
+// (11/10: regiões e cidade começam em 2, eram 3 — a rampa por nível devolve a dificuldade aos poucos)
+const QUEST_GROW = { plain: 2, grass: 2, cyber: 2, solar: 2, rock: 2, toxic: 2, rail: 2, road: 2 };
 // Prédios que uma peça de cidade acrescenta, em média: peça toda cyberpunk ~10, metade ~5, um lado ~1.5
 // (medido em 600 peças). É a taxa de câmbio peças → prédios das missões de cidade.
 export const BUILDINGS_PER_TILE = 5;
@@ -185,7 +187,9 @@ export const questLevel = (placed) => Math.floor(placed / QUEST_LEVEL_EVERY);
 // peças que a fácil. Fica sempre abaixo de 1 peça por peça exigida — é isso que garante que a
 // partida acaba (a versão anterior pagava 1 peça no fim, por missão grande: ficou dura demais).
 // (o teto `grow - 1` garante o "< 1:1" também nas missões pequenas de conector, que pediam 2 e pagavam 2)
-const rewardTiles = (grow, level) => Math.min(grow - 1, Math.max(2, Math.min(6, Math.round(grow * Math.max(0.55, 0.8 - 0.025 * level)))));
+// (11/10: nos 2 primeiros níveis o piso de 2 peças vale mesmo na missão pequena — o começo não pode
+// ficar mais pobre só porque as missões encolheram; o "< 1:1" volta a valer do nível 2 em diante)
+const rewardTiles = (grow, level) => Math.min(level < 2 ? 6 : grow - 1, Math.max(2, Math.min(6, Math.round(grow * Math.max(0.55, 0.8 - 0.025 * level)))));
 
 // Dois tipos de missão:
 //  - 'region': conecte `target` peças do grupo a partir da bandeira (progress = peças ligadas).
@@ -210,7 +214,7 @@ export function makeQuest(rng, tile, buildings = 0, weights = null, ctx = null) 
 }
 function makeQuestFor(rng, group, buildings, ctx) {
   const L = ctx.level, mult = 1 + 0.2 * L; // pontos sobem com o nível
-  const grow = QUEST_GROW[group] + rng.int(2) + Math.floor(L * 0.4); // em peças; dificuldade sobe mais devagar que o nível (11/10: era round(L*0.7), depois floor(L*0.6))
+  const grow = QUEST_GROW[group] + rng.int(2) + Math.floor(L * 0.5); // em peças; dificuldade sobe mais devagar que o nível (11/10: era round(L*0.7); agora base menor + meia peça por nível)
   if (group === 'cyber') { // cidade: conta PRÉDIOS — o mesmo esforço em peças, convertido pela média de prédios por peça
     const growB = grow * BUILDINGS_PER_TILE + rng.int(3) - 1;
     return { kind: 'city', exact: false, group, target: buildings + growB, grow: growB, progress: buildings, reward: { tiles: rewardTiles(grow, L), points: Math.round(grow * 20 * mult) } };

@@ -53,33 +53,30 @@ button { font: inherit; cursor: pointer; border: 0; color: #fff; }
 .icon-btns { display: flex; gap: 6px; }
 .icon { width: 40px; height: 40px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-border); font-weight: 900; font-size: 16px; }
 
-.quests-wrap { position: absolute; right: calc(12px + var(--sar)); top: calc(66px + var(--sat)); display: flex; flex-direction: column; gap: 5px; max-width: 250px; pointer-events: none; align-items: flex-end; }
-.quests-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; opacity: 0.7; text-align: right; padding-right: 4px; display: flex; gap: 4px; align-items: center; }
+.quests-wrap { position: absolute; right: calc(12px + var(--sar)); top: calc(100px + var(--sat)); display: flex; flex-direction: column; gap: 5px; max-width: 250px; pointer-events: none; align-items: flex-end; }
 .quests { display: flex; flex-direction: column; gap: 5px; pointer-events: auto; align-items: flex-end; }
-/* cartão minimizado: ícone com anel de progresso + número que falta; toque abre o texto */
-.quest { cursor: pointer; background: var(--panel); border: 1.5px solid var(--qc, var(--panel-border)); border-radius: 14px; padding: 4px 7px 4px 4px; animation: pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--qc, #fff) 40%, transparent); backdrop-filter: blur(6px); max-width: 100%; transition: transform 0.15s, background 0.2s; }
+/* cartão de missão só com desenho: [ícone + anel de progresso] número [unidade] [+N peças]; toque = ir até a bandeira */
+.quest { position: relative; cursor: grab; display: flex; align-items: center; gap: 5px; background: var(--panel); border: 1.5px solid var(--qc, var(--panel-border)); border-radius: 999px; padding: 4px 6px 4px 4px; animation: pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--qc, #fff) 40%, transparent); backdrop-filter: blur(6px); transition: transform 0.15s, background 0.2s; }
 .quest:hover { background: rgba(50, 30, 80, 0.92); transform: translateX(-2px); }
-.qhead { display: flex; align-items: center; gap: 6px; }
+/* arrastar para ordenar: o cartão pego cresce e brilha; os outros abrem espaço deslizando */
+.quest:not(.pending) { touch-action: none; user-select: none; -webkit-user-select: none; }
+.quests.sorting .quest { transition: transform 0.16s cubic-bezier(0.2, 1, 0.3, 1); }
+.quests.sorting .quest.dragging { transition: none; z-index: 5; cursor: grabbing; background: rgba(50, 30, 80, 0.96); box-shadow: 0 0 0 2px #fff, 0 0 26px var(--qc), 0 10px 22px rgba(0, 0, 0, 0.55); }
+.quest > .unit { color: var(--qc); opacity: 0.85; margin-left: -2px; }
 .qicon { position: relative; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: color-mix(in srgb, var(--qc) 32%, #12101f); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qc) 40%, transparent); flex: none; }
 .qicon .ic { filter: drop-shadow(0 0 6px var(--qc)); }
+.qflag { position: absolute; right: -4px; top: -4px; width: 15px; height: 15px; border-radius: 50%; background: var(--yellow); display: grid; place-items: center; color: var(--ink); }
+.qflag .ic { color: var(--ink); filter: none; }
 .qring { position: absolute; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); transform: rotate(-90deg); }
 .qring circle { fill: none; stroke: rgba(255, 255, 255, 0.12); stroke-width: 3; }
 .qring circle + circle { stroke: var(--qc); stroke-linecap: round; transition: stroke-dashoffset 0.6s cubic-bezier(0.2, 1, 0.3, 1); filter: drop-shadow(0 0 4px var(--qc)); }
-.qleft { font-family: Orbitron, sans-serif; font-weight: 800; font-size: 20px; line-height: 1; color: var(--qc); text-shadow: 0 0 12px color-mix(in srgb, var(--qc) 70%, transparent); min-width: 26px; text-align: center; }
+.qring.dashed circle:first-child { stroke: var(--qc); stroke-dasharray: 4 4; opacity: 0.7; }
+.qleft { font-family: Orbitron, sans-serif; font-weight: 800; font-size: 19px; line-height: 1; color: var(--qc); text-shadow: 0 0 12px color-mix(in srgb, var(--qc) 70%, transparent); white-space: nowrap; display: inline-block; min-width: 14px; text-align: right; }
 .qleft.bump { animation: numBump 0.55s cubic-bezier(0.2, 1.6, 0.4, 1); }
 @keyframes numBump { 0% { transform: scale(1); } 30% { transform: scale(1.45) rotate(-6deg); } 100% { transform: scale(1); } }
-.qunit { color: var(--qc); opacity: 0.8; margin: 6px 4px 0 -3px; display: inline-flex; } .qunit .ic { width: 11px; height: 11px; }
 .qlabel .unit { margin-left: 1px; opacity: 0.8; }
-.qrew { font-family: Orbitron, sans-serif; font-size: 10px; color: var(--acid); display: inline-flex; align-items: center; gap: 2px; opacity: 0.9; }
-.qbody { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.28s cubic-bezier(0.2, 1, 0.3, 1); }
-.qbody .qin { overflow: hidden; min-height: 0; width: 0; min-width: 100%; } /* fechado, o texto não alarga o card */
-.quest.open { min-width: min(250px, 72vw); }
-.quest.open .qbody { grid-template-rows: 1fr; }
-.qbody p { margin: 0; font-size: 12px; line-height: 1.35; padding: 0 4px; }
-.quest.open .qin { padding-top: 8px; }
-.qbody .qr { font-size: 11px; opacity: 0.8; margin-top: 4px; }
-.qgo { display: inline-flex; align-items: center; gap: 4px; margin: 8px 4px 2px; padding: 5px 10px; border-radius: 999px; background: color-mix(in srgb, var(--qc) 25%, #1b1030); border: 1px solid var(--qc); color: #fff; font-size: 11px; font-weight: 700; }
+.qrew { margin-left: 2px; padding: 3px 6px; border-radius: 999px; background: rgba(196, 255, 42, 0.14); font-family: Orbitron, sans-serif; font-size: 11px; font-weight: 800; color: var(--acid); display: inline-flex; align-items: center; gap: 2px; }
 .quest.pending { border-style: dashed; opacity: 0.92; animation: pendingPulse 1.4s ease-in-out infinite; }
 .quest.pending .qicon { background: transparent; box-shadow: inset 0 0 0 1.5px var(--qc); }
 @keyframes pendingPulse { 50% { box-shadow: 0 0 22px color-mix(in srgb, var(--qc, #fff) 70%, transparent); } }
@@ -88,8 +85,43 @@ button { font: inherit; cursor: pointer; border: 0; color: #fff; }
 .quest.lost { animation: questLost 0.9s ease-in forwards; filter: grayscale(1); }
 @keyframes questLost { 0% { transform: translateX(0); } 15% { transform: translateX(-6px) rotate(-2deg); } 30% { transform: translateX(6px) rotate(2deg); } 45% { transform: translateX(-4px); } 60% { transform: translateX(0); opacity: 1; } 100% { transform: translateY(14px) scale(0.85); opacity: 0; } }
 
+/* medalha de recompensa: nasce sobre a casa (missão, perfeito, harmonia, achado), pula, solta um anel,
+   mostra o selo "+N peças" e sobe sumindo. Fica numa área livre entre o HUD de cima e o de baixo. */
+.rburst { position: absolute; z-index: 45; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none;
+  transform: translate(-50%, -50%); animation: rbLife 2.1s cubic-bezier(0.2, 1, 0.3, 1) var(--delay, 0ms) both; }
+@keyframes rbLife { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.2) rotate(-20deg); } 14% { opacity: 1; transform: translate(-50%, -50%) scale(1.18) rotate(4deg); }
+  24% { transform: translate(-50%, -50%) scale(1) rotate(0); } 78% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: 0; transform: translate(-50%, calc(-50% - 28px)) scale(0.9); } }
+.rb-medal { position: relative; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 70%, #fff), var(--c) 55%, color-mix(in srgb, var(--c) 45%, #000));
+  box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--c), 0 0 28px var(--c), 0 6px 14px rgba(0, 0, 0, 0.5); }
+.rb-medal > .ic { color: var(--ink); position: relative; z-index: 1; }
+.rb-star { position: relative; z-index: 1; font-size: 34px; line-height: 1; color: #fff; text-shadow: 0 0 8px #fff, 0 2px 0 rgba(0, 0, 0, 0.25); }
+.rburst.perfect .rb-medal { border-radius: 0; clip-path: none; background: none; box-shadow: none; }
+.rburst.perfect .rb-medal::before { content: ''; position: absolute; inset: -5px; background: #fff; clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); filter: drop-shadow(0 0 14px var(--c)); }
+.rburst.perfect .rb-medal::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 35% 30%, #d9ffe2, var(--c) 60%, #1f8a45); clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); }
+.rb-ring { position: absolute; inset: -4px; border-radius: 50%; border: 3px solid var(--c); opacity: 0; animation: rbRing 0.9s ease-out calc(var(--delay, 0ms) + 120ms) both; }
+@keyframes rbRing { 0% { opacity: 0.95; transform: scale(0.9); } 100% { opacity: 0; transform: scale(2.3); } }
+.rb-rays { position: absolute; inset: -26px; border-radius: 50%; z-index: -1; opacity: 0.55;
+  background: repeating-conic-gradient(from 0deg, var(--c) 0 8deg, transparent 8deg 30deg);
+  -webkit-mask: radial-gradient(circle, transparent 30%, #000 42%, transparent 70%); mask: radial-gradient(circle, transparent 30%, #000 42%, transparent 70%);
+  animation: rbSpin 2.4s linear var(--delay, 0ms) both; }
+@keyframes rbSpin { from { transform: rotate(0) scale(0.6); } 20% { transform: rotate(40deg) scale(1); } to { transform: rotate(160deg) scale(1); } }
+.rb-badge { position: absolute; z-index: 2; right: -4px; bottom: -4px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--acid); color: var(--ink); box-shadow: 0 0 0 2px #fff, 0 0 10px var(--acid);
+  animation: charPop 0.45s cubic-bezier(0.2, 1.7, 0.4, 1) calc(var(--delay, 0ms) + 260ms) both; }
+.rb-badge .ic { color: var(--ink); }
+.rb-chip { display: inline-flex; align-items: center; gap: 3px; padding: 3px 10px; border-radius: 999px; background: var(--acid); color: var(--ink); font-family: Orbitron, sans-serif; font-weight: 900; font-size: 17px;
+  box-shadow: 0 0 0 2px #fff, 0 0 16px rgba(196, 255, 42, 0.8); animation: rbChip 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) calc(var(--delay, 0ms) + 300ms) both; }
+.rb-chip .ic { color: var(--ink); }
+.rburst.harmony .rb-chip { background: #ffd166; box-shadow: 0 0 0 2px #fff, 0 0 16px rgba(255, 209, 102, 0.9); }
+@keyframes rbChip { from { opacity: 0; transform: translateY(-16px) scale(0.5); } to { opacity: 1; transform: none; } }
+.rburst.lost .rb-medal { filter: grayscale(0.85) brightness(0.8); animation: questLost 0.9s ease-in var(--delay, 0ms) both; }
+.rburst.lost .rb-rays { display: none; } .rburst.lost .rb-ring { border-color: #ff5c7a; }
+.rburst.lost .rb-badge { background: #ff5c7a; box-shadow: 0 0 0 2px #fff, 0 0 10px #ff5c7a; }
+@media (prefers-reduced-motion: reduce) { .rb-rays { display: none; } }
+
 /* balões flutuando sobre as bandeiras: ícone + quanto falta */
-#qlabels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+#qlabels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; transition: opacity 0.3s; }
+#qlabels.dim { opacity: 0.18; }
 /* Balão da missão: amarelo e claro de propósito — escuro, ele sumia no tabuleiro e a bandeira sozinha
    não dizia "aqui tem peças a ganhar". O grupo aparece no disco colorido à esquerda. */
 .qlabel { position: absolute; transform: translate(-50%, -100%); display: flex; align-items: center; gap: 4px; background: var(--yellow); border: 2px solid #fff; color: var(--ink);
@@ -269,13 +301,29 @@ button { font: inherit; cursor: pointer; border: 0; color: #fff; }
 .title { font-family: Orbitron, sans-serif; font-weight: 800; font-size: clamp(30px, 8vw, 46px); letter-spacing: 0.1em; line-height: 1;
   text-shadow: 0 0 12px var(--magenta), 0 0 30px rgba(255, 43, 214, 0.7); }
 .title span { color: var(--cyan); text-shadow: 0 0 12px var(--cyan), 0 0 30px rgba(34, 243, 255, 0.7); }
-.tagline { font-size: 14px; opacity: 0.9; margin: 12px 0 16px; line-height: 1.45; }
+.tagline { font-size: 15px; font-weight: 700; opacity: 0.9; margin: 10px 0 14px; }
+/* menu inicial: uma miniatura 3D de verdade de cada peça (renderizada pelo jogo) no lugar da legenda */
+.biomes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0 0 8px; }
+.biomes figure { margin: 0; display: flex; flex-direction: column; align-items: center; }
+.biomes canvas { width: 100%; aspect-ratio: 1; display: block; }
+.biomes figcaption { font-size: 11px; font-weight: 800; color: var(--c); text-shadow: 0 0 8px color-mix(in srgb, var(--c) 60%, transparent); margin-top: -4px; white-space: nowrap; }
+.biomes.links { grid-template-columns: repeat(5, 1fr); align-items: center; padding: 4px 0; border-top: 1px dashed rgba(255, 255, 255, 0.12); margin-bottom: 12px; }
+.links-note { grid-column: span 2; margin: 0; font-size: 12px; font-weight: 700; opacity: 0.8; text-align: left; line-height: 1.3; }
+.howto { display: flex; justify-content: center; gap: 8px; margin: 0 0 16px; }
+.howto div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); }
+.howto b { font-family: Orbitron, sans-serif; font-size: 16px; color: var(--yellow); display: inline-flex; align-items: center; gap: 2px; }
+.howto small { font-size: 11px; opacity: 0.75; }
+.howto .hx6 { color: var(--yellow); font-size: 16px; line-height: 18px; }
+.start-row { display: flex; gap: 8px; }
+.keys { display: grid; gap: 6px; margin: 0 0 12px; text-align: left; }
+.keys div { display: grid; grid-template-columns: 30px auto 1fr; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); }
+.keys span { font-size: 18px; text-align: center; } .keys b { font-size: 13px; white-space: nowrap; } .keys small { font-size: 11.5px; opacity: 0.75; text-align: right; }
+.qdemo { display: inline-flex; align-items: center; gap: 4px; background: var(--yellow); border: 2px solid #fff; border-radius: 999px; padding: 2px 9px 2px 2px; color: var(--ink); box-shadow: 0 0 0 2px var(--qc); }
+.qdemo .ic-slot { width: 22px; height: 22px; border-radius: 50%; background: var(--qc); display: grid; place-items: center; }
+.qdemo b { font-family: Orbitron, sans-serif; font-size: 15px; color: var(--ink); }
+.qdemo.dash { box-shadow: 0 0 0 2px var(--qc), 0 0 12px var(--qc); }
+.card .start-row .ghost-btn { flex: 1; margin-top: 0; }
 h2 { font-family: Orbitron, sans-serif; margin: 0 0 12px; font-size: 20px; letter-spacing: 0.06em; }
-.legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; text-align: left; margin-bottom: 14px; }
-.legend div { display: grid; grid-template-columns: 22px 1fr; column-gap: 8px; align-items: center; background: rgba(255, 255, 255, 0.06); border-radius: 10px; padding: 6px 8px; }
-.legend i { width: 22px; height: 22px; border-radius: 6px; grid-row: 1 / span 2; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); }
-.legend b { font-size: 12px; }
-.legend small { font-size: 10px; opacity: 0.75; }
 .rules { text-align: left; font-size: 13px; line-height: 1.5; padding-left: 18px; margin: 0 0 16px; }
 .rules li + li { margin-top: 4px; }
 kbd { background: rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 0 5px; font-family: inherit; font-size: 12px; }
@@ -319,11 +367,10 @@ kbd { background: rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 0 5px;
   .score-box.pulse { animation-name: scorePulseSm; }
   @keyframes scorePulseSm { 0% { transform: scale(1); } 30% { transform: scale(1.06) rotate(-1.5deg); } 55% { transform: scale(0.98) rotate(0.8deg); } 100% { transform: scale(1); } }
   .icon { width: 38px; height: 38px; }
-  .quests-wrap { top: calc(58px + var(--sat)); right: calc(10px + var(--sar)); max-width: 60vw; }
-  .quest { padding: 3px 6px 3px 3px; border-radius: 12px; }
+  .quests-wrap { top: calc(86px + var(--sat)); right: calc(10px + var(--sar)); max-width: 60vw; } /* abaixo do placar, nunca por cima */
+  .quest { padding: 3px 5px 3px 3px; gap: 4px; }
   .qicon { width: 30px; height: 30px; } .qicon .ic { width: 18px; height: 18px; }
-  .qleft { font-size: 17px; min-width: 22px; }
-  .quests-title { display: none; }
+  .qleft { font-size: 16px; } .qrew { font-size: 10px; padding: 2px 5px; }
   .banners { top: calc(60px + var(--sat)); left: calc(10px + var(--sal)); transform: none; width: auto; max-width: calc(100vw - 175px); align-items: flex-start; }
   .banner { padding: 5px 12px; }
   .banner .bt { font-size: 12px; gap: 6px; } .banner .bt .big { font-size: 18px; } .banner .bt .ic { width: 16px; height: 16px; }
@@ -348,7 +395,8 @@ kbd { background: rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 0 5px;
   .ghost-btn.mini { padding: 10px 12px; min-width: 54px; }
   .flyhex svg { width: 24px; height: 24px; }
   .card { padding: 22px 16px; border-radius: 20px; }
-  .legend { grid-template-columns: 1fr 1fr; }
+  .biomes figcaption { font-size: 9.5px; }
+  .links-note { font-size: 11px; }
   .rank-form { flex-direction: column; }
   .rank-form .primary { width: 100%; }
 }
@@ -358,7 +406,7 @@ kbd { background: rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 0 5px;
 }
 
 /* desafio do dia */
-.daily-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 8px; border-color: var(--yellow) !important; color: var(--yellow); }
+.daily-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; border-color: var(--yellow) !important; color: var(--yellow); }
 .daily-btn small { font-weight: 600; font-size: 11px; opacity: 0.75; color: #fff; }
 .rank-tabs { display: flex; gap: 8px; margin: 0 0 10px; }
 .card .rank-tabs .ghost-btn { width: auto; flex: 1; padding: 6px 10px; }
