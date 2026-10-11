@@ -2,8 +2,8 @@
 // tubos, frustos, chanfros, folhas), biomas redesenhados e partes animáveis.
 // Três malhas por peça: "lit" (iluminada), "glow" (neon, sem luz) e "water"
 // (shader de água animada). Cor por vértice, flat shading.
-import { edgeAngle, vertexAngle, APO } from './hex.js?v=20261010b';
-import { RNG } from './rng.js?v=20261010b';
+import { edgeAngle, vertexAngle, APO } from './hex.js?v=20261011a';
+import { RNG } from './rng.js?v=20261011a';
 
 const THREE = window.THREE;
 export const TILE_H = 0.16;
@@ -1907,14 +1907,6 @@ export function buildTile(tile) {
   const keep = walkTrails(B, rng, tile, walk, hub, !tile.conn);
   const iris = PAL.iris[new RNG(((tile.seed ^ 0x1215) >>> 0) || 3).int(PAL.iris.length)]; // cor das flores do Baldio desta peça
   for (let i = 0; i < 6; i++) groundDetail(B, rng, tile.ground[i], i, polys, lay && lay.kind !== 'line' ? (lay.kind === 'end' ? 0.52 : 0.46) : 0, keep, iris);
-  if (tile.quest) {
-    let fi = tile.ground.findIndex((g) => GROUPS[g] === tile.quest.group);
-    if (fi < 0 && tile.conn) fi = tile.conn.exits[0];
-    if (fi < 0) fi = 0;
-    const a = edgeAngle(fi), fx = Math.cos(a) * 0.5, fz = Math.sin(a) * 0.5;
-    occupied.push({ x: fx, z: fz, r: 0.12 });
-    drawFlag(B, fx, fz, a + Math.PI / 2, tile.quest.color);
-  }
   for (let i = 0; i < 6; i++) {
     const g = tile.ground[i];
     const n = g === 'cyber' ? 2 + rng.int(2) : g === 'solar' ? 3 + rng.int(2) : g === 'rock' ? 2 + rng.int(2) : g === 'pool' ? rng.int(2) : g === 'grass' ? 1 + rng.int(2) : 2 + rng.int(2);
@@ -1923,9 +1915,38 @@ export function buildTile(tile) {
   }
   if (landmark) drawLandmark(B, rng, landmark.type, landmark.x, landmark.z, landmark.a, cyberSch);
   if (landmark && landmark.type === 'cyber') B.buildings++;
+  // A bandeira vem DEPOIS de tudo, num ponto livre, sem reservar espaço nem sortear nada: antes ela
+  // entrava em `occupied` antes dos prédios e re-sorteava o layout — a mesma peça mudava de 8 para 4
+  // prédios ao ganhar a missão (e a missão de cidade conta prédios). Também não pisa mais na pista.
+  if (tile.quest) { const f = flagSpot(tile, occupied, polys); drawFlag(B, f.x, f.z, Math.atan2(f.z, f.x) + Math.PI / 2, tile.quest.color); }
   const out = B.build();
   out.routes = routes; out.polys = polys; out.hub = hub;
   return out;
+}
+
+// Ponto da bandeira de missão: no setor do grupo da missão (fora das saídas de conector), ou, numa
+// missão de conector, ao lado da pista dele; o ponto com mais folga em relação a prédios, marco e pista.
+// Determinístico e sem RNG: não altera nada do resto da peça.
+function flagSpot(tile, occupied, polys) {
+  const grp = tile.quest.group, cn = [tile.conn, tile.conn2].find((c) => c && GROUPS[c.type] === grp);
+  const exits = new Set([...(tile.conn ? tile.conn.exits : []), ...(tile.conn2 ? tile.conn2.exits : [])]);
+  let sectors = [0, 1, 2, 3, 4, 5].filter((i) => !cn && GROUPS[tile.ground[i]] === grp);
+  const free = sectors.filter((i) => !exits.has(i)); if (free.length) sectors = free;
+  if (!sectors.length) sectors = [0, 1, 2, 3, 4, 5];
+  const ex = cn ? edgeAngle(cn.exits[0]) : 0, exX = Math.cos(ex) * APO, exZ = Math.sin(ex) * APO;
+  let best = null;
+  for (const i of sectors) {
+    const a = edgeAngle(i), dx = Math.cos(a), dz = Math.sin(a);
+    for (const t of [0.42, 0.52, 0.62, 0.72]) for (const s of [-0.6, -0.3, 0, 0.3, 0.6]) {
+      const T = t * APO, hw = Math.max(0, T * 0.577 * 0.8 - 0.05), x = dx * T - dz * s * hw, z = dz * T + dx * s * hw;
+      let clear = 1;
+      for (const o of occupied) clear = Math.min(clear, Math.hypot(o.x - x, o.z - z) - (o.r || 0));
+      if (polys) { const dl = distToPolys(polys, x, z); if (dl < 0.2) continue; clear = Math.min(clear, dl - 0.1); }
+      const score = clear - (cn ? 0.5 * Math.hypot(x - exX, z - exZ) : 0);
+      if (!best || score > best.score) best = { x, z, score };
+    }
+  }
+  return best || { x: Math.cos(edgeAngle(sectors[0])) * 0.5, z: Math.sin(edgeAngle(sectors[0])) * 0.5 };
 }
 
 // Geometria de realce de uma formação: setores do grupo + faixa do conector (uma cor por grupo, material translúcido)

@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js';
-import { RNG } from './rng.js';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js';
-import { initAudio, play, setMuted, isMuted } from './audio.js';
-import { CameraRig, attachInput } from './controls.js';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011a';
+import { RNG } from './rng.js?v=20261011a';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011a';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011a';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011a';
+import { CameraRig, attachInput } from './controls.js?v=20261011a';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -250,13 +250,13 @@ function placeHi(m, t, group) {
   m.position.set(w.x, TILE_H + 0.012, w.z); m.rotation.y = (-t.rot * Math.PI) / 3; m.userData.group = group;
 }
 // grupos de formação que a peça na casa (q,r) com esta avaliação tocaria, e as casas de cada um
-function formationGroups(q, r, ev, tile = S.current, rot = S.rot) {
+function formationGroups(q, r, ev, tile = S.current, rot = S.rot, all = false) { // `all`: inclui Snowpunk/Baldio (prévia de missão)
   const byGroup = new Map();
   for (let i = 0; i < 6; i++) {
     if (ev.sides[i] !== 1) continue;
     const nk = key(q + DIRS[i][0], r + DIRS[i][1]), nb = S.tiles.get(nk);
     for (const g of sideGroups(tile, local(i, rot))) { // a estrada na cidade liga a rede E a cidade
-      if (g === 'plain' || g === 'grass') continue; // gelo e baldio não formam "formação": não vale realçar meio tabuleiro
+      if (!all && (g === 'plain' || g === 'grass')) continue; // no REALCE, gelo e baldio ficam de fora (acenderia meio tabuleiro); nas missões contam
       if (!nb || !sideHas(nb, opp(i), g)) continue;
       let set = byGroup.get(g); if (!set) { set = new Set(); byGroup.set(g, set); }
       if (!set.has(nk)) for (const k of regionKeys(nk, g)) set.add(k);
@@ -587,7 +587,7 @@ function evalPlacement(q, r, tile, rot, peek = false) {
     neighbors++;
     const mine = edgeAt(tile, rot, i), theirs = edgeAt(nb.tile, nb.rot, opp(i));
     if (nb.tile.hidden && !peek) { if (isConnector(mine)) { legal = false; sides.push(-1); } else sides.push(3); continue; }
-    if (compatible(mine, theirs)) { matches++; matchedTypes.push(mine); sides.push(1); if (isConnector(mine)) links++; }
+    if (compatible(mine, theirs)) { matches++; matchedTypes.push(mine); sides.push(1); if (isConnector(mine) && isConnector(theirs)) links++; } // rede só continua em rede (esgoto na lagoa encaixa, mas não é "rede continua")
     else if (isConnector(mine) || isConnector(theirs)) { legal = false; sides.push(-1); } // conector interrompido: proibido (friso vermelho baixo)
     else sides.push(2);
   }
@@ -628,7 +628,7 @@ function bestPlacement(tile, cells) {
     for (let rot = 0; rot < 6; rot++) {
       const ev = evalPlacement(cell.q, cell.r, tile, rot);
       if (!ev.legal) continue;
-      const score = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + (ev.matches === ev.neighbors ? 3 : 0) + S.rng.float();
+      const score = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + (ev.matches === ev.neighbors ? 3 : 0) + Math.random(); // desempate FORA do S.rng: dica/pré-posição não podem mudar a pilha (desafio diário)
       if (!best || score > best.score) best = { q: cell.q, r: cell.r, rot, score, ev };
     }
   }
@@ -693,13 +693,13 @@ function clearBoard() {
   stackRoot.clear(); curRoot.clear(); curTileGroup = null; stackTopGroup = null; uiAnims.length = 0;
   for (const hk of [...harmonyFx.keys()]) removeHarmonyFx(hk);
   for (const R of S.relics) fxGroup.remove(R.beam); S.relics = []; S.sinceRelic = 0;
-  S.selected = null; S.undo = null; S.pendingGain = 0; $('qlabels').innerHTML = ''; document.querySelectorAll('.flyhex').forEach((e) => e.remove());
+  S.selected = null; S.undo = null; S.pendingGain = 0; $('qlabels').innerHTML = ''; document.querySelectorAll('.flyhex').forEach((e) => { e.getAnimations().forEach((a) => a.cancel()); e.remove(); });
 }
 
 // ---------- peça atual / fantasma ----------
 function setGhost(tile) {
   ghostGroup.clear();
-  if (!tile) { ghostGroup.visible = false; ghostShadow.visible = false; hideFormation(); return; }
+  if (!tile) { S.selected = null; updateGhost(); ghostGroup.visible = false; ghostShadow.visible = false; hideFormation(); return; } // fim de jogo: botão, frisos e faixas apagam
   ghostGroup.add(makeTileGroup(tile, ghostLit, ghostGlow, false), ghostHi);
   updateGhost();
 }
@@ -719,14 +719,15 @@ function updateGhost() {
   const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot);
   setSeamStates(seamGhost, ev); seamGhost.boost = ev.perfect ? 0.6 : 0;
   if (ev.legal && ev.matches) showFormation(S.selected.q, S.selected.r, ev); else hideFormation();
-  previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev) : new Map());
+  previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true) : new Map());
+  previewPendingGoal(ev);
   hoverFx.cols = ev.sides.map((st, i) => (st === 1 ? hexCss(EDGE_COLORS[ev.types[i]] || 0xffffff) : null)).filter(Boolean);
   hoverFx.target = hoverFx.cols.length ? (ev.perfect ? 1.0 : 0.5 + 0.1 * ev.matches) : 0;
   if (ghostPos.x.target !== w.x || ghostPos.z.target !== w.z) { ghostPos.x.target = w.x; ghostPos.z.target = w.z; ghostPos.arc = 1; }
   ghostLit.color.setHex(0xffffff); ghostGlow.color.setHex(0xffffff);
   setSlotMaterials(ev);
   bp.disabled = !ev.legal; // nesta rotação o conector bateria em outra coisa: só gira (o lado ruim fica com friso vermelho baixo)
-  const bonus = ev.legal ? previewBonus(S.selected.q, S.selected.r, S.current, S.rot) : { shut: 0, harmony: 0 }, basePts = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + bonus.shut + bonus.harmony;
+  const bonus = ev.legal ? previewBonus(S.selected.q, S.selected.r, S.current, S.rot) : { shut: 0, harmony: 0, terminal: 0, relic: 0 }, basePts = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + bonus.shut + bonus.harmony + bonus.terminal + bonus.relic;
   bp.innerHTML = ev.legal ? `Colocar <b>+${basePts}</b>${ev.links ? ' ⇢' : ''}${ev.perfect ? ' ★' : ''}${bonus.shut ? ' ⬢' : ''}${bonus.harmony ? ' ✺' : ''}` : 'Gire a peça';
   bp.classList.toggle('perfect', ev.legal && ev.perfect);
 }
@@ -813,7 +814,7 @@ function autoPreview(from) {
 function frontier() {
   const groups = {}, ends = [];
   for (const t of S.tiles.values()) for (let i = 0; i < 6; i++) {
-    if (S.tiles.has(key(t.q + DIRS[i][0], t.r + DIRS[i][1]))) continue;
+    if (t.tile.hidden || S.tiles.has(key(t.q + DIRS[i][0], t.r + DIRS[i][1]))) continue; // achado oculto não conta (entregaria o bioma)
     const e = edgeAt(t.tile, t.rot, i), g = groupOf(e);
     groups[g] = (groups[g] || 0) + 1;
     if (isConnector(e)) ends.push({ type: e, ground: t.tile.ground[0] });
@@ -828,21 +829,21 @@ function steerStack() {
   const t = S.stack[2]; if (!t || t.quest || t._steered) return;
   const { ends } = frontier(); if (!ends.length || !S.rng.chance(STEER_CHANCE)) return;
   const e = S.rng.pick(ends), nt = continuationTile(S.rng, e.type, e.ground); nt._steered = true;
+  if (S.undo) S.undo.steer = { from: S.stack[2], to: nt }; // o desfazer devolve a peça original
   S.stack[2] = nt;
 }
 
-// Tamanho da maior formação de cada grupo (e prédios da maior cidade): o alvo da missão parte
-// daí, senão a bandeira caía numa rede que já tinha passado do número e cumpria na hora.
-function questContext() {
-  const have = {}, seen = {}; let city = 0;
-  for (const [k, t] of S.tiles) for (let i = 0; i < 6; i++) for (const g of sideGroups(t.tile, local(i, t.rot))) {
-    if (g === 'plain' || g === 'grass') continue;
-    const sg = seen[g] || (seen[g] = new Set()); if (sg.has(k)) continue;
-    const keys = regionKeys(k, g); for (const x of keys) sg.add(x);
-    have[g] = Math.max(have[g] || 0, keys.size);
-    if (g === 'cyber') { let b = 0; for (const x of keys) b += buildingsOf(S.tiles.get(x).tile); city = Math.max(city, b); }
-  }
-  return { level: questLevel(S.placed), have, city };
+// O alvo da missão NÃO olha mais a maior formação do tabuleiro inteiro (dava "142 prédios" para
+// uma bandeira longe da cidade grande): ele se ajusta à formação em que a bandeira entra (rebaseQuest).
+const questContext = () => ({ level: questLevel(S.placed) });
+// Progresso de uma missão sobre um conjunto de casas: cidade conta PRÉDIOS (soma por peça), o resto conta peças.
+const sumBuildings = (keys) => { let n = 0; for (const k of keys) n += buildingsOf(S.tiles.get(k).tile); return n; };
+const questProgress = (qst, keys) => (qst.kind === 'city' ? sumBuildings(keys) : keys.size);
+// A bandeira acabou de entrar no tabuleiro: se ela caiu numa formação que já existia, o alvo passa a
+// ser no mínimo (tamanho dela + o crescimento pedido). Ligar à rede grande vale, mas não cumpre de graça.
+function rebaseQuest(qst) {
+  const p = questProgress(qst, regionKeys(qst.tileKey, qst.group));
+  qst.target = Math.max(qst.target, p + (qst.grow || 0)); qst.progress = p;
 }
 // ---------- missões: nascem na peça que está no topo da pilha (o jogador vê chegando) ----------
 function maybeAssignQuest() {
@@ -855,6 +856,7 @@ function maybeAssignQuest() {
   if (!q) return;
   q.color = GROUP_INFO[q.group].color; tile.quest = q; tile._geo = null; tile._slab = null; tile._hi = null;
   if (q.kind === 'city') q.progress = buildingsOf(tile);
+  if (S.undo) S.undo.questTile = tile; // o desfazer tira a bandeira que nasceu neste saque
   S.sinceQuest = 0;
 }
 
@@ -864,22 +866,28 @@ function drawNext(from, silentStack) {
   S.current = S.stack.shift() || null;
   S.rot = 0;
   if (!S.current) { setGhost(null); refreshCurrentPreview(); rebuildStack(); updateHUD(); gameOver(); return; }
-  steerStack();
-  maybeAssignQuest();
-  if (S.started && S.tileList.length) spawnRelic();
+  // extras do saque: se um deles falhar, o turno NÃO pode parar no meio (o fantasma ficava com a
+  // peça antiga em cima da recém-colocada e a peça real na mão era outra — 10/10)
+  safely(steerStack); safely(maybeAssignQuest);
+  if (S.started && S.tileList.length) safely(spawnRelic);
   setGhost(S.current); refreshCurrentPreview(); rebuildStack(0, true); updateHUD();
   ghostGroup.rotation.y = 0; if (curTileGroup) curTileGroup.rotation.y = 0;
   autoPreview(from);
   renderQuests(); // a missão da peça na mão aparece como card pendente (sem texto no meio da tela)
 }
+function safely(fn) { try { fn(); } catch (err) { console.error('[punkromantik]', fn.name, err); } }
 const ORD = ['', '', 'DUPLO', 'TRIPLO', 'QUÁDRUPLO', 'QUÍNTUPLO', 'SÊXTUPLO'];
+// Clique duplo em "Colocar" ou espaço segurado colocavam a peça seguinte sem o jogador vê-la (ela já
+// chega sólida numa casa válida). Os comandos do JOGADOR passam por aqui; PR.commitPlacement (bot/auto) não.
+let lastCommit = 0;
+function playerCommit() { const now = performance.now(); if (now - lastCommit < 450) return; lastCommit = now; commitPlacement(); }
 function commitPlacement() {
   if (!S.current || !S.selected || S.over) return;
   const { q, r } = S.selected, tile = S.current, rot = S.rot;
   const ev = evalPlacement(q, r, tile, rot, true);
   if (!ev.legal) { play('bad'); return; }
   // instantâneo para o único "desfazer" permitido
-  S.undo = { q, r, tile, rot, score: S.score, placed: S.placed, perfects: S.perfects, questsDone: S.questsDone, questsLost: S.questsLost, quests: S.quests.map((x) => ({ ...x })), gained: 0, sinceQuest: S.sinceQuest, lowWarned: S.lowWarned, hints: S.hints };
+  S.undo = { q, r, tile, rot, score: S.score, placed: S.placed, perfects: S.perfects, questsDone: S.questsDone, questsLost: S.questsLost, quests: S.quests.map((x) => ({ ...x })), gained: 0, sinceQuest: S.sinceQuest, lowWarned: S.lowWarned, hintGain: 0, best: S.best, sinceRelic: S.sinceRelic, gains: { ...S.gains }, rng: S.rng.state };
   addTile(q, r, tile, rot, true, ev);
   S.placed++;
   const w = toWorld(q, r);
@@ -924,7 +932,7 @@ function commitPlacement() {
     play('relic'); confettiBurst(2); pulse(rw, GROUP_HEX[relicHit.g]); spawnBurst(rw, [GROUP_INFO[relicHit.g].color, '#ffffff'], 36, 1.1);
     banner(`✦ <b>ACHADO</b> <b class="big">+${relicHit._tiles}</b> ${icon('tile', 18)} <small>+${RELIC_PTS}</small>`, '', 'quest reward', 3200);
   }
-  if (tile.quest) S.quests.push({ ...tile.quest, tileKey: key(q, r) });
+  if (tile.quest) { const nq = { ...tile.quest, tileKey: key(q, r) }; rebaseQuest(nq); S.quests.push(nq); }
   const fromRect = { x: (window.innerWidth / 2), y: window.innerHeight * 0.36 };
   gained += checkQuests();
   S.undo.gained = gained;
@@ -942,10 +950,19 @@ function commitPlacement() {
 // médio prazo além do encaixe de cada jogada. Gelo conta; Baldio (respiro) e redes não.
 const CLOSABLE = ['plain', 'cyber', 'solar', 'rock'];
 // prevê os bônus (região fechada, harmonia) pondo a peça no tabuleiro por um instante (regionKeys lê S.tiles)
+// Tudo que commitPlacement paga além de encaixe/rede/perfeito — o botão "Colocar +N" tem que bater
+// com o que entra no placar. (Faltavam o ponto final +20 e o achado ligado +80.) Achado ainda oculto
+// fica de fora de propósito: a prévia não entrega o palpite.
 function previewBonus(q, r, tile, rot) {
-  const k = key(q, r); if (S.tiles.has(k)) return { shut: 0, harmony: 0 };
+  const none = { shut: 0, harmony: 0, terminal: 0, relic: 0 };
+  const k = key(q, r); if (S.tiles.has(k)) return none;
+  const ev = evalPlacement(q, r, tile, rot);
+  const terminal = isTerminal(tile) && ev.sides[(tile.conn.exits[0] + rot) % 6] === 1 ? 20 : 0;
   S.tiles.set(k, { q, r, tile, rot });
-  try { return { shut: closedRegions(q, r, tile, rot).reduce((n, c) => n + c.points, 0), harmony: newHarmonies(q, r).length * HARMONY_PTS }; } finally { S.tiles.delete(k); }
+  try {
+    const relic = S.relics.filter((R) => !R.claimed && !R.hidden && relicConnected(R)).length * RELIC_PTS;
+    return { shut: closedRegions(q, r, tile, rot).reduce((n, c) => n + c.points, 0), harmony: newHarmonies(q, r).length * HARMONY_PTS, terminal, relic };
+  } finally { S.tiles.delete(k); }
 }
 function closedRegions(q, r, tile, rot) {
   const k = key(q, r), out = [], seen = new Set();
@@ -1086,7 +1103,7 @@ const hexDist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(
 const relicBeamGeo = new THREE.CylinderGeometry(0.06, 0.32, 9, 14, 1, true);
 const relicAt = (k) => S.relics.find((R) => R.k === k);
 function spawnRelic(force) {
-  const waiting = S.relics.filter((R) => !R.claimed).length;
+  const waiting = S.relics.filter((R) => !R.claimed).length, since0 = S.sinceRelic;
   if (!force && (waiting >= RELIC_MAX || S.placed < RELIC_FROM || S.stack.length < 6 || ++S.sinceRelic < 9 || !S.rng.chance(0.25))) return false;
   const list = S.tileList, opts = ['cyber', 'solar', 'rock', 'plain'];
   for (let tries = 0; tries < 120; tries++) {
@@ -1104,6 +1121,7 @@ function spawnRelic(force) {
     const wp = toWorld(c.q, c.r), beam = new THREE.Mesh(relicBeamGeo, new THREE.MeshBasicMaterial({ color: RELIC_BEAM, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
     beam.position.set(wp.x, TILE_H + 4.5, wp.z); beam.layers.enable(BLOOM); fxGroup.add(beam);
     S.relics.push({ k: key(c.q, c.r), q: c.q, r: c.r, g, beam, claimed: false, hidden: true, pulse: 0 });
+    if (S.undo && !force) S.undo.spawned = { R: S.relics[S.relics.length - 1], since: since0 }; // o desfazer apaga o achado deste saque
     S.sinceRelic = 0;
     spawnBurst(wp, ['#c8ccd6', '#ffffff'], 18, 0.8); play('appear');
     return true;
@@ -1162,6 +1180,10 @@ function undoLast() {
   for (const R of u.relics || []) { R.claimed = false; R.beam.material.opacity = 0.32; R.beam.scale.set(1, 1, 1); }
   for (const R of u.revealed || []) setRelicHidden(R, true); // o palpite volta a ficar em aberto
   const k = key(u.q, u.r), t = removeTile(k); if (!t) { S.undo = null; updateUndoButton(); return; }
+  // desfaz também o que aconteceu ao sacar a peça seguinte: achado novo, bandeira nova, peça trocada
+  if (u.spawned) { const R = u.spawned.R; removeTile(R.k); fxGroup.remove(R.beam); S.relics.splice(S.relics.indexOf(R), 1); S.sinceRelic = u.spawned.since; }
+  if (u.questTile) { const qt = u.questTile; qt.quest = null; qt._geo = null; qt._slab = null; qt._hi = null; }
+  if (u.steer) { const i = S.stack.indexOf(u.steer.to); if (i >= 0) S.stack[i] = u.steer.from; }
   play('appear');
   const w = toWorld(u.q, u.r);
   spawnBurst(w, ['#ffffff', '#9ff5ff'], 10, 0.7);
@@ -1169,11 +1191,14 @@ function undoLast() {
   const ghostCopy = t.group; ghostCopy.position.y = 0; scene.add(ghostCopy);
   anims.push({ obj: ghostCopy, prop: 'undo', t: 0, dur: 0.4 });
   S.score = u.score; scoreShown = S.score; scoreRoll = null; $('score').textContent = S.score; $('score-box').classList.remove('rolling'); syncRecord();
-  S.placed = u.placed; S.perfects = u.perfects; S.questsDone = u.questsDone; S.questsLost = u.questsLost; S.sinceQuest = u.sinceQuest; S.lowWarned = u.lowWarned; S.hints = u.hints; updateHintButton();
+  S.placed = u.placed; S.perfects = u.perfects; S.questsDone = u.questsDone; S.questsLost = u.questsLost; S.sinceQuest = u.sinceQuest; S.lowWarned = u.lowWarned; S.hints -= u.hintGain; updateHintButton(); // só tira a dica que a missão deu: a usada depois não volta
+  S.best = u.best; try { localStorage.setItem('pr_best', S.best); } catch (e) {} syncRecord();
+  S.sinceRelic = u.sinceRelic; S.gains = u.gains; S.rng.state = u.rng; // mesmo sorteio ao refazer: nada de re-roll
   S.quests = u.quests.map((x) => ({ ...x }));
-  if (u.gained) S.stack.splice(S.stack.length - u.gained, u.gained);
-  document.querySelectorAll('.flyhex').forEach((e) => e.remove()); S.pendingGain = 0;
+  // devolve a peça sacada ANTES de tirar as ganhas: se a pilha estava vazia, a peça sacada era uma das ganhas
   if (S.current) S.stack.unshift(S.current);
+  if (u.gained) S.stack.splice(S.stack.length - u.gained, u.gained);
+  document.querySelectorAll('.flyhex').forEach((e) => { e.getAnimations().forEach((a) => a.cancel()); e.remove(); }); S.pendingGain = 0;
   S.current = u.tile; S.rot = u.rot;
   S.undo = null;
   refreshSlots();
@@ -1187,8 +1212,7 @@ function checkQuests() {
   for (const qst of S.quests) {
     const keys = regionKeys(qst.tileKey, qst.group);
     const before = qst.progress;
-    if (qst.kind === 'city') { let sum = 0; for (const k of keys) sum += buildingsOf(S.tiles.get(k).tile); qst.progress = sum; }
-    else qst.progress = keys.size;
+    qst.progress = questProgress(qst, keys);
     if (qst.progress !== before) qst._bump = true;
     // "N+" cumpre ao chegar OU passar do número (ligar numa rede maior também vale); "N" exige o número exato
     if (qst.exact ? qst.progress === qst.target : qst.progress >= qst.target) done.push(qst);
@@ -1200,7 +1224,7 @@ function checkQuests() {
     S.score += qst.reward.points;
     for (let i = 0; i < qst.reward.tiles; i++) S.stack.push(genTile(S.rng));
     gained += qst.reward.tiles; gain('quest', qst.reward.tiles);
-    if (qst.reward.hints) { S.hints += qst.reward.hints; updateHintButton(); }
+    if (qst.reward.hints) { S.hints += qst.reward.hints; if (S.undo) S.undo.hintGain += qst.reward.hints; updateHintButton(); }
     const t = S.tiles.get(qst.tileKey), w = toWorld(t.q, t.r);
     play('quest'); confettiBurst(2); kick(0.6, ['#c4ff2a', qst.color], 0.3);
     scoreSign(qst.reward.points, 'quest', `${icon(questIcon(qst), 16)} missão`, w);
@@ -1217,7 +1241,7 @@ function checkQuests() {
     if (qst._card) { qst._card.classList.add('lost'); const c = qst._card; setTimeout(() => c.remove(), 900); qst._card = null; }
     const t = S.tiles.get(qst.tileKey); if (t) spawnBurst(toWorld(t.q, t.r), ['#ff5c7a', '#55506a'], 14, 0.6);
   }
-  renderQuests(done.length || lost.length ? 0 : 400);
+  renderQuests(done.length || lost.length ? 900 : 400); // espera o cartão cumprido/perdido terminar a animação
   return gained;
 }
 function rewardBanner(q) {
@@ -1271,7 +1295,7 @@ function demoBoard(n) {
     if (!b) break;
     addTile(b.q, b.r, tile, b.rot, false); refreshSlots();
   }
-  for (const s of S.slots.values()) slotGroup.remove(s.mesh);
+  for (const s of S.slots.values()) slotGroup.remove(s.mesh, s.fill, s.ticks);
   S.slots.clear();
   rig.autoOrbit = true; rig.dist = isNarrow() ? 16 : 13; rig.polar = 0.95;
 }
@@ -1300,6 +1324,7 @@ function spawnBurst(w, colors, n, power = 1) {
 function spawnAmbient() {
   const list = S.tileList; if (!list.length) return;
   const t = list[(Math.random() * list.length) | 0], w = toWorld(t.q, t.r);
+  if (t.tile.hidden) return; // achado oculto: partícula do bioma entregaria o palpite
   if (Math.hypot(w.x - rig.target.x, w.z - rig.target.z) > rig.dist * 1.5) return;
   const rot = (t.rot * Math.PI) / 3, geo = t.tile._geo;
   const local = (x, z) => ({ x: w.x + x * Math.cos(rot) - z * Math.sin(rot), z: w.z + x * Math.sin(rot) + z * Math.cos(rot) });
@@ -1865,7 +1890,7 @@ function renderQuests(delayMs = 0) {
     const pend = S.current && S.current.quest && !S.over ? S.current.quest : null;
     if (pend) { // missão da peça na mão: card tracejado com ícone, alvo e recompensa (começa quando a peça for colocada)
       const d = document.createElement('div'); d.className = 'quest pending'; d.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
-      d.innerHTML = `<div class="qhead"><span class="qicon">${icon(questIcon(pend), 21)}</span><span class="qleft">${questGoal(pend)}</span><span class="qunit">${icon(pend.kind === 'city' ? 'city' : 'tile', 13)}</span><span class="qrew">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +${pend.reward.hints}${icon('bulb', 11)}` : ''}</span></div>
+      d.innerHTML = `<div class="qhead"><span class="qicon">${icon(questIcon(pend), 21)}</span><span class="qleft">${pendGoal(pend)}</span><span class="qunit">${icon(pend.kind === 'city' ? 'city' : 'tile', 13)}</span><span class="qrew">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +${pend.reward.hints}${icon('bulb', 11)}` : ''}</span></div>
         <div class="qbody"><div class="qin"><p>Nova missão: ${questText(pend)} a partir desta peça.</p><p class="qr">Recompensa: <b>+${pend.reward.points}</b> pts · <b>+${pend.reward.tiles}</b> peças${pend.reward.hints ? ' · <b>+1</b> dica' : ''}</p></div></div>`;
       d.addEventListener('click', () => d.classList.toggle('open'));
       el.appendChild(d);
@@ -1900,11 +1925,11 @@ function renderQuests(delayMs = 0) {
     pendLabel = null;
     if (pend) { // a peça na mão também ganha o balão: a bandeira sozinha não dizia que ali tem peças a ganhar
       const l = document.createElement('div'); l.className = 'qlabel pending'; l.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
-      l.innerHTML = labelHTML(pend, `<b>${questGoal(pend)}</b>`) + `<span class="qgain">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +1${icon('bulb', 11)}` : ''}</span>`;
+      l.innerHTML = labelHTML(pend, `<b>${pendGoal(pend)}</b>`) + `<span class="qgain">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +1${icon('bulb', 11)}` : ''}</span>`;
       pendLabel = l; lab.appendChild(l);
     }
     $('quests-title').classList.toggle('hidden', S.quests.length === 0 && !pend);
-    if (S.selected && S.current && !S.over) { const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot); previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev) : new Map()); }
+    if (S.selected && S.current && !S.over) { const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot); previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true) : new Map()); }
   };
   if (delayMs) setTimeout(build, delayMs); else build();
 }
@@ -1914,8 +1939,7 @@ function previewQuests(byGroup) {
     const keys = byGroup.get(q.group);
     let proj = null;
     if (keys && keys.has(q.tileKey) && S.current) {
-      if (q.kind === 'city') { let sum = buildingsOf(S.current); for (const k of keys) sum += buildingsOf(S.tiles.get(k).tile); proj = sum; }
-      else proj = keys.size + 1;
+      proj = questProgress(q, keys) + (q.kind === 'city' ? buildingsOf(S.current) : 1); // + a peça na mão
     }
     const left = questLeft(q), raw = proj == null ? null : q.target - proj, newLeft = raw == null ? null : q.exact ? raw : Math.max(0, raw);
     const cls = newLeft == null ? '' : newLeft === 0 ? 'hit' : newLeft < 0 ? 'over' : '';
@@ -1923,6 +1947,20 @@ function previewQuests(byGroup) {
     if (q._label) { q._label.innerHTML = labelHTML(q, html); q._label.className = 'qlabel ' + cls; }
     if (q._card) { const ql = q._card.querySelector('.qleft'); if (ql) { ql.innerHTML = html.replace(/^<b>|<\/b>$/g, ''); ql.classList.toggle('hit', cls === 'hit'); ql.classList.toggle('over', cls === 'over'); } }
   }
+}
+// A missão da peça na mão mostra o alvo que ela TERÁ na casa onde o fantasma está: se a bandeira cai
+// numa formação que já existe, rebaseQuest sobe o alvo — antes o balão dizia "5+" e virava "9" ao colocar.
+const pendGoal = (q) => `${q._shown || q.target}+`;
+function previewPendingGoal(ev) {
+  const q = S.current && S.current.quest; if (!q) return;
+  let shown = q.target;
+  if (ev.legal) {
+    const keys = formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true).get(q.group) || new Set();
+    const p = (q.kind === 'city' ? sumBuildings(keys) + buildingsOf(S.current) : keys.size + 1);
+    shown = Math.max(q.target, p + (q.grow || 0));
+  }
+  if (shown === (q._shown || q.target)) return;
+  q._shown = shown; renderQuests(0);
 }
 function updateQuestLabels() {
   if (pendLabel) { // balão da peça na mão acompanha o fantasma
@@ -2051,7 +2089,7 @@ attachInput(canvas, rig, {
     if (!S.started || S.over) return;
     const c = cellAt(x, y);
     if (!c) return;
-    if (S.selected && S.selected.q === c.q && S.selected.r === c.r) commitPlacement();
+    if (S.selected && S.selected.q === c.q && S.selected.r === c.r) playerCommit();
     else selectSlot(c);
   },
   onRotate(dir) { rotate(dir); },
@@ -2067,9 +2105,10 @@ let wheelAcc = 0;
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
+  if (k !== 'escape' && [...document.querySelectorAll('.overlay')].some((o) => !o.classList.contains('hidden'))) return; // menu/ajuda aberto: o jogo fica parado
   if (k === 'r' || k === 'e') rotate(1);
   else if (k === 'q') rotate(-1);
-  else if (k === ' ' || k === 'enter') { e.preventDefault(); commitPlacement(); }
+  else if (k === ' ' || k === 'enter') { e.preventDefault(); if (!e.repeat) playerCommit(); }
   else if (k === 'h') hint();
   else if (k === 'z' || k === 'u' || k === 'backspace') { e.preventDefault(); undoLast(); }
   else if (k === 'arrowleft' || k === 'a') rig.pan(-40, 0);
@@ -2078,7 +2117,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'arrowdown' || k === 's') rig.pan(0, 40);
   else if (k === '+' || k === '=') rig.zoom(0.85);
   else if (k === '-') rig.zoom(1.18);
-  else if (k === 'escape') { const open = [...document.querySelectorAll('.overlay')].some((o) => !o.classList.contains('hidden')); if (open) showOverlay(null); else if (S.started) { syncMenuToggles(); showOverlay('overlay-menu'); } }
+  else if (k === 'escape') { const open = [...document.querySelectorAll('.overlay')].some((o) => !o.classList.contains('hidden')); if (open) showOverlay(S.started ? null : 'overlay-start'); else if (S.started) { syncMenuToggles(); showOverlay('overlay-menu'); } }
 });
 // Move a peça atual para o melhor encaixe (usado pela dica e pela demonstração automática)
 function applyBest() {
@@ -2104,9 +2143,13 @@ function updateHintButton() {
 
 $('rot-l').addEventListener('click', () => rotate(-1));
 $('current-area').addEventListener('click', () => rotate(1));
-$('current-area').addEventListener('wheel', (e) => { e.preventDefault(); rotate(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+$('current-area').addEventListener('wheel', (e) => { // mesmo acumulador do tabuleiro: trackpad não gira 4 passos de uma vez
+  e.preventDefault(); if (!e.deltaY) return;
+  if (Math.abs(e.deltaY) >= 50) { wheelAcc = 0; rotate(e.deltaY > 0 ? 1 : -1); return; }
+  wheelAcc += e.deltaY; while (wheelAcc >= 60) { wheelAcc -= 60; rotate(1); } while (wheelAcc <= -60) { wheelAcc += 60; rotate(-1); }
+}, { passive: false });
 $('rot-r').addEventListener('click', () => rotate(1));
-$('btn-place').addEventListener('click', commitPlacement);
+$('btn-place').addEventListener('click', playerCommit);
 $('btn-hint').addEventListener('click', hint);
 $('btn-undo').addEventListener('click', undoLast);
 $('btn-help').addEventListener('click', () => showOverlay('overlay-help'));

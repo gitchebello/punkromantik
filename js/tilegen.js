@@ -1,4 +1,4 @@
-import { RNG } from './rng.js';
+import { RNG } from './rng.js?v=20261011a';
 
 // Terrenos. Cada bioma é uma vertente -punk da mesma proposta estética (é daí que vem o nome
 // do jogo): Cyberpunk, Solarpunk, Sandpunk e Snowpunk. Regiões preenchem setores; conectores atravessam a peça de uma
@@ -151,24 +151,31 @@ export function continuationTile(rng, type, ground) {
 export const isTerminal = (tile) => !!(tile.conn && tile.conn.exits.length === 1);
 export const isFork = (tile) => !!(tile.conn && tile.conn.exits.length >= 3);
 
-// Grupos que uma peça pode "puxar" numa missão (nunca gelo nem baldio)
+// Grupos que uma peça pode "puxar" numa missão: todos, Snowpunk e Baldio inclusive (desde 10/10)
 export function questCandidates(tile) {
   const set = new Set();
-  for (const t of [...tile.edges, ...tile.ground]) { const g = groupOf(t); if (g !== 'plain' && g !== 'grass') set.add(g); }
+  for (const t of [...tile.edges, ...tile.ground]) set.add(groupOf(t)); // todos os biomas têm missão, Baldio e Snowpunk inclusive
   return [...set];
 }
 
 // conectores dependem de peças certas aparecerem: alvo menor que o das regiões
-const QUEST_BASE = { cyber: 6, solar: 6, rock: 5, toxic: 4, rail: 3, road: 3 };
-// quanto a missão pede para CRESCER além da maior formação que o grupo já tem no tabuleiro
-const QUEST_GROW = { cyber: 3, solar: 3, rock: 3, toxic: 2, rail: 2, road: 2 };
+// (cyber não entra aqui: a missão dele conta PRÉDIOS, ver makeQuestFor). Baldio e Snowpunk são os
+// biomas mais comuns da pilha, mas se espalham em manchas pequenas: alvo igual ao do Sandpunk.
+const QUEST_BASE = { plain: 5, grass: 5, solar: 6, rock: 5, toxic: 4, rail: 3, road: 3 };
+// quanto a missão pede para CRESCER (em peças) além da formação em que a bandeira entrou
+const QUEST_GROW = { plain: 3, grass: 3, cyber: 3, solar: 3, rock: 3, toxic: 2, rail: 2, road: 2 };
+// Prédios que uma peça de cidade acrescenta, em média: peça toda cyberpunk ~10, metade ~5, um lado ~1.5
+// (medido em 600 peças). É a taxa de câmbio peças → prédios das missões de cidade.
+export const BUILDINGS_PER_TILE = 5;
 
 // Progressão: o nível sobe a cada QUEST_LEVEL_EVERY peças colocadas. Sem isso o jogo virava
 // infinito no fim: a missão "ligue 3+ trilhos" caía numa malha de 10 e cumpria na hora, pagando
 // 3 peças — e as missões respondiam por ~93% das peças extras de uma partida. Agora:
-//  - o alvo é RELATIVO ao que o jogador já tem: maior formação do grupo + crescimento, e o
-//    crescimento sobe com o nível. Ligar a bandeira à rede grande continua valendo (regra "N+"),
-//    mas só cumpre quando ela passar do tamanho de hoje;
+//  - o alvo é RELATIVO à formação em que a bandeira ENTRA: ao colocar a peça da bandeira, o alvo
+//    vira no mínimo (tamanho dessa formação + `grow`) — ver `rebaseQuest` em main.js. Ligar a bandeira
+//    à rede grande continua valendo (regra "N+"), mas só cumpre quando ela crescer além disso.
+//    (Antes o alvo partia da maior formação do TABULEIRO INTEIRO, mesmo longe da bandeira: saía
+//    "cidade com 142 prédios" para uma bandeira de 10 — impossível sem ligar a uma cidade distante.)
 //  - a recompensa em PEÇAS encolhe com o nível (no fim, 1 peça por missão), enquanto os PONTOS
 //    sobem: quem joga bem continua sendo premiado, mas no placar, e a partida termina.
 export const QUEST_LEVEL_EVERY = 15;
@@ -177,37 +184,39 @@ export const questLevel = (placed) => Math.floor(placed / QUEST_LEVEL_EVERY);
 // A fração cai com o nível (80% → 50%), mas como o crescimento sobe, a missão difícil paga mais
 // peças que a fácil. Fica sempre abaixo de 1 peça por peça exigida — é isso que garante que a
 // partida acaba (a versão anterior pagava 1 peça no fim, por missão grande: ficou dura demais).
-const rewardTiles = (grow, level) => Math.max(2, Math.min(6, Math.round(grow * Math.max(0.5, 0.8 - 0.04 * level))));
+// (o teto `grow - 1` garante o "< 1:1" também nas missões pequenas de conector, que pediam 2 e pagavam 2)
+const rewardTiles = (grow, level) => Math.min(grow - 1, Math.max(2, Math.min(6, Math.round(grow * Math.max(0.5, 0.8 - 0.04 * level)))));
 
 // Dois tipos de missão:
 //  - 'region': conecte `target` peças do grupo a partir da bandeira (progress = peças ligadas).
 //    Sempre "N+": ligar a formação a uma rede que já passou do número CUMPRE a missão — o jogador
 //    fez a malha se conectar, e isso precisa ser recompensado, não punido.
-//  - 'city':   a cidade ligada à bandeira deve somar `target` prédios (progress = prédios somados).
+//  - 'city':   SEMPRE a missão do Cyberpunk. A cidade ligada à bandeira deve somar `target` PRÉDIOS
+//    (progress = soma dos prédios de cada peça da cidade, `buildingsOf`) — nunca número de peças.
 //    Também é sempre "N+": cidade não tem teto de prédios. Passar de 22 para 25 CUMPRE a missão;
 //    ela só se perde quando a formação fica cercada e não tem mais como crescer.
 //    `buildings` é quantos prédios a própria peça da bandeira tem (vem da geometria).
 // `weights` (opcional): quanto cada grupo está "vivo" na borda do tabuleiro — a missão puxa
 // o grupo que o jogador tem como crescer, em vez de um que vai empacar com progresso 1.
-// `ctx` (opcional): { level, have: {grupo: maior formação}, city: prédios da maior cidade }.
+// `ctx` (opcional): { level }.
+// `grow` vai junto na missão (em peças, ou em prédios na de cidade) para o rebase na colocação.
 export function makeQuest(rng, tile, buildings = 0, weights = null, ctx = null) {
   const cands = questCandidates(tile);
   if (!cands.length) return null;
   const group = weights ? rng.weighted(cands.map((g) => [g, 1 + (weights[g] || 0)])) : rng.pick(cands);
-  const q = makeQuestFor(rng, group, buildings, ctx || { level: 0, have: {}, city: 0 });
+  const q = makeQuestFor(rng, group, buildings, ctx || { level: 0 });
   if (rng.chance(Math.max(0.15, 0.3 - 0.025 * (ctx ? ctx.level : 0)))) q.reward.hints = 1; // às vezes a missão também devolve uma dica
   return q;
 }
 function makeQuestFor(rng, group, buildings, ctx) {
   const L = ctx.level, mult = 1 + 0.2 * L; // pontos sobem com o nível
-  if (group === 'cyber' && buildings > 0 && rng.chance(0.55)) {
-    const grow = 9 + rng.int(9) + 2 * L; // prédios além da maior cidade (uma peça cheia de cidade tem ~8-11)
-    const target = Math.max(buildings, ctx.city || 0) + grow;
-    return { kind: 'city', exact: false, group, target, progress: buildings, reward: { tiles: rewardTiles(Math.round(grow / 4), L), points: Math.round(grow * 10 * mult) } };
+  const grow = QUEST_GROW[group] + rng.int(2) + Math.floor(L * 0.6); // em peças; dificuldade sobe mais devagar que o nível (11/10: era round(L*0.7), aliviado)
+  if (group === 'cyber') { // cidade: conta PRÉDIOS — o mesmo esforço em peças, convertido pela média de prédios por peça
+    const growB = grow * BUILDINGS_PER_TILE + rng.int(3) - 1;
+    return { kind: 'city', exact: false, group, target: buildings + growB, grow: growB, progress: buildings, reward: { tiles: rewardTiles(grow, L), points: Math.round(grow * 20 * mult) } };
   }
-  const grow = QUEST_GROW[group] + rng.int(2) + Math.round(L * 0.7); // dificuldade sobe mais devagar que o nível
-  const target = Math.max(QUEST_BASE[group] + rng.int(3) - 1, (ctx.have[group] || 0) + grow);
-  return { kind: 'region', exact: false, group, target, progress: 1, reward: { tiles: rewardTiles(grow, L), points: Math.round(Math.max(grow, target / 2) * 20 * mult) } };
+  const target = Math.max(QUEST_BASE[group] + rng.int(3) - 1, 1 + grow);
+  return { kind: 'region', exact: false, group, target, grow, progress: 1, reward: { tiles: rewardTiles(grow, L), points: Math.round(Math.max(grow, target / 2) * 20 * mult) } };
 }
 // "8+" (pelo menos); `exact` ficou só por compatibilidade com o HUD
 export const questGoal = (q) => `${q.target}${q.exact ? '' : '+'}`;
