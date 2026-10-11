@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011d';
-import { RNG } from './rng.js?v=20261011d';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011d';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011d';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011d';
-import { CameraRig, attachInput } from './controls.js?v=20261011d';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011f';
+import { RNG } from './rng.js?v=20261011f';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011f';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011f';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011f';
+import { CameraRig, attachInput } from './controls.js?v=20261011f';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -36,7 +36,6 @@ const ICON_PATHS = {
 const icon = (name, size = 18, color = 'currentColor', cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="${color}" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
 const questIcon = (q) => (q.kind === 'city' ? 'city' : q.group);
 const questLeft = (q) => Math.max(0, q.target - q.progress);
-const plus = (q) => (q.exact ? '' : '+'); // "N+": pelo menos N
 
 // ---------- cena ----------
 const canvas = $('scene');
@@ -496,7 +495,7 @@ const dust = (() => {
 const S = {
   tiles: new Map(), slots: new Map(), stack: [], current: null, rot: 0, selected: null, ghostSolid: true,
   score: 0, placed: 0, perfects: 0, questsDone: 0, questsLost: 0, quests: [], over: false, started: false, rng: new RNG(Date.now() >>> 0),
-  best: +(localStorage.getItem('pr_best') || 0), tips: new Set(), lowWarned: false, tileList: [], hints: 5, undo: null, sinceQuest: 0, pendingGain: 0, relics: [], sinceRelic: 0, gains: {},
+  best: +(localStorage.getItem('pr_best') || 0), tips: new Set(), coached: 0, lowWarned: false, tileList: [], hints: 5, undo: null, sinceQuest: 0, pendingGain: 0, relics: [], sinceRelic: 0, gains: {},
 };
 const HINTS_PER_GAME = 5, QUEST_CAP = 4;
 // no começo menos missões abertas ao mesmo tempo (3 nas primeiras 40 peças, depois 4): o jogador sente que dá conta
@@ -934,7 +933,7 @@ function commitPlacement() {
     play('relic'); confettiBurst(2); pulse(rw, GROUP_HEX[relicHit.g]); spawnBurst(rw, [GROUP_INFO[relicHit.g].color, '#ffffff'], 36, 1.1);
     banner(`✦ <b>ACHADO</b> <b class="big">+${relicHit._tiles}</b> ${icon('tile', 18)} <small>+${RELIC_PTS}</small>`, '', 'quest reward', 3200);
   }
-  if (tile.quest) { const nq = { ...tile.quest, tileKey: key(q, r) }; rebaseQuest(nq); S.quests.push(nq); }
+  if (tile.quest) { const nq = { ...tile.quest, tileKey: key(q, r) }; rebaseQuest(nq); if (nq._coach) nq._coachAt = S.placed; S.quests.push(nq); }
   const fromRect = { x: (window.innerWidth / 2), y: window.innerHeight * 0.36 };
   gained += checkQuests();
   S.undo.gained = gained;
@@ -1223,6 +1222,7 @@ function checkQuests() {
   for (const qst of done) {
     S.quests.splice(S.quests.indexOf(qst), 1);
     S.questsDone++;
+    try { localStorage.setItem('pr_qdone', '1'); } catch (e) { /* sem storage: continua aprendiz */ }
     S.score += qst.reward.points;
     for (let i = 0; i < qst.reward.tiles; i++) S.stack.push(genTile(S.rng));
     gained += qst.reward.tiles; gain('quest', qst.reward.tiles);
@@ -1239,7 +1239,7 @@ function checkQuests() {
     S.quests.splice(S.quests.indexOf(qst), 1);
     S.questsLost++;
     play('bad');
-    banner(`${icon('x', 16, '#ff5c7a')} ${icon(questIcon(qst), 20, '#ff5c7a')} <b>missão perdida</b>`, '', 'warn', 2600);
+    banner(`${icon('x', 16, '#ff5c7a')} ${icon(questIcon(qst), 20, '#ff5c7a')} <b>missão perdida</b> <small>${questName(qst)} ficou cercado</small>`, '', 'warn', 3000);
     if (qst._card) { qst._card.classList.add('lost'); const c = qst._card; setTimeout(() => c.remove(), 900); qst._card = null; }
     const t = S.tiles.get(qst.tileKey); if (t) spawnBurst(toWorld(t.q, t.r), ['#ff5c7a', '#55506a'], 14, 0.6);
   }
@@ -1274,7 +1274,7 @@ function newGame(seed, daily = null) {
   if (daily) seed = dailySeed(daily);
   S.rng = new RNG(seed != null ? seed >>> 0 : (Date.now() ^ (Math.random() * 1e9)) >>> 0);
   S.stack = makeStack(S.rng, STACK_SIZE);
-  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null; S.gains = {};
+  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.coached = 0; S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null; S.gains = {};
   updateHintButton(); updateUndoButton();
   addTile(0, 0, starterTile(S.rng), 0, false);
   refreshSlots();
@@ -1881,9 +1881,19 @@ function questText(q) {
   if (q.kind === 'city') return q.exact ? `cidade com <b>exatamente ${q.target}</b> prédios` : `cidade com <b>pelo menos ${q.target}</b> prédios`;
   return `ligue <b>${q.target} ou mais</b> peças de <b>${GROUP_INFO[q.group].name}</b>`;
 }
-// balão: ícone do grupo num disco da cor do grupo + número escuro sobre fundo amarelo
+// balão: ícone do grupo num disco da cor do grupo + "falta N" escuro sobre fundo amarelo
 const labelHTML = (q, num) => `<i class="qarrow"></i><span class="qlic">${icon(questIcon(q), 15)}</span>${num}${icon(q.kind === 'city' ? 'city' : 'tile', 11, 'currentColor', 'unit')}`;
 const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+// Playtest 11/10: o cartão fechado mostrava só "1+" — era quanto FALTA, mas lia como a meta "pelo menos 1",
+// e não dizia o bioma nem o que fazer. Agora o "N+" fica só na meta; o que falta vem escrito por extenso.
+const unitWord = (q, n) => (q.kind === 'city' ? (n === 1 ? 'prédio' : 'prédios') : n === 1 ? 'peça' : 'peças');
+const questName = (q) => (q.kind === 'city' ? 'Prédios Cyberpunk' : GROUP_INFO[q.group].name);
+const leftText = (q, n, to = '') => (n === 0 ? '<b>pronto!</b>' : `${n === 1 ? 'falta' : 'faltam'} <b>${n}</b> ${unitWord(q, n)}${to}`);
+const rewardHTML = (q) => `+${q.reward.tiles}${icon('tile', 11)}${q.reward.hints ? ` +${q.reward.hints}${icon('bulb', 11)}` : ''}`;
+// Quem nunca cumpriu uma missão é tratado como aprendiz: as duas primeiras missões de cada partida abrem
+// o cartão sozinhas (a da mão enquanto ela está na mão; a do tabuleiro durante a jogada seguinte).
+const learner = () => { try { return !localStorage.getItem('pr_qdone'); } catch (e) { return false; } };
+const balloonLeft = (n, to = '') => `<small>${n === 1 ? 'falta' : 'faltam'}</small><b>${n}${to}</b>`;
 let pendLabel = null;
 function renderQuests(delayMs = 0) {
   const el = $('quests'), lab = $('qlabels');
@@ -1891,43 +1901,44 @@ function renderQuests(delayMs = 0) {
     el.innerHTML = ''; lab.innerHTML = '';
     const pend = S.current && S.current.quest && !S.over ? S.current.quest : null;
     if (pend) { // missão da peça na mão: card tracejado com ícone, alvo e recompensa (começa quando a peça for colocada)
-      const d = document.createElement('div'); d.className = 'quest pending'; d.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
-      d.innerHTML = `<div class="qhead"><span class="qicon">${icon(questIcon(pend), 21)}</span><span class="qleft">${pendGoal(pend)}</span><span class="qunit">${icon(pend.kind === 'city' ? 'city' : 'tile', 13)}</span><span class="qrew">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +${pend.reward.hints}${icon('bulb', 11)}` : ''}</span></div>
-        <div class="qbody"><div class="qin"><p>Nova missão: ${questText(pend)} a partir desta peça.</p><p class="qr">Recompensa: <b>+${pend.reward.points}</b> pts · <b>+${pend.reward.tiles}</b> peças${pend.reward.hints ? ' · <b>+1</b> dica' : ''}</p></div></div>`;
-      d.addEventListener('click', () => d.classList.toggle('open'));
+      if (pend._coach == null) pend._coach = learner() && S.coached < 2 && !!++S.coached;
+      const d = document.createElement('div'); d.className = 'quest pending' + (pend._coach ? ' open' : ''); d.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
+      d.innerHTML = `<div class="qhead"><span class="qicon">${icon(questIcon(pend), 21)}</span><span class="qtxt"><span class="qname">nova missão · ${questName(pend)}</span><span class="qleft">ligar <b>${pendGoal(pend)}</b> ${unitWord(pend, 2)}</span></span><span class="qrew">${rewardHTML(pend)}</span></div>
+        <div class="qbody"><div class="qin"><p>A peça na sua mão tem uma <b>bandeira</b>. Coloque-a e vá juntando a ela ${pend.kind === 'city' ? `peças de <b>Cyberpunk</b> até a cidade somar <b>${pendGoal(pend)}</b> prédios (cada peça mostra quantos tem)` : `peças de <b>${GROUP_INFO[pend.group].name}</b>, uma encostada na outra, até a formação ter <b>${pendGoal(pend)}</b> peças (a da bandeira conta)`}.</p><p class="qr">Cumpriu: <b>+${pend.reward.tiles}</b> peças na pilha · <b>+${pend.reward.points}</b> pts${pend.reward.hints ? ' · <b>+1</b> dica' : ''}</p></div></div>`;
+      d.addEventListener('click', () => { pend._coach = false; d.classList.toggle('open'); });
       el.appendChild(d);
     }
     for (const q of S.quests) {
       const info = GROUP_INFO[q.group], left = questLeft(q), pct = Math.max(0, Math.min(1, q.progress / q.target)), ic = questIcon(q);
-      const d = document.createElement('div'); d.className = 'quest' + (q._open ? ' open' : ''); d.style.setProperty('--qc', q.color || info.color);
+      const d = document.createElement('div'); d.className = 'quest' + (q._open || (q._coachAt === S.placed && !(pend && pend._coach)) ? ' open' : ''); // um cartão aberto por vez d.style.setProperty('--qc', q.color || info.color);
       const R = 17, C = 2 * Math.PI * R;
       d.innerHTML = `<div class="qhead">
           <span class="qicon"><svg class="qring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="${R}"/><circle cx="20" cy="20" r="${R}" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct)}"/></svg>${icon(ic, 21)}</span>
-          <span class="qleft${q._bump ? ' bump' : ''}">${left}${plus(q)}</span><span class="qunit">${icon(q.kind === 'city' ? 'city' : 'tile', 13)}</span>
-          <span class="qrew">+${q.reward.tiles}${icon('tile', 11)}${q.reward.hints ? ` +${q.reward.hints}${icon('bulb', 11)}` : ''}</span>
+          <span class="qtxt"><span class="qname">${questName(q)} · ${q.progress}/${q.target}</span><span class="qleft${q._bump ? ' bump' : ''}">${leftText(q, left)}</span></span>
+          <span class="qrew">${rewardHTML(q)}</span>
         </div>
         <div class="qbody"><div class="qin">
-          <p>${cap(questText(q))} a partir da bandeira — já são <b>${q.progress}</b>, faltam <b>${left}</b>.</p>
-          <p class="qr">Recompensa: <b>+${q.reward.points}</b> pts · <b>+${q.reward.tiles}</b> peças${q.reward.hints ? ' · <b>+1</b> dica' : ''}${q.exact ? ' · passar do número cancela a missão' : ' · passar do número também vale'}</p>
+          <p>${q.kind === 'city' ? `Junte peças de <b>Cyberpunk</b> à cidade da bandeira até ela somar <b>${q.target}+</b> prédios` : `Encoste peças de <b>${info.name}</b> na formação da bandeira até ela ter <b>${q.target}+</b> peças`} — já são <b>${q.progress}</b>.</p>
+          <p class="qr">Cumpriu: <b>+${q.reward.tiles}</b> peças na pilha · <b>+${q.reward.points}</b> pts${q.reward.hints ? ' · <b>+1</b> dica' : ''}. Passar do número também vale; se a formação ficar cercada, a missão se perde.</p>
           <button class="qgo" type="button">${icon('pin', 14)} ir até a bandeira</button>
         </div></div>`;
       q._bump = false;
       d.addEventListener('click', (e) => {
         if (e.target.closest('.qgo')) { const t = S.tiles.get(q.tileKey); if (t) { const w = toWorld(t.q, t.r); rig.flyTo(w.x, w.z); pulse(w, new THREE.Color(q.color).getHex()); } return; }
         const open = !d.classList.contains('open');
-        for (const o of S.quests) o._open = false; el.querySelectorAll('.quest.open').forEach((x) => x.classList.remove('open'));
+        for (const o of S.quests) { o._open = false; o._coachAt = -1; } el.querySelectorAll('.quest.open').forEach((x) => x.classList.remove('open'));
         q._open = open; d.classList.toggle('open', open);
       });
       q._card = d; el.appendChild(d);
       const l = document.createElement('div'); l.className = 'qlabel'; l.style.setProperty('--qc', q.color || info.color);
-      l.innerHTML = labelHTML(q, `<b>${left}${plus(q)}</b>`);
+      l.innerHTML = labelHTML(q, balloonLeft(left));
       l.addEventListener('click', () => { const t = S.tiles.get(q.tileKey); if (t) { const w = toWorld(t.q, t.r); rig.flyTo(w.x, w.z); pulse(w, new THREE.Color(q.color).getHex()); } });
       q._label = l; lab.appendChild(l);
     }
     pendLabel = null;
     if (pend) { // a peça na mão também ganha o balão: a bandeira sozinha não dizia que ali tem peças a ganhar
       const l = document.createElement('div'); l.className = 'qlabel pending'; l.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
-      l.innerHTML = labelHTML(pend, `<b>${pendGoal(pend)}</b>`) + `<span class="qgain">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +1${icon('bulb', 11)}` : ''}</span>`;
+      l.innerHTML = labelHTML(pend, `<small>meta</small><b>${pendGoal(pend)}</b>`) + `<span class="qgain">+${pend.reward.tiles}${icon('tile', 11)}${pend.reward.hints ? ` +1${icon('bulb', 11)}` : ''}</span>`;
       pendLabel = l; lab.appendChild(l);
     }
     $('quests-title').classList.toggle('hidden', S.quests.length === 0 && !pend);
@@ -1945,9 +1956,9 @@ function previewQuests(byGroup) {
     }
     const left = questLeft(q), raw = proj == null ? null : q.target - proj, newLeft = raw == null ? null : q.exact ? raw : Math.max(0, raw);
     const cls = newLeft == null ? '' : newLeft === 0 ? 'hit' : newLeft < 0 ? 'over' : '';
-    const html = newLeft == null || newLeft === left ? `<b>${left}${plus(q)}</b>` : `<b>${left}${plus(q)}<span class="to">→ ${newLeft < 0 ? '✕' : newLeft === 0 ? '✓' : newLeft}</span></b>`;
-    if (q._label) { q._label.innerHTML = labelHTML(q, html); q._label.className = 'qlabel ' + cls; }
-    if (q._card) { const ql = q._card.querySelector('.qleft'); if (ql) { ql.innerHTML = html.replace(/^<b>|<\/b>$/g, ''); ql.classList.toggle('hit', cls === 'hit'); ql.classList.toggle('over', cls === 'over'); } }
+    const to = newLeft == null || newLeft === left ? '' : `<span class="to">→ ${newLeft < 0 ? '✕' : newLeft === 0 ? '✓' : newLeft}</span>`;
+    if (q._label) { q._label.innerHTML = labelHTML(q, balloonLeft(left, to)); q._label.className = 'qlabel ' + cls; }
+    if (q._card) { const ql = q._card.querySelector('.qleft'); if (ql) { ql.innerHTML = leftText(q, left, to); ql.classList.toggle('hit', cls === 'hit'); ql.classList.toggle('over', cls === 'over'); } }
   }
 }
 // A missão da peça na mão mostra o alvo que ela TERÁ na casa onde o fantasma está: se a bandeira cai
