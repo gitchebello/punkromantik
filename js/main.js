@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011q';
-import { RNG } from './rng.js?v=20261011q';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011q';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011q';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011q';
-import { CameraRig, attachInput } from './controls.js?v=20261011q';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011r';
+import { RNG } from './rng.js?v=20261011r';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011r';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011r';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011r';
+import { CameraRig, attachInput } from './controls.js?v=20261011r';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -522,7 +522,7 @@ const dust = (() => {
 const S = {
   tiles: new Map(), slots: new Map(), stack: [], current: null, rot: 0, selected: null, ghostSolid: true,
   score: 0, placed: 0, perfects: 0, questsDone: 0, questsLost: 0, quests: [], over: false, started: false, rng: new RNG(Date.now() >>> 0),
-  best: +(localStorage.getItem('pr_best') || 0), tips: new Set(), coached: 0, lowWarned: false, tileList: [], hints: 5, undo: null, sinceQuest: 0, pendingGain: 0, relics: [], sinceRelic: 0, gains: {},
+  best: +(localStorage.getItem('pr_best') || 0), tips: new Set(), coached: 0, lowWarned: false, tileList: [], hints: 5, undo: null, sinceQuest: 0, pendingGain: 0, relics: [], sinceRelic: 0, gains: {}, questSeq: {},
 };
 const HINTS_PER_GAME = 5, QUEST_CAP = 4;
 // no começo menos missões abertas ao mesmo tempo (3 nas primeiras 40 peças, depois 4): o jogador sente que dá conta
@@ -860,23 +860,8 @@ function steerStack() {
   S.stack[2] = nt;
 }
 
-// O alvo da missão parte da maior formação ABERTA de cada grupo (fechada não cresce mais, então não
-// serve de base): o que o jogador já construiu conta. Ver makeQuestFor em tilegen.js.
-function questContext() {
-  const best = {}, seen = new Set(); let bestB = 0;
-  for (const t of S.tiles.values()) {
-    if (t.tile.hidden) continue;
-    const k = key(t.q, t.r);
-    for (const tt of [...t.tile.edges, ...t.tile.ground]) {
-      const g = groupOf(tt), sk = g + '|' + k; if (seen.has(sk)) continue;
-      const keys = regionKeys(k, g); for (const kk of keys) seen.add(g + '|' + kk);
-      if (!regionOpen(keys, g)) continue;
-      if (g === 'cyber') bestB = Math.max(bestB, sumBuildings(keys));
-      best[g] = Math.max(best[g] || 0, keys.size);
-    }
-  }
-  return { level: questLevel(S.placed), best, bestB };
-}
+// O alvo sai da escada de cada grupo (ver questTarget em tilegen.js): nível + missões já sorteadas.
+const questContext = () => ({ level: questLevel(S.placed), seq: S.questSeq });
 // Progresso de uma missão sobre um conjunto de casas: cidade conta PRÉDIOS (soma por peça), o resto conta peças.
 const sumBuildings = (keys) => { let n = 0; for (const k of keys) n += buildingsOf(S.tiles.get(k).tile); return n; };
 const questProgress = (qst, keys) => (qst.kind === 'city' ? sumBuildings(keys) : keys.size);
@@ -894,7 +879,8 @@ function maybeAssignQuest() {
   if (!q) return;
   q.color = GROUP_INFO[q.group].color; tile.quest = q; tile._geo = null; tile._slab = null; tile._hi = null;
   if (q.kind === 'city') q.progress = buildingsOf(tile);
-  if (S.undo) S.undo.questTile = tile; // o desfazer tira a bandeira que nasceu neste saque
+  S.questSeq[q.group] = Math.max(S.questSeq[q.group] || 0, q.step) + 1; // próximo degrau da escada deste grupo
+  if (S.undo) S.undo.questTile = tile; // o desfazer tira a bandeira que nasceu neste saque (e volta a escada: S.undo.questSeq)
   S.sinceQuest = 0;
 }
 
@@ -926,7 +912,7 @@ function commitPlacement() {
   const ev = evalPlacement(q, r, tile, rot, true);
   if (!ev.legal) { play('bad'); return; }
   // instantâneo para o único "desfazer" permitido
-  S.undo = { q, r, tile, rot, score: S.score, placed: S.placed, perfects: S.perfects, questsDone: S.questsDone, questsLost: S.questsLost, quests: S.quests.map((x) => ({ ...x })), gained: 0, sinceQuest: S.sinceQuest, lowWarned: S.lowWarned, hintGain: 0, best: S.best, sinceRelic: S.sinceRelic, gains: { ...S.gains }, rng: S.rng.state };
+  S.undo = { q, r, tile, rot, score: S.score, placed: S.placed, perfects: S.perfects, questsDone: S.questsDone, questsLost: S.questsLost, quests: S.quests.map((x) => ({ ...x })), gained: 0, sinceQuest: S.sinceQuest, lowWarned: S.lowWarned, hintGain: 0, best: S.best, sinceRelic: S.sinceRelic, gains: { ...S.gains }, questSeq: { ...S.questSeq }, rng: S.rng.state };
   addTile(q, r, tile, rot, true, ev);
   S.placed++;
   const w = toWorld(q, r);
@@ -1233,7 +1219,7 @@ function undoLast() {
   S.score = u.score; scoreShown = S.score; scoreRoll = null; $('score').textContent = S.score; $('score-box').classList.remove('rolling'); syncRecord();
   S.placed = u.placed; S.perfects = u.perfects; S.questsDone = u.questsDone; S.questsLost = u.questsLost; S.sinceQuest = u.sinceQuest; S.lowWarned = u.lowWarned; S.hints -= u.hintGain; updateHintButton(); // só tira a dica que a missão deu: a usada depois não volta
   S.best = u.best; try { localStorage.setItem('pr_best', S.best); } catch (e) {} syncRecord();
-  S.sinceRelic = u.sinceRelic; S.gains = u.gains; S.rng.state = u.rng; // mesmo sorteio ao refazer: nada de re-roll
+  S.sinceRelic = u.sinceRelic; S.gains = u.gains; S.questSeq = u.questSeq; S.rng.state = u.rng; // mesmo sorteio ao refazer: nada de re-roll
   S.quests = u.quests.map((x) => ({ ...x }));
   // devolve a peça sacada ANTES de tirar as ganhas: se a pilha estava vazia, a peça sacada era uma das ganhas
   if (S.current) S.stack.unshift(S.current);
@@ -1310,7 +1296,7 @@ function newGame(seed, daily = null) {
   if (daily) seed = dailySeed(daily);
   S.rng = new RNG(seed != null ? seed >>> 0 : (Date.now() ^ (Math.random() * 1e9)) >>> 0);
   S.stack = makeStack(S.rng, STACK_SIZE);
-  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null; S.gains = {};
+  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null; S.gains = {}; S.questSeq = {};
   updateHintButton(); updateUndoButton();
   addTile(0, 0, starterTile(S.rng), 0, false);
   refreshSlots();
