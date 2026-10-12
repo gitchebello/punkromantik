@@ -56,8 +56,12 @@ button { font: inherit; cursor: pointer; border: 0; color: #fff; }
 .quests-wrap { position: absolute; right: calc(12px + var(--sar)); top: calc(100px + var(--sat)); display: flex; flex-direction: column; gap: 5px; max-width: 250px; pointer-events: none; align-items: flex-end; }
 .quests { display: flex; flex-direction: column; gap: 5px; pointer-events: auto; align-items: flex-end; }
 /* cartão de missão só com desenho: [ícone + anel de progresso] número [unidade] [+N peças]; toque = ir até a bandeira */
-.quest { position: relative; cursor: grab; display: flex; align-items: center; gap: 5px; background: var(--panel); border: 1.5px solid var(--qc, var(--panel-border)); border-radius: 999px; padding: 4px 6px 4px 4px; animation: pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+.quest { position: relative; cursor: grab; display: flex; align-items: center; gap: 5px; background: var(--panel); border: 1.5px solid var(--qc, var(--panel-border)); border-radius: 999px; padding: 4px 6px 4px 4px;
   box-shadow: 0 0 14px color-mix(in srgb, var(--qc, #fff) 40%, transparent); backdrop-filter: blur(6px); transition: transform 0.15s, background 0.2s; }
+/* 12/10, pedido do usuário: chamar atenção de leve — um inchaço com overshoot pequeno quando a missão chega
+   (só na primeira vez: o cartão é refeito a cada jogada) e depois uma pulsação discreta. Nada de sacudir. */
+.quest.fresh { animation: questSwell 0.7s cubic-bezier(0.3, 0, 0.3, 1) both; }
+@keyframes questSwell { 0% { opacity: 0; transform: scale(0.9); } 45% { opacity: 1; transform: scale(1.06); } 72% { transform: scale(0.99); } 100% { transform: none; } }
 .quest:hover { background: rgba(50, 30, 80, 0.92); transform: translateX(-2px); }
 /* arrastar para ordenar: o cartão pego cresce e brilha; os outros abrem espaço deslizando */
 .quest:not(.pending) { touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -73,17 +77,18 @@ button { font: inherit; cursor: pointer; border: 0; color: #fff; }
 .qring circle + circle { stroke: var(--qc); stroke-linecap: round; transition: stroke-dashoffset 0.6s cubic-bezier(0.2, 1, 0.3, 1); filter: drop-shadow(0 0 4px var(--qc)); }
 .qring.dashed circle:first-child { stroke: var(--qc); stroke-dasharray: 4 4; opacity: 0.7; }
 .qleft { font-family: Orbitron, sans-serif; font-weight: 800; font-size: 19px; line-height: 1; color: var(--qc); text-shadow: 0 0 12px color-mix(in srgb, var(--qc) 70%, transparent); white-space: nowrap; display: inline-block; min-width: 14px; text-align: right; }
-.qleft.bump { animation: numBump 0.55s cubic-bezier(0.2, 1.6, 0.4, 1); }
-@keyframes numBump { 0% { transform: scale(1); } 30% { transform: scale(1.45) rotate(-6deg); } 100% { transform: scale(1); } }
+.qleft.bump { animation: numBump 0.6s ease-out; }
+@keyframes numBump { 0% { transform: scale(1); } 35% { transform: scale(1.18); } 70% { transform: scale(0.98); } 100% { transform: scale(1); } }
 .qlabel .unit { margin-left: 1px; opacity: 0.8; }
 .qrew { margin-left: 2px; padding: 3px 6px; border-radius: 999px; background: rgba(196, 255, 42, 0.14); font-family: Orbitron, sans-serif; font-size: 11px; font-weight: 800; color: var(--acid); display: inline-flex; align-items: center; gap: 2px; }
-.quest.pending { border-style: dashed; opacity: 0.92; animation: pendingPulse 1.4s ease-in-out infinite; }
+.quest.pending { border-style: dashed; opacity: 0.92; animation: pendingPulse 2.2s ease-in-out infinite; }
+.quest.pending.fresh { animation: questSwell 0.7s cubic-bezier(0.3, 0, 0.3, 1) both, pendingPulse 2.2s 0.7s ease-in-out infinite; }
 .quest.pending .qicon { background: transparent; box-shadow: inset 0 0 0 1.5px var(--qc); }
-@keyframes pendingPulse { 50% { box-shadow: 0 0 22px color-mix(in srgb, var(--qc, #fff) 70%, transparent); } }
+@keyframes pendingPulse { 50% { transform: scale(1.03); box-shadow: 0 0 20px color-mix(in srgb, var(--qc, #fff) 60%, transparent); } }
 .quest.done { animation: questDone 0.9s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; border-color: var(--acid); box-shadow: 0 0 26px rgba(196, 255, 42, 0.8); }
 @keyframes questDone { 0% { transform: scale(1); } 30% { transform: scale(1.12); } 100% { transform: translateX(40px) scale(0.6); opacity: 0; } }
 .quest.lost { animation: questLost 0.9s ease-in forwards; filter: grayscale(1); }
-@keyframes questLost { 0% { transform: translateX(0); } 15% { transform: translateX(-6px) rotate(-2deg); } 30% { transform: translateX(6px) rotate(2deg); } 45% { transform: translateX(-4px); } 60% { transform: translateX(0); opacity: 1; } 100% { transform: translateY(14px) scale(0.85); opacity: 0; } }
+@keyframes questLost { 0% { transform: none; } 30% { transform: scale(1.04); opacity: 1; } 100% { transform: translateY(10px) scale(0.85); opacity: 0; } }
 
 /* Bandeja de recompensas logo abaixo do placar. Recorta no topo: a medalha nasce de trás do placar e
    volta para dentro dele. Medalhas simultâneas ficam lado a lado, centradas sob o placar. */
@@ -121,8 +126,8 @@ body.tray-on .sb-gain { display: none; } /* o selo da medalha já conta a novida
 .rburst.rb-perfect .rb-medal::before { content: ''; position: absolute; inset: -3px; background: #fff; clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); filter: drop-shadow(0 0 8px var(--c)); }
 .rb-icon { position: relative; z-index: 1; display: grid; place-items: center; animation: rbIcon var(--T) var(--delay, 0ms) both; }
 .rb-icon .ic { color: var(--ink); width: 18px; height: 18px; }
-@keyframes rbIcon { 0%, 9% { transform: translateY(-5px); } 13% { transform: translateY(3px) rotate(-12deg) scale(1.14, 0.84); } 19% { transform: translateY(-3px) rotate(9deg) scale(0.92, 1.1); }
-  25% { transform: rotate(-4deg); } 32%, 72% { transform: none; } 78% { transform: translateY(3px) scale(1.1, 0.88); } 90%, 100% { transform: translateY(-5px) scale(0.9, 1.12); } }
+@keyframes rbIcon { 0%, 9% { transform: translateY(-5px); } 13% { transform: translateY(2px) scale(1.08, 0.92); } 19% { transform: translateY(-1px) scale(0.97, 1.03); }
+  25%, 72% { transform: none; } 78% { transform: translateY(3px) scale(1.1, 0.88); } 90%, 100% { transform: translateY(-5px) scale(0.9, 1.12); } }
 .rb-star { font-size: 21px; line-height: 1; color: #fff; font-weight: 900; text-shadow: 0 0 6px #fff, 0 1px 0 rgba(0, 0, 0, 0.25); }
 .rb-ring { position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--c); opacity: 0; animation: rbRing var(--T) var(--delay, 0ms) both; }
 @keyframes rbRing { 0%, 10% { opacity: 0; transform: scale(0.8); } 11% { opacity: 1; transform: scale(1, 0.75); } 36%, 100% { opacity: 0; transform: scale(2.1, 1.7); } }
@@ -138,7 +143,7 @@ body.tray-on .sb-gain { display: none; } /* o selo da medalha já conta a novida
   21% { opacity: 1; transform: translateX(4px) scale(1.18, 0.86); } 26% { transform: translateX(-2px) scale(0.94, 1.08); } 31%, 68% { opacity: 1; transform: none; animation-timing-function: cubic-bezier(0.5, 0, 1, 0.5); }
   78%, 100% { opacity: 0; transform: translateX(-30px) scale(0.2, 0.6); } }
 .rburst.rb-harmony .rb-chip { background: #ffd166; box-shadow: 0 0 12px rgba(255, 209, 102, 0.8); }
-/* aviso em texto do encaixe perfeito: letras saltam uma a uma logo abaixo da medalha (11/10) */
+/* aviso em texto da harmonia: letras saltam uma a uma logo abaixo da medalha (11/10) */
 #rtray.titled { height: 88px; }
 @media (min-width: 721px) { body.tray-title .quests-wrap { transform: translateY(78px); } }
 @media (max-width: 720px) { .rb-title { font-size: 11px; letter-spacing: 0.03em; } }
@@ -169,8 +174,8 @@ body.tray-on .sb-gain { display: none; } /* o selo da medalha já conta a novida
 .qlabel b { font-family: Orbitron, sans-serif; font-size: 16px; font-weight: 900; color: var(--ink); line-height: 1; }
 .qlabel .qgain { font-family: Orbitron, sans-serif; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; gap: 1px; margin-left: 3px; padding: 2px 5px; border-radius: 999px; background: #fff; color: var(--ink); }
 .qlabel .qgain .ic { color: var(--ink); }
-.qlabel.pending { animation: pendBob 1.1s ease-in-out infinite; }
-@keyframes pendBob { 50% { transform: translate(-50%, calc(-100% - 5px)); } }
+.qlabel.pending { transform-origin: 50% 100%; animation: pendBob 2.2s ease-in-out infinite; }
+@keyframes pendBob { 50% { transform: translate(-50%, -100%) scale(1.05); } }
 .qlabel::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 9px; height: 9px; background: var(--yellow); border-right: 2px solid #fff; border-bottom: 2px solid #fff; transform: translateX(-50%) rotate(45deg); }
 /* banners de recompensa / dicas */
 .banners { position: absolute; left: 50%; top: calc(64px + var(--sat)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; width: min(92vw, 520px); pointer-events: none; }
