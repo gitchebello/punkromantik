@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011k';
-import { RNG } from './rng.js?v=20261011k';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011k';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011k';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011k';
-import { CameraRig, attachInput } from './controls.js?v=20261011k';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011n';
+import { RNG } from './rng.js?v=20261011n';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011n';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011n';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011n';
+import { CameraRig, attachInput } from './controls.js?v=20261011n';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -249,13 +249,12 @@ function placeHi(m, t, group) {
   m.position.set(w.x, TILE_H + 0.012, w.z); m.rotation.y = (-t.rot * Math.PI) / 3; m.userData.group = group;
 }
 // grupos de formação que a peça na casa (q,r) com esta avaliação tocaria, e as casas de cada um
-function formationGroups(q, r, ev, tile = S.current, rot = S.rot, all = false) { // `all`: inclui Snowpunk/Baldio (prévia de missão)
+function formationGroups(q, r, ev, tile = S.current, rot = S.rot) { // 11/10: Snowpunk e Baldio acendem como os outros biomas (pedido do usuário)
   const byGroup = new Map();
   for (let i = 0; i < 6; i++) {
     if (ev.sides[i] !== 1) continue;
     const nk = key(q + DIRS[i][0], r + DIRS[i][1]), nb = S.tiles.get(nk);
     for (const g of sideGroups(tile, local(i, rot))) { // a estrada na cidade liga a rede E a cidade
-      if (!all && (g === 'plain' || g === 'grass')) continue; // no REALCE, gelo e baldio ficam de fora (acenderia meio tabuleiro); nas missões contam
       if (!nb || !sideHas(nb, opp(i), g)) continue;
       let set = byGroup.get(g); if (!set) { set = new Set(); byGroup.set(g, set); }
       if (!set.has(nk)) for (const k of regionKeys(nk, g)) set.add(k);
@@ -748,8 +747,7 @@ function updateGhost() {
   const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot);
   setSeamStates(seamGhost, ev); seamGhost.boost = ev.perfect ? 0.6 : 0;
   if (ev.legal && ev.matches) showFormation(S.selected.q, S.selected.r, ev); else hideFormation();
-  previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true) : new Map());
-  previewPendingGoal(ev);
+  previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot) : new Map());
   hoverFx.cols = ev.sides.map((st, i) => (st === 1 ? hexCss(EDGE_COLORS[ev.types[i]] || 0xffffff) : null)).filter(Boolean);
   hoverFx.target = hoverFx.cols.length ? (ev.perfect ? 1.0 : 0.5 + 0.1 * ev.matches) : 0;
   if (ghostPos.x.target !== w.x || ghostPos.z.target !== w.z) { ghostPos.x.target = w.x; ghostPos.z.target = w.z; ghostPos.arc = 1; }
@@ -868,11 +866,11 @@ const questContext = () => ({ level: questLevel(S.placed) });
 // Progresso de uma missão sobre um conjunto de casas: cidade conta PRÉDIOS (soma por peça), o resto conta peças.
 const sumBuildings = (keys) => { let n = 0; for (const k of keys) n += buildingsOf(S.tiles.get(k).tile); return n; };
 const questProgress = (qst, keys) => (qst.kind === 'city' ? sumBuildings(keys) : keys.size);
-// A bandeira acabou de entrar no tabuleiro: se ela caiu numa formação que já existia, o alvo passa a
-// ser no mínimo (tamanho dela + o crescimento pedido). Ligar à rede grande vale, mas não cumpre de graça.
+// A bandeira acabou de entrar no tabuleiro: o alvo vira (formação em que ela entrou + need). Assim o
+// número do cartão logo depois do encaixe é exatamente o `need` que ele mostrava antes — e daí só cai.
 function rebaseQuest(qst) {
   const p = questProgress(qst, regionKeys(qst.tileKey, qst.group));
-  qst.target = Math.max(qst.target, p + (qst.grow || 0)); qst.progress = p;
+  qst.target = p + qst.need; qst.progress = p;
 }
 // ---------- missões: nascem na peça que está no topo da pilha (o jogador vê chegando) ----------
 function maybeAssignQuest() {
@@ -909,6 +907,7 @@ const ORD = ['', '', 'DUPLO', 'TRIPLO', 'QUÁDRUPLO', 'QUÍNTUPLO', 'SÊXTUPLO']
 // Clique duplo em "Colocar" ou espaço segurado colocavam a peça seguinte sem o jogador vê-la (ela já
 // chega sólida numa casa válida). Os comandos do JOGADOR passam por aqui; PR.commitPlacement (bot/auto) não.
 let lastCommit = 0;
+const PERFECT_TILES = 5; // 11/10, pedido do usuário: o encaixe perfeito (6 lados) sempre dá +5 peças para seguir jogando (era +1)
 function playerCommit() { const now = performance.now(); if (now - lastCommit < 450) return; lastCommit = now; commitPlacement(); }
 function commitPlacement() {
   if (!S.current || !S.selected || S.over) return;
@@ -921,7 +920,7 @@ function commitPlacement() {
   S.placed++;
   const w = toWorld(q, r);
   let pts = ev.matches * 10 + ev.links * LINK_PTS, gained = 0; // continuar trilho/rodovia/esgoto vale extra
-  if (ev.perfect) { pts += 60; S.perfects++; S.stack.push(genTile(S.rng)); gained++; gain('perfect'); }
+  if (ev.perfect) { pts += 60; S.perfects++; for (let i = 0; i < PERFECT_TILES; i++) S.stack.push(genTile(S.rng)); gained += PERFECT_TILES; gain('perfect', PERFECT_TILES); }
   let closed = false;
   if (isTerminal(tile) && ev.sides[(tile.conn.exits[0] + rot) % 6] === 1) { pts += 20; S.stack.push(genTile(S.rng)); gained++; closed = true; gain('terminal'); } // fechou uma linha: sensação de "ponto final"
   const shut = closedRegions(q, r, tile, rot); // regiões que esta peça acabou de cercar por completo
@@ -943,7 +942,7 @@ function commitPlacement() {
   spawnBurst(w, ev.matchedTypes.map((t) => TERRAIN[t].color), ev.perfect ? 34 : 4 + ev.matches * 3);
   if (ev.perfect) {
     play('perfect'); pulse(w, 0xffd166); confettiBurst(2);
-    rewardBurst(w, 'perfect', '#7dff9a', '<b class="rb-star">★</b>', `+1${icon('tile', 13)}`);
+    rewardBurst(w, 'perfect', '#7dff9a', '<b class="rb-star">★</b>', `+${PERFECT_TILES}${icon('tile', 13)}`);
   } else if (ev.matches >= 3) {
     confettiBurst(ev.matches >= 4 ? 2 : 1); play('confetti');
   }
@@ -977,8 +976,8 @@ function commitPlacement() {
 }
 // Bônus de região fechada: uma área de bioma que ficou cercada por completo (não tem mais lado
 // livre para crescer) rende 5 pts por peça e, a partir de 8 peças, +1 peça. Dá um objetivo de
-// médio prazo além do encaixe de cada jogada. Gelo conta; Baldio (respiro) e redes não.
-const CLOSABLE = ['plain', 'cyber', 'solar', 'rock'];
+// médio prazo além do encaixe de cada jogada. Todos os biomas contam (Baldio desde 11/10); redes não.
+const CLOSABLE = ['plain', 'grass', 'cyber', 'solar', 'rock']; // 11/10: Baldio entra na mesma categoria dos outros biomas
 // prevê os bônus (região fechada, harmonia) pondo a peça no tabuleiro por um instante (regionKeys lê S.tiles)
 // Tudo que commitPlacement paga além de encaixe/rede/perfeito — o botão "Colocar +N" tem que bater
 // com o que entra no placar. (Faltavam o ponto final +20 e o achado ligado +80.) Achado ainda oculto
@@ -1135,7 +1134,7 @@ const relicAt = (k) => S.relics.find((R) => R.k === k);
 function spawnRelic(force) {
   const waiting = S.relics.filter((R) => !R.claimed).length, since0 = S.sinceRelic;
   if (!force && (waiting >= RELIC_MAX || S.placed < RELIC_FROM || S.stack.length < 6 || ++S.sinceRelic < 9 || !S.rng.chance(0.25))) return false;
-  const list = S.tileList, opts = ['cyber', 'solar', 'rock', 'plain'];
+  const list = S.tileList, opts = ['cyber', 'solar', 'rock', 'plain', 'grass'];
   for (let tries = 0; tries < 120; tries++) {
     const base = list[S.rng.int(list.length)], d = S.rng.int(6), dist = 5 + S.rng.int(3), side = S.rng.chance(0.5) ? DIRS[(d + 1) % 6] : [0, 0];
     const c = { q: base.q + DIRS[d][0] * dist + side[0], r: base.r + DIRS[d][1] * dist + side[1] };
@@ -1827,6 +1826,12 @@ function popup(text, w, cls = '', y = 0.5) {
 // até a pilha; na saída ela agacha e é sugada de volta para o placar, que pulsa ao recebê-la.
 // No desktop a coluna de missões (logo abaixo do placar) desce para abrir espaço enquanto a bandeja está cheia.
 const RB_T = 2400;
+// Medalha hexagonal (11/10, pedido do usuário: o jogo é de hexágonos, a medalha também). O corpo gira
+// em "cliques" de 60° — o hexágono volta a ser ele mesmo a cada clique —, um traço de luz percorre as
+// 6 arestas, 6 faíscas saem pelos vértices e uma onda hexagonal se abre no impacto. O ícone fica de pé.
+const RB_HEX = `<i class="rb-wave"><svg viewBox="-24 -24 48 48"><polygon points="22.0,0.0 11.0,19.05 -11.0,19.05 -22.0,0.0 -11.0,-19.05 11.0,-19.05"/></svg></i>`
+  + `<i class="rb-body"><i class="rb-rim"></i><i class="rb-face"></i><svg class="rb-lines" viewBox="-24 -24 48 48"><polygon class="rb-inner" points="15.5,0 7.75,13.42 -7.75,13.42 -15.5,0 -7.75,-13.42 7.75,-13.42"/><polygon class="rb-trace" pathLength="6" points="23.0,0.0 11.5,19.92 -11.5,19.92 -23.0,0.0 -11.5,-19.92 11.5,-19.92"/></svg></i>`
+  + [0, 1, 2, 3, 4, 5].map((i) => `<i class="rb-v" style="--a:${i * 60}deg"></i>`).join('');
 const hw0 = (h) => { const t = S.tiles.get(h.k); return toWorld(t.q, t.r); };
 function rewardTray() {
   let tray = $('rtray');
@@ -1842,7 +1847,7 @@ function rewardBurst(w, kind, color, medal, chip, delay = 0) {
   delay += tray.children.length * 180; // medalhas da mesma jogada entram em cascata
   el.className = `rburst rb-${kind}`; el.style.setProperty('--c', color); el.style.setProperty('--delay', `${delay}ms`); // prefixo rb-: "quest" puro herdava o fundo escuro do cartão de missão
   const badge = (medal.match(/<i class="rb-badge">.*?<\/i>/) || [''])[0]; medal = medal.replace(badge, ''); // o selo ✓/✕ fica preso ao corpo, não ao ícone que balança
-  el.innerHTML = `<div class="rb-medal"><i class="rb-ring"></i><i class="rb-face"></i><span class="rb-icon">${medal}</span>${badge}</div>${chip ? `<div class="rb-chip">${chip}</div>` : ''}`;
+  el.innerHTML = `<div class="rb-medal">${RB_HEX}<span class="rb-icon">${medal}</span>${badge}</div>${chip ? `<div class="rb-chip">${chip}</div>` : ''}`;
   tray.appendChild(el); document.body.classList.add('tray-on');
   setTimeout(() => { const sb = $('score-box'); sb.classList.remove('pulse'); void sb.offsetWidth; sb.classList.add('pulse'); }, delay + RB_T * 0.8); // o placar engole a medalha
   setTimeout(() => { el.remove(); if (!tray.children.length) document.body.classList.remove('tray-on'); }, delay + RB_T + 60);
@@ -2000,11 +2005,11 @@ function renderQuests(delayMs = 0) {
       l.innerHTML = labelHTML(pend, pendGoal(pend)) + `<span class="qgain">${rewardHTML(pend)}</span>`;
       pendLabel = l; lab.appendChild(l);
     }
-    if (S.selected && S.current && !S.over) { const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot); previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true) : new Map()); }
+    if (S.selected && S.current && !S.over) { const ev = evalPlacement(S.selected.q, S.selected.r, S.current, S.rot); previewQuests(ev.legal ? formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot) : new Map()); }
   };
   if (delayMs) setTimeout(build, delayMs); else build();
 }
-// balão e cartão mostram "falta X → Y" para as missões que esta jogada mexeria (verde = fecha, vermelho = passa do número)
+// balão e cartão acendem para as missões que esta jogada mexeria (verde = fecha)
 function previewQuests(byGroup) {
   for (const q of S.quests) {
     const keys = byGroup.get(q.group);
@@ -2012,27 +2017,17 @@ function previewQuests(byGroup) {
     if (keys && keys.has(q.tileKey) && S.current) {
       proj = questProgress(q, keys) + (q.kind === 'city' ? buildingsOf(S.current) : 1); // + a peça na mão
     }
-    const left = questLeft(q), raw = proj == null ? null : q.target - proj, newLeft = raw == null ? null : q.exact ? raw : Math.max(0, raw);
-    const cls = newLeft == null ? '' : newLeft === 0 ? 'hit' : newLeft < 0 ? 'over' : '';
-    const to = newLeft == null || newLeft === left ? '' : `<span class="to">→ ${newLeft < 0 ? '✕' : newLeft === 0 ? '✓' : newLeft}</span>`;
-    if (q._label) { q._label.innerHTML = labelHTML(q, left + to); q._label.className = 'qlabel ' + cls; }
-    if (q._card) { const ql = q._card.querySelector('.qleft'); if (ql) { ql.innerHTML = left + to; ql.classList.toggle('hit', cls === 'hit'); ql.classList.toggle('over', cls === 'over'); } }
+    // o NÚMERO só muda depois do encaixe (11/10); antes, a missão que esta jogada mexe só acende
+    // (verde quando fecharia) — a forma avisa, o número não pula
+    const left = questLeft(q), newLeft = proj == null ? null : Math.max(0, q.target - proj);
+    const cls = newLeft == null || newLeft === left ? '' : newLeft === 0 ? 'hit' : 'near';
+    if (q._label) q._label.className = 'qlabel ' + cls;
+    if (q._card) { const ql = q._card.querySelector('.qleft'); if (ql) { ql.classList.toggle('hit', cls === 'hit'); ql.classList.toggle('near', cls === 'near'); } }
   }
 }
-// A missão da peça na mão mostra o alvo que ela TERÁ na casa onde o fantasma está: se a bandeira cai
-// numa formação que já existe, rebaseQuest sobe o alvo — antes o balão dizia "5+" e virava "9" ao colocar.
-const pendGoal = (q) => `${q._shown || q.target}`;
-function previewPendingGoal(ev) {
-  const q = S.current && S.current.quest; if (!q) return;
-  let shown = q.target;
-  if (ev.legal) {
-    const keys = formationGroups(S.selected.q, S.selected.r, ev, S.current, S.rot, true).get(q.group) || new Set();
-    const p = (q.kind === 'city' ? sumBuildings(keys) + buildingsOf(S.current) : keys.size + 1);
-    shown = Math.max(q.target, p + (q.grow || 0));
-  }
-  if (shown === (q._shown || q.target)) return;
-  q._shown = shown; renderQuests(0);
-}
+// A missão da peça na mão mostra quantas conexões ela pede (`need`). O número não acompanha o
+// fantasma pelas casas — só muda depois do encaixe (pedido do usuário, 11/10).
+const pendGoal = (q) => `${q.need}`;
 function updateQuestLabels() {
   if (pendLabel) { // balão da peça na mão acompanha o fantasma
     const vis0 = ghostGroup.visible && S.current && S.current.quest && !S.over;
