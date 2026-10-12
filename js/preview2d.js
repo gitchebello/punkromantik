@@ -1,5 +1,5 @@
 // Desenho 2D de uma peça (para o HUD e a fila de próximas peças)
-import { edgeAngle, vertexAngle, groundAt, APO } from './hex.js?v=20261011n';
+import { edgeAngle, vertexAngle, groundAt, APO } from './hex.js?v=20261011q';
 
 const G2D = { plain: '#a9c7dd', grass: '#cdb68c', cyber: '#14162e', solar: '#4fc43f', rock: '#9a6538', pool: '#0d5a4c' }; // acompanha PAL.ground de tilemesh.js
 
@@ -41,7 +41,7 @@ export function drawTilePreview(canvas, tile, rot = 0, opts = {}) {
     ctx.fillStyle = tile.quest.color; ctx.fill();
     ctx.strokeStyle = '#1b1030'; ctx.lineWidth = 2; ctx.stroke();
     ctx.fillStyle = '#1b1030'; ctx.font = `bold ${Math.round(R * 0.24)}px Nunito, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(tile.quest.need ?? tile.quest.target), cx, cy + 1); // antes do encaixe: conexões pedidas
+    ctx.fillText(String(tile.quest.target), cx, cy + 1);
   }
 }
 

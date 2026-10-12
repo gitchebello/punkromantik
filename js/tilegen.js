@@ -1,4 +1,4 @@
-import { RNG } from './rng.js?v=20261011n';
+import { RNG } from './rng.js?v=20261011q';
 
 // Terrenos. Cada bioma é uma vertente -punk da mesma proposta estética (é daí que vem o nome
 // do jogo): Cyberpunk, Solarpunk, Sandpunk e Snowpunk. Regiões preenchem setores; conectores atravessam a peça de uma
@@ -158,40 +158,43 @@ export function questCandidates(tile) {
   return [...set];
 }
 
-// Missão = "ligue mais N" à formação da bandeira (11/10, pedido do usuário: a comunicação estava confusa).
-//  - Antes de a bandeira entrar no tabuleiro, o cartão e o balão mostram `need`: quantas conexões
-//    (peças, ou prédios no Cyberpunk) a missão pede. Esse número NÃO muda enquanto o jogador passeia
-//    com a peça pelas casas.
-//  - Ao encaixar, o alvo vira (formação em que a bandeira entrou + need) — `rebaseQuest` em main.js —
-//    e o número passa a ser o que FALTA. Logo depois do encaixe ele é o próprio `need`; a cada peça
-//    ligada à formação, cai. Nunca cumpre de graça e nunca pula para um número maior.
-// Ligar a bandeira a uma rede que já passou do número continua valendo (regra "N+"): o que conta é a
-// formação crescer `need` depois da bandeira.
+// Missão = alvo ABSOLUTO que conta o que já foi construído (11/10, pedido do usuário: "precisamos
+// valorizar o esforço do jogador em preparar o terreno, como no tetris").
+//  - A missão nasce olhando a maior formação ABERTA daquele grupo no tabuleiro (`ctx.best`) e pede um
+//    pouco além dela: com 8 Solarpunk prontos, sai "10". Pôr a bandeira nessa área soma 8 + 1 = 9 e o
+//    cartão passa a mostrar "1" (o que falta). Pôr a bandeira longe, numa área pequena, custa mais.
+//  - Antes do encaixe o cartão/balão mostram o alvo (10) e esse número não muda enquanto o fantasma
+//    passeia; depois do encaixe mostram quanto falta.
+//  - Há um piso por nível (`floorT`): sem formação pronta, a missão ainda pede algo a construir; e um
+//    teto (`capT`/`capB`) para o número não explodir quando a formação já é enorme.
+// Ligar a bandeira a uma formação que já passou do alvo CUMPRE na hora: é o terreno preparado pagando.
 //
-// Progressão: o nível sobe a cada QUEST_LEVEL_EVERY peças colocadas. Sem isso o jogo virava
-// infinito no fim (a missão "ligue 3+ trilhos" caía numa malha de 10 e cumpria na hora).
-export const QUEST_LEVEL_EVERY = 20; // 11/10: era 15 — missões endurecem mais devagar
+// Progressão: o nível sobe a cada QUEST_LEVEL_EVERY peças colocadas. O "além" (`extra`) cresce com o
+// nível — é ele que segura o fim da partida, porque formações grandes deixariam toda missão de graça.
+export const QUEST_LEVEL_EVERY = 20;
 export const questLevel = (placed) => Math.floor(placed / QUEST_LEVEL_EVERY);
-// Conexões pedidas (em peças): 2–3 no começo, +1 a cada 2 níveis.
-const questNeed = (rng, L) => 2 + rng.int(2) + Math.floor(L * 0.5);
-// Cyberpunk conta PRÉDIOS e sobe mais devagar que os outros (pedido do usuário: "aparecia um número
-// muito alto logo no início"; antes eram need×5, ou seja 9–16 prédios já no nível 0).
-// Nível 0: 4–6 prédios (~1 peça de cidade); +1,5 prédio por nível; teto 20.
-const cityNeed = (rng, L) => Math.min(20, 4 + rng.int(3) + Math.floor(L * 1.5));
-// Recompensa proporcional ao esforço (11/10, pedido do usuário: missão difícil pagava as mesmas 2–3
-// peças da fácil). 75% das peças exigidas + 1 peça a cada 3 níveis, entre 2 e 5:
-// começo (níveis 0–2) → 2; a partir de ~60 peças → 3–4; fim → 4–5.
-// Nunca passa de `need`: a missão consome need + a peça da bandeira, então continua pagando menos
-// do que custa — é isso que garante que a partida acaba.
-export const questReward = (needTiles, L) => Math.max(2, Math.min(5, needTiles, Math.round(needTiles * 0.75) + Math.floor(L / 3)));
+// peças além da maior formação aberta (a peça da bandeira já conta 1 delas)
+const extraTiles = (rng, L) => 2 + rng.int(2) + Math.floor(L / 3);
+const floorT = (rng, L) => 4 + rng.int(2) + L;
+// Teto por nível: o número na tela continua legível. Quem já tem uma formação MAIOR que o teto cumpre
+// a missão no encaixe da bandeira — o terreno bem preparado paga na hora.
+const capT = (rng, L) => 7 + rng.int(2) + 2 * L;
+// Cyberpunk conta PRÉDIOS e sobe mais devagar (pedido do usuário: números altos cedo demais).
+// Uma peça de cidade soma ~5 prédios em média (peça cheia ~10, meia ~5).
+const extraB = (rng, L) => 3 + rng.int(3) + Math.floor(L * 1.5);
+const floorB = (rng, L) => 6 + rng.int(3) + 2 * L;
+const capB = (rng, L) => 14 + rng.int(3) + 5 * L;
+// Recompensa cresce com o tamanho da formação pedida (quem prepara o terreno e fecha missões grandes
+// ganha mais): ~1 peça a cada 4 da formação, entre 2 e 5. Cidade: ~1 peça a cada 8 prédios.
+export const questReward = (sizeTiles) => Math.max(2, Math.min(5, Math.round(sizeTiles / 4)));
 
 // Dois tipos de missão:
-//  - 'region': ligue `need` peças do grupo à formação da bandeira (progress = peças ligadas).
-//  - 'city':   SEMPRE a missão do Cyberpunk; a cidade ligada à bandeira ganha `need` PRÉDIOS
+//  - 'region': a formação da bandeira chega a `target` peças do grupo (progress = peças ligadas).
+//  - 'city':   SEMPRE a missão do Cyberpunk; a cidade da bandeira soma `target` PRÉDIOS
 //    (progress = soma dos prédios de cada peça da cidade, `buildingsOf`) — nunca número de peças.
-// `weights` (opcional): quanto cada grupo está "vivo" na borda do tabuleiro — a missão puxa
-// o grupo que o jogador tem como crescer, em vez de um que vai empacar com progresso 1.
-// `ctx` (opcional): { level }. `buildings` é quantos prédios a própria peça da bandeira tem.
+// `weights` (opcional): quanto cada grupo está "vivo" na borda do tabuleiro.
+// `ctx`: { level, best: { grupo: peças da maior formação aberta }, bestB: prédios da maior cidade aberta }.
+// `buildings` é quantos prédios a própria peça da bandeira tem.
 export function makeQuest(rng, tile, buildings = 0, weights = null, ctx = null) {
   const cands = questCandidates(tile);
   if (!cands.length) return null;
@@ -203,11 +206,11 @@ export function makeQuest(rng, tile, buildings = 0, weights = null, ctx = null) 
 function makeQuestFor(rng, group, buildings, ctx) {
   const L = ctx.level, mult = 1 + 0.2 * L; // pontos sobem com o nível
   if (group === 'cyber') {
-    const need = cityNeed(rng, L), eq = questNeed(rng, L); // a recompensa da cidade é a de uma missão de região do mesmo nível
-    return { kind: 'city', exact: false, group, need, target: buildings + need, progress: buildings, reward: { tiles: questReward(eq, L), points: Math.round(eq * 20 * mult) } };
+    const best = (ctx.bestB || 0), lo = floorB(rng, L), target = Math.max(lo, Math.min(Math.max(lo, capB(rng, L)), best + buildings + extraB(rng, L)));
+    return { kind: 'city', exact: false, group, target, progress: buildings, reward: { tiles: questReward(target / 2), points: Math.round(target * 4 * mult) } };
   }
-  const need = questNeed(rng, L);
-  return { kind: 'region', exact: false, group, need, target: 1 + need, progress: 1, reward: { tiles: questReward(need, L), points: Math.round(need * 20 * mult) } };
+  const best = (ctx.best && ctx.best[group]) || 0, lo = floorT(rng, L), target = Math.max(lo, Math.min(capT(rng, L), best + extraTiles(rng, L)));
+  return { kind: 'region', exact: false, group, target, progress: 1, reward: { tiles: questReward(target), points: Math.round(target * 10 * mult) } };
 }
 // "8+" (pelo menos); `exact` ficou só por compatibilidade com o HUD
 export const questGoal = (q) => `${q.target}${q.exact ? '' : '+'}`;

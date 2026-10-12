@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011n';
-import { RNG } from './rng.js?v=20261011n';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011n';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011n';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011n';
-import { CameraRig, attachInput } from './controls.js?v=20261011n';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011q';
+import { RNG } from './rng.js?v=20261011q';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011q';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011q';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011q';
+import { CameraRig, attachInput } from './controls.js?v=20261011q';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -860,18 +860,29 @@ function steerStack() {
   S.stack[2] = nt;
 }
 
-// O alvo da missão NÃO olha mais a maior formação do tabuleiro inteiro (dava "142 prédios" para
-// uma bandeira longe da cidade grande): ele se ajusta à formação em que a bandeira entra (rebaseQuest).
-const questContext = () => ({ level: questLevel(S.placed) });
+// O alvo da missão parte da maior formação ABERTA de cada grupo (fechada não cresce mais, então não
+// serve de base): o que o jogador já construiu conta. Ver makeQuestFor em tilegen.js.
+function questContext() {
+  const best = {}, seen = new Set(); let bestB = 0;
+  for (const t of S.tiles.values()) {
+    if (t.tile.hidden) continue;
+    const k = key(t.q, t.r);
+    for (const tt of [...t.tile.edges, ...t.tile.ground]) {
+      const g = groupOf(tt), sk = g + '|' + k; if (seen.has(sk)) continue;
+      const keys = regionKeys(k, g); for (const kk of keys) seen.add(g + '|' + kk);
+      if (!regionOpen(keys, g)) continue;
+      if (g === 'cyber') bestB = Math.max(bestB, sumBuildings(keys));
+      best[g] = Math.max(best[g] || 0, keys.size);
+    }
+  }
+  return { level: questLevel(S.placed), best, bestB };
+}
 // Progresso de uma missão sobre um conjunto de casas: cidade conta PRÉDIOS (soma por peça), o resto conta peças.
 const sumBuildings = (keys) => { let n = 0; for (const k of keys) n += buildingsOf(S.tiles.get(k).tile); return n; };
 const questProgress = (qst, keys) => (qst.kind === 'city' ? sumBuildings(keys) : keys.size);
-// A bandeira acabou de entrar no tabuleiro: o alvo vira (formação em que ela entrou + need). Assim o
-// número do cartão logo depois do encaixe é exatamente o `need` que ele mostrava antes — e daí só cai.
-function rebaseQuest(qst) {
-  const p = questProgress(qst, regionKeys(qst.tileKey, qst.group));
-  qst.target = p + qst.need; qst.progress = p;
-}
+// A bandeira acabou de entrar no tabuleiro: o alvo é absoluto, só o progresso é medido (a formação em
+// que ela entrou + ela mesma). Se essa formação já passou do alvo, a missão cumpre neste mesmo encaixe.
+function rebaseQuest(qst) { qst.progress = questProgress(qst, regionKeys(qst.tileKey, qst.group)); }
 // ---------- missões: nascem na peça que está no topo da pilha (o jogador vê chegando) ----------
 function maybeAssignQuest() {
   const tile = S.stack[0]; if (!tile || tile.quest || S.placed < 2) return;
@@ -2025,9 +2036,9 @@ function previewQuests(byGroup) {
     if (q._card) { const ql = q._card.querySelector('.qleft'); if (ql) { ql.classList.toggle('hit', cls === 'hit'); ql.classList.toggle('near', cls === 'near'); } }
   }
 }
-// A missão da peça na mão mostra quantas conexões ela pede (`need`). O número não acompanha o
-// fantasma pelas casas — só muda depois do encaixe (pedido do usuário, 11/10).
-const pendGoal = (q) => `${q.need}`;
+// A missão da peça na mão mostra o ALVO (ex.: 10). O número não acompanha o fantasma pelas casas —
+// depois do encaixe ele vira quanto falta (pedido do usuário, 11/10).
+const pendGoal = (q) => `${q.target}`;
 function updateQuestLabels() {
   if (pendLabel) { // balão da peça na mão acompanha o fantasma
     const vis0 = ghostGroup.visible && S.current && S.current.quest && !S.over;
