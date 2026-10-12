@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011t';
-import { RNG } from './rng.js?v=20261011t';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011t';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011t';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011t';
-import { CameraRig, attachInput } from './controls.js?v=20261011t';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011u';
+import { RNG } from './rng.js?v=20261011u';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011u';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011u';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011u';
+import { CameraRig, attachInput } from './controls.js?v=20261011u';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -868,6 +868,10 @@ const questProgress = (qst, keys) => (qst.kind === 'city' ? sumBuildings(keys) :
 // A bandeira acabou de entrar no tabuleiro: o alvo é absoluto, só o progresso é medido (a formação em
 // que ela entrou + ela mesma). Se essa formação já passou do alvo, a missão cumpre neste mesmo encaixe.
 function rebaseQuest(qst) { qst.progress = questProgress(qst, regionKeys(qst.tileKey, qst.group)); }
+// Cor da missão: a do bioma, exceto Cyberpunk, que na missão é roxo neon em vez do rosa (pedido do usuário, 11/10).
+// Só a missão (cartão, balão, bandeira, medalha): o bioma no tabuleiro continua rosa.
+const QUEST_COLORS = { cyber: '#a259ff' };
+const questColor = (g) => QUEST_COLORS[g] || GROUP_INFO[g].color;
 // ---------- missões: nascem na peça que está no topo da pilha (o jogador vê chegando) ----------
 function maybeAssignQuest() {
   const tile = S.stack[0]; if (!tile || tile.quest || S.placed < 2) return;
@@ -877,7 +881,7 @@ function maybeAssignQuest() {
   if (!(S.rng.chance(0.26) || S.sinceQuest >= 7 || starving)) return;
   const q = makeQuest(S.rng, tile, buildingsOf(tile), frontier().groups, questContext());
   if (!q) return;
-  q.color = GROUP_INFO[q.group].color; tile.quest = q; tile._geo = null; tile._slab = null; tile._hi = null;
+  q.color = questColor(q.group); tile.quest = q; tile._geo = null; tile._slab = null; tile._hi = null;
   if (q.kind === 'city') q.progress = buildingsOf(tile);
   S.questSeq[q.group] = Math.max(S.questSeq[q.group] || 0, q.step) + 1; // próximo degrau da escada deste grupo
   if (S.undo) S.undo.questTile = tile; // o desfazer tira a bandeira que nasceu neste saque (e volta a escada: S.undo.questSeq)
@@ -939,7 +943,7 @@ function commitPlacement() {
   spawnBurst(w, ev.matchedTypes.map((t) => TERRAIN[t].color), ev.perfect ? 34 : 4 + ev.matches * 3);
   if (ev.perfect) {
     play('perfect'); pulse(w, 0xffd166); confettiBurst(2);
-    rewardBurst(w, 'perfect', '#7dff9a', '<b class="rb-star">★</b>', `+${PERFECT_TILES}${icon('tile', 13)}`);
+    rewardBurst(w, 'perfect', '#7dff9a', '<b class="rb-star">★</b>', `+${PERFECT_TILES}${icon('tile', 13)}`, 0, 'ENCAIXE PERFEITO!'); // aviso em texto (pedido do usuário, 11/10)
   } else if (ev.matches >= 3) {
     confettiBurst(ev.matches >= 4 ? 2 : 1); play('confetti');
   }
@@ -1823,12 +1827,6 @@ function popup(text, w, cls = '', y = 0.5) {
 // até a pilha; na saída ela agacha e é sugada de volta para o placar, que pulsa ao recebê-la.
 // No desktop a coluna de missões (logo abaixo do placar) desce para abrir espaço enquanto a bandeja está cheia.
 const RB_T = 2400;
-// Medalha hexagonal (11/10, pedido do usuário: o jogo é de hexágonos, a medalha também). O corpo gira
-// em "cliques" de 60° — o hexágono volta a ser ele mesmo a cada clique —, um traço de luz percorre as
-// 6 arestas, 6 faíscas saem pelos vértices e uma onda hexagonal se abre no impacto. O ícone fica de pé.
-const RB_HEX = `<i class="rb-wave"><svg viewBox="-24 -24 48 48"><polygon points="22.0,0.0 11.0,19.05 -11.0,19.05 -22.0,0.0 -11.0,-19.05 11.0,-19.05"/></svg></i>`
-  + `<i class="rb-body"><i class="rb-rim"></i><i class="rb-face"></i><svg class="rb-lines" viewBox="-24 -24 48 48"><polygon class="rb-inner" points="15.5,0 7.75,13.42 -7.75,13.42 -15.5,0 -7.75,-13.42 7.75,-13.42"/><polygon class="rb-trace" pathLength="6" points="23.0,0.0 11.5,19.92 -11.5,19.92 -23.0,0.0 -11.5,-19.92 11.5,-19.92"/></svg></i>`
-  + [0, 1, 2, 3, 4, 5].map((i) => `<i class="rb-v" style="--a:${i * 60}deg"></i>`).join('');
 const hw0 = (h) => { const t = S.tiles.get(h.k); return toWorld(t.q, t.r); };
 function rewardTray() {
   let tray = $('rtray');
@@ -1837,17 +1835,20 @@ function rewardTray() {
   tray.style.left = `${cx - W / 2}px`; tray.style.top = `${r.bottom}px`; tray.style.width = `${W}px`;
   return tray;
 }
+// bandeja mais alta enquanto houver aviso em texto (a coluna de missões desce junto)
+function syncTrayTitle(tray) { const on = !!tray.querySelector('.titled'); tray.classList.toggle('titled', on); document.body.classList.toggle('tray-title', on); }
 // ponto de onde as peças ganhas decolam: o selo da medalha mais recente (ou nada, se não há medalha)
 function trayPoint() { const c = [...document.querySelectorAll('#rtray .rb-chip')].pop() || document.querySelector('#rtray .rb-medal'); if (!c) return null; const r = c.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 + 12 }; }
-function rewardBurst(w, kind, color, medal, chip, delay = 0) {
+function rewardBurst(w, kind, color, medal, chip, delay = 0, title = '') { // `title`: aviso em texto embaixo da medalha (encaixe perfeito)
   const tray = rewardTray(), el = document.createElement('div');
   delay += tray.children.length * 180; // medalhas da mesma jogada entram em cascata
   el.className = `rburst rb-${kind}`; el.style.setProperty('--c', color); el.style.setProperty('--delay', `${delay}ms`); // prefixo rb-: "quest" puro herdava o fundo escuro do cartão de missão
   const badge = (medal.match(/<i class="rb-badge">.*?<\/i>/) || [''])[0]; medal = medal.replace(badge, ''); // o selo ✓/✕ fica preso ao corpo, não ao ícone que balança
-  el.innerHTML = `<div class="rb-medal">${RB_HEX}<span class="rb-icon">${medal}</span>${badge}</div>${chip ? `<div class="rb-chip">${chip}</div>` : ''}`;
-  tray.appendChild(el); document.body.classList.add('tray-on');
+  el.innerHTML = `<div class="rb-medal"><i class="rb-ring"></i><i class="rb-face"></i><span class="rb-icon">${medal}</span>${badge}</div>${chip ? `<div class="rb-chip">${chip}</div>` : ''}${title ? `<div class="rb-title">${[...title].map((c, i) => `<span style="--i:${i}">${c === ' ' ? '&nbsp;' : c}</span>`).join('')}</div>` : ''}`;
+  if (title) el.classList.add('titled');
+  tray.appendChild(el); document.body.classList.add('tray-on'); syncTrayTitle(tray);
   setTimeout(() => { const sb = $('score-box'); sb.classList.remove('pulse'); void sb.offsetWidth; sb.classList.add('pulse'); }, delay + RB_T * 0.8); // o placar engole a medalha
-  setTimeout(() => { el.remove(); if (!tray.children.length) document.body.classList.remove('tray-on'); }, delay + RB_T + 60);
+  setTimeout(() => { el.remove(); syncTrayTitle(tray); if (!tray.children.length) document.body.classList.remove('tray-on'); }, delay + RB_T + 60);
 }
 // Letreiro neon animado com os pontos: letras pulam uma a uma, o letreiro voa até o placar e o número rola
 let scoreShown = 0, scoreRoll = null;
@@ -1979,26 +1980,26 @@ function renderQuests(delayMs = 0) {
     el.innerHTML = ''; lab.innerHTML = '';
     const pend = S.current && S.current.quest && !S.over ? S.current.quest : null;
     if (pend) { // missão da peça na mão: cartão tracejado, anel vazio, meta (começa quando a peça for colocada)
-      const d = document.createElement('div'); d.className = 'quest pending'; d.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
+      const d = document.createElement('div'); d.className = 'quest pending'; d.style.setProperty('--qc', pend.color || questColor(pend.group));
       d.innerHTML = `<span class="qicon">${ringSVG(0, true)}${icon(questIcon(pend), 21)}<i class="qflag">${icon('flag', 9)}</i></span><span class="qleft">${pendGoal(pend)}</span>${unitIcon(pend, 13)}<span class="qrew">${rewardHTML(pend)}</span>`;
       el.appendChild(d);
     }
     for (const q of S.quests) {
       const info = GROUP_INFO[q.group], left = questLeft(q), pct = Math.max(0, Math.min(1, q.progress / q.target));
-      const d = document.createElement('div'); d.className = 'quest'; d.style.setProperty('--qc', q.color || info.color);
+      const d = document.createElement('div'); d.className = 'quest'; d.style.setProperty('--qc', q.color || questColor(q.group));
       d.innerHTML = `<span class="qicon">${ringSVG(pct)}${icon(questIcon(q), 21)}</span><span class="qleft${q._bump ? ' bump' : ''}">${left}</span>${unitIcon(q, 13)}<span class="qrew">${rewardHTML(q)}</span>`;
       q._bump = false;
       d.addEventListener('click', () => { if (!questDrag.moved) flyToQuest(q); });
       d.addEventListener('pointerdown', (e) => startQuestDrag(e, q, d));
       q._card = d; el.appendChild(d);
-      const l = document.createElement('div'); l.className = 'qlabel'; l.style.setProperty('--qc', q.color || info.color);
+      const l = document.createElement('div'); l.className = 'qlabel'; l.style.setProperty('--qc', q.color || questColor(q.group));
       l.innerHTML = labelHTML(q, left);
       l.addEventListener('click', () => flyToQuest(q));
       q._label = l; lab.appendChild(l);
     }
     pendLabel = null;
     if (pend) { // a peça na mão também ganha o balão: a bandeira sozinha não dizia que ali tem peças a ganhar
-      const l = document.createElement('div'); l.className = 'qlabel pending'; l.style.setProperty('--qc', pend.color || GROUP_INFO[pend.group].color);
+      const l = document.createElement('div'); l.className = 'qlabel pending'; l.style.setProperty('--qc', pend.color || questColor(pend.group));
       l.innerHTML = labelHTML(pend, pendGoal(pend)) + `<span class="qgain">${rewardHTML(pend)}</span>`;
       pendLabel = l; lab.appendChild(l);
     }
