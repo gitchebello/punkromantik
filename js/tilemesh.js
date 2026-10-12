@@ -2,8 +2,8 @@
 // tubos, frustos, chanfros, folhas), biomas redesenhados e partes animáveis.
 // Três malhas por peça: "lit" (iluminada), "glow" (neon, sem luz) e "water"
 // (shader de água animada). Cor por vértice, flat shading.
-import { edgeAngle, vertexAngle, APO } from './hex.js?v=20261011h';
-import { RNG } from './rng.js?v=20261011h';
+import { edgeAngle, vertexAngle, APO } from './hex.js?v=20261011k';
+import { RNG } from './rng.js?v=20261011k';
 
 const THREE = window.THREE;
 export const TILE_H = 0.16;
@@ -37,8 +37,6 @@ export const PAL = {
   ice: '#cfe6f5', iceDark: '#9dbfd4', crystal: '#bfe9ff', crystalGlow: '#9ff5ff', snow: '#e9f3fb', crack: '#3f9dc4', iceRock: ['#a7c9dd', '#8fb5cc', '#c2dcea', '#7ea6bf'], pine: '#2f7a63', pineDark: '#215c4c', iceHole: '#2dd9ff', // agulha escura: a neve entra por cima, em PAL.snow
   trunk: '#5b3a22', palmTrunk: '#7a5a3a', leaf: ['#1f8a3f', '#2ea44f', '#3fbf5a', '#55d46a', '#1d7a4a'], jungle: ['#176b35', '#1f8a3f', '#28a04a'],
   flower: ['#ff4fa3', '#ff8a3c', '#ffe45c', '#ff5c5c', '#c85cff'], ipe: ['#ffd21f', '#ffc21a', '#ff7fbf', '#c070ff', '#fff4f8'], // ipê amarelo (mais comum), rosa, roxo, branco
-  // sucata a vapor do Baldio: latão, cobre, azinhavre e ferro — fosco, para não competir com o neon
-  brass: ['#c8963e', '#b8873a', '#d4a24c'], copper: ['#b8673a', '#a85a32', '#c4774a'], patina: '#5fbfa8', iron: '#3a3632', steam: '#f2efe8',
   cream: '#efe7d3', glass: '#9fe3ff', vine: '#2f9e4f', panel: '#1b2f6b', panelGlow: '#5fa8ff', string: '#ffd27a',
   stucco: ['#efe7d3', '#e6d9bd', '#f2ece0', '#dcc9a8', '#e8dcc4'], stuccoShade: '#c9b998',
   terracotta: ['#c96f4a', '#b35a3c', '#d98a5c', '#a84f34'], wood: ['#9c6b40', '#8a5c36', '#b07d4e'], woodDark: '#6b4527',
@@ -570,10 +568,10 @@ function drawIce(B, rng, pts) {
 // ---------- BALDIO (terreno de estuque livre: respiro) ----------
 // Continua o bioma mais vazio do jogo (1-2 pontos por setor, contra 2-4 dos outros), mas agora com
 // folhagem leve e flores de UMA cor do arco-íris sorteada pela peça — cada baldio tem a sua.
-// ---------- BALDIO (com um quê de steampunk) ----------
-// Terreno vago: pouca coisa, mas viva. Flores numa cor do arco-íris sorteada por peça (a cor nova é a
-// graça de cada Baldio que sai da pilha), mudinhas, capim, e sucata de uma era a vapor que ficou para
-// trás — engrenagens tombadas com flor brotando, caldeira soltando vapor, lampião a gás, cano com registro.
+// ---------- BALDIO ----------
+// Terreno vago e calmo: só flores numa cor do arco-íris sorteada por peça (a cor nova é a graça de cada
+// Baldio que sai da pilha) e micro vegetação — capim e moitinhas. A sucata steampunk saiu em 11/10
+// (pedido do usuário: não ficou apelativa e enchia demais o bioma que deve ser o mais vazio).
 function wildFlower(B, rng, x, z, fc, h = rng.range(0.035, 0.06)) {
   B.extrude(B.lit, ngon(x, z, 0.004, 5), H, h, col(PAL.grassDark));
   B.leaf(B.lit, [x, H + 0.006, z], rng.float() * PI2, 0.032, 0.015, col(rng.pick(PAL.tuft)), { lift: 0.012, droop: 0.01, segs: 2 });
@@ -581,71 +579,18 @@ function wildFlower(B, rng, x, z, fc, h = rng.range(0.035, 0.06)) {
   for (let j = 0; j < 5; j++) { const a = ph + (j / 5) * PI2; B.sphere(B.glow, x + Math.cos(a) * 0.02, H + h, z + Math.sin(a) * 0.02, 0.017, fc, 5, 2); }
   B.sphere(B.lit, x, H + h + 0.005, z, 0.011, col('#fff3b0'), 5, 2);
 }
-function sapling(B, rng, x, z) { // mudinha: tronco fino e três tufos redondos
-  const h = rng.range(0.08, 0.12), c = col(rng.pick(['#7fbf4a', '#93cf5a', '#6aa93e']));
-  B.tube(B.lit, [[x, H, z], [x + rng.range(-0.008, 0.008), H + h * 0.6, z + rng.range(-0.008, 0.008)], [x, H + h, z]], [0.007, 0.006, 0.005], 5, col(PAL.trunk));
-  for (let k = 0; k < 3; k++) { const a = rng.float() * PI2; B.sphere(B.lit, x + Math.cos(a) * 0.02, H + h + rng.range(-0.01, 0.015), z + Math.sin(a) * 0.02, rng.range(0.022, 0.03), shade(c, rng.range(0.9, 1.12)), 7, 4); }
-}
-function cog(B, x, z, r, y0, h, color, teeth = 10, ry = 0) { // engrenagem deitada (o topo é leque a partir do centro: a estrela é convexa o bastante)
-  const poly = [], st = PI2 / teeth;
-  for (let i = 0; i < teeth; i++) {
-    const a = ry + i * st;
-    poly.push([x + Math.cos(a) * r, z + Math.sin(a) * r], [x + Math.cos(a + st * 0.2) * r * 1.25, z + Math.sin(a + st * 0.2) * r * 1.25], [x + Math.cos(a + st * 0.45) * r * 1.25, z + Math.sin(a + st * 0.45) * r * 1.25], [x + Math.cos(a + st * 0.65) * r, z + Math.sin(a + st * 0.65) * r]);
-  }
-  B.extrude(B.lit, poly, y0, h, color, { topCol: shade(color, 1.1) });
-  B.annulus(B.lit, x, y0 + h + 0.001, z, r * 0.45, r * 0.72, 12, shade(color, 0.62));
-  B.extrude(B.lit, ngon(x, z, r * 0.22, 8), y0 + h, 0.006, shade(color, 0.8));
-}
-function brassGears(B, rng, p, iris) {
-  const c1 = col(rng.pick(PAL.brass)), r = rng.range(0.06, 0.08);
-  cog(B, p.x, p.z, r, H, 0.018, c1, 10, rng.float());
-  cog(B, p.x + r * 0.95, p.z + r * 0.5, r * 0.5, H, 0.03, col(rng.pick(PAL.copper)), 7, rng.float());
-  B.sphere(B.lit, p.x - r * 0.8, H, p.z + r * 0.4, 0.02, col(PAL.patina), 6, 3, { dome: true, sy: 0.5 }); // azinhavre
-  wildFlower(B, rng, p.x + rng.range(-0.02, 0.02), p.z + rng.range(-0.02, 0.02), col(iris), 0.07); // flor brotando pelo furo
-}
-function steamBoiler(B, rng, p) {
-  const c = col(rng.pick(PAL.copper)), brass = col(PAL.brass[0]), ox = Math.cos(p.a) * 0.03, oz = Math.sin(p.a) * 0.03;
-  B.frustum(B.lit, p.x, H, p.z, 0.042, 0.042, 0.085, 12, c);
-  B.sphere(B.lit, p.x, H + 0.085, p.z, 0.042, shade(c, 1.08), 12, 4, { dome: true, sy: 0.6 });
-  for (const y of [0.015, 0.06]) B.frustum(B.lit, p.x, H + y, p.z, 0.045, 0.045, 0.008, 12, brass);
-  B.frustum(B.lit, p.x + ox, H + 0.09, p.z + oz, 0.012, 0.014, 0.08, 8, col(PAL.iron));
-  B.frustum(B.lit, p.x + ox, H + 0.17, p.z + oz, 0.02, 0.014, 0.012, 8, col(PAL.iron));
-  B.sphere(B.glow, p.x - Math.sin(p.a) * 0.043, H + 0.05, p.z + Math.cos(p.a) * 0.043, 0.009, col('#ffcf6e'), 6, 3); // manômetro
-  for (let k = 0; k < 3; k++) B.sphere(B.lit, p.x + ox + k * 0.012, H + 0.2 + k * 0.035, p.z + oz - k * 0.006, 0.018 + k * 0.007, col(PAL.steam), 7, 4); // vapor
-}
-function gasLamp(B, rng, p) {
-  const iron = col(PAL.iron), h = 0.2;
-  B.frustum(B.lit, p.x, H, p.z, 0.016, 0.01, 0.02, 8, iron);
-  B.extrude(B.lit, ngon(p.x, p.z, 0.006, 6), H + 0.02, h - 0.02, iron);
-  B.frustum(B.lit, p.x, H + h, p.z, 0.012, 0.018, 0.035, 6, shade(col(PAL.lantern), 0.9));
-  B.sphere(B.glow, p.x, H + h + 0.017, p.z, 0.013, col(PAL.lantern), 6, 3);
-  B.cone(B.lit, p.x, H + h + 0.035, p.z, 0.024, 0.025, iron, 6);
-}
-function pipeValve(B, rng, p) {
-  const c = col(rng.pick(PAL.copper)), dx = Math.cos(p.a) * 0.07, dz = Math.sin(p.a) * 0.07;
-  B.tube(B.lit, [[p.x - dx, H - 0.01, p.z - dz], [p.x - dx, H + 0.06, p.z - dz], [p.x - dx * 0.5, H + 0.09, p.z - dz * 0.5], [p.x + dx * 0.5, H + 0.09, p.z + dz * 0.5], [p.x + dx, H + 0.06, p.z + dz], [p.x + dx, H - 0.01, p.z + dz]], [0.013], 8, c);
-  B.extrude(B.lit, ngon(p.x, p.z, 0.005, 6), H + 0.09, 0.03, col(PAL.iron));
-  B.annulus(B.lit, p.x, H + 0.122, p.z, 0.016, 0.024, 10, col('#c43a2a')); // volante do registro
-  B.extrude(B.lit, rect(p.x, p.z, 0.044, 0.005, p.a + 0.8), H + 0.12, 0.004, col('#c43a2a'));
-}
 function drawGrass(B, rng, pts, iris) {
   for (const p of pts) {
     const r = rng.float();
-    if (r < 0.3) { // canteiro de flores na cor da peça
+    if (r < 0.38) { // canteiro de flores na cor da peça
       for (let k = 0, n = 4 + rng.int(4); k < n; k++) wildFlower(B, rng, p.x + rng.range(-0.07, 0.07), p.z + rng.range(-0.07, 0.07), col(iris));
-    } else if (r < 0.46) { // tufos de capim com uma flor ou outra
+    } else if (r < 0.66) { // tufos de capim com uma flor ou outra
       for (let k = 0, n = 3 + rng.int(3); k < n; k++) { const x = p.x + rng.range(-0.06, 0.06), z = p.z + rng.range(-0.06, 0.06); B.cone(B.lit, x, H, z, rng.range(0.012, 0.02), rng.range(0.03, 0.06), col(rng.pick(PAL.tuft)), 4, rng.float() * 6); }
       wildFlower(B, rng, p.x, p.z, col(iris));
-    } else if (r < 0.58) { sapling(B, rng, p.x, p.z); if (rng.chance(0.6)) wildFlower(B, rng, p.x + 0.05, p.z - 0.03, col(iris)); }
-    else if (r < 0.74) { // sucata a vapor (uma por ponto, raras no tile inteiro)
-      const s = rng.float();
-      if (s < 0.32) brassGears(B, rng, p, iris); else if (s < 0.58) steamBoiler(B, rng, p); else if (s < 0.8) gasLamp(B, rng, p); else pipeValve(B, rng, p);
-    } else if (r < 0.86) { // moita baixa florida
+    } else if (r < 0.84) { // moitinha baixa florida
       const c = col(rng.pick(PAL.tuft));
-      B.sphere(B.lit, p.x, H + 0.01, p.z, rng.range(0.035, 0.05), c, 7, 3, { dome: true, sy: 0.7 });
-      for (let k = 0; k < 3; k++) B.sphere(B.glow, p.x + rng.range(-0.03, 0.03), H + 0.042, p.z + rng.range(-0.03, 0.03), 0.012, col(iris), 5, 2);
-    } else if (r < 0.92) { // pedra lisa
-      B.sphere(B.lit, p.x, H, p.z, rng.range(0.03, 0.05), col('#a89c86'), 6, 3, { dome: true, sy: 0.5 });
+      B.sphere(B.lit, p.x, H + 0.01, p.z, rng.range(0.03, 0.045), c, 7, 3, { dome: true, sy: 0.7 });
+      for (let k = 0; k < 3; k++) B.sphere(B.glow, p.x + rng.range(-0.03, 0.03), H + 0.038, p.z + rng.range(-0.03, 0.03), 0.012, col(iris), 5, 2);
     } // (o resto fica vazio de propósito)
   }
 }

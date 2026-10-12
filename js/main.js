@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011h';
-import { RNG } from './rng.js?v=20261011h';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011h';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011h';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011h';
-import { CameraRig, attachInput } from './controls.js?v=20261011h';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011k';
+import { RNG } from './rng.js?v=20261011k';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011k';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011k';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011k';
+import { CameraRig, attachInput } from './controls.js?v=20261011k';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -971,7 +971,7 @@ function commitPlacement() {
   refreshSlots();
   if (S.score > S.best) { S.best = S.score; localStorage.setItem('pr_best', S.best); }
   drawNext({ q, r });
-  if (gained) rewardTiles(gained, screenOf(w) || fromRect);
+  if (gained) setTimeout(() => rewardTiles(gained, trayPoint() || screenOf(w) || fromRect), 0); // peças decolam do selo da medalha, se houver
   if (S.tiles.size % 6 === 0) rig.flyTo(w.x, w.z);
   updateUndoButton();
 }
@@ -1821,30 +1821,31 @@ function popup(text, w, cls = '', y = 0.5) {
   $('popups').appendChild(el);
   setTimeout(() => el.remove(), 1500);
 }
-// Medalha de recompensa (missão, perfeito, harmonia, achado): nasce sobre a casa do tabuleiro, nunca no
-// topo da tela — antes os banners e o letreiro brigavam com o placar. A posição é presa a uma área livre
-// entre o HUD de cima (placar + cartões de missão) e o de baixo; medalhas simultâneas ficam lado a lado.
-const bursts = [];
+// Medalha de recompensa (missão, perfeito, harmonia, achado): sai de baixo do placar, numa bandeja logo
+// abaixo dele — ali o olho já tem folga para ler novidade (o meio do tabuleiro é colorido e caótico demais).
+// A medalha cai de trás do placar, quica, o selo "+N peças" desliza para o lado, as peças ganhas voam dali
+// até a pilha; na saída ela agacha e é sugada de volta para o placar, que pulsa ao recebê-la.
+// No desktop a coluna de missões (logo abaixo do placar) desce para abrir espaço enquanto a bandeja está cheia.
+const RB_T = 2400;
 const hw0 = (h) => { const t = S.tiles.get(h.k); return toWorld(t.q, t.r); };
+function rewardTray() {
+  let tray = $('rtray');
+  if (!tray) { tray = document.createElement('div'); tray.id = 'rtray'; document.body.appendChild(tray); }
+  const r = $('score-box').getBoundingClientRect(), cx = r.left + r.width / 2, W = Math.min(320, 2 * (cx - 4), 2 * (innerWidth - cx - 4)); // centrada no placar
+  tray.style.left = `${cx - W / 2}px`; tray.style.top = `${r.bottom}px`; tray.style.width = `${W}px`;
+  return tray;
+}
+// ponto de onde as peças ganhas decolam: o selo da medalha mais recente (ou nada, se não há medalha)
+function trayPoint() { const c = [...document.querySelectorAll('#rtray .rb-chip')].pop() || document.querySelector('#rtray .rb-medal'); if (!c) return null; const r = c.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 + 12 }; }
 function rewardBurst(w, kind, color, medal, chip, delay = 0) {
-  const p = screenOf(w, 0.9); if (!p) return;
-  const el = document.createElement('div');
-  el.className = `rburst ${kind}`; el.style.setProperty('--c', color); el.style.setProperty('--delay', `${delay}ms`);
-  el.innerHTML = `<div class="rb-medal"><i class="rb-ring"></i><i class="rb-rays"></i>${medal}</div>${chip ? `<div class="rb-chip">${chip}</div>` : ''}`;
-  $('popups').appendChild(el);
-  const W = 100, H = chip ? 122 : 88;
-  const top0 = document.querySelector('.hud-top').getBoundingClientRect().bottom + 8, bottom = document.querySelector('.hud-bottom').getBoundingClientRect().top - 8;
-  // obstáculos no alto da tela: coluna de cartões de missão e o letreiro de pontos (desktop)
-  const obst = [$('quests'), ...document.querySelectorAll('#signs .sign')].map((e) => e.getBoundingClientRect()).filter((r) => r.height);
-  let x = p.x, y = p.y - H / 2 - 10; // logo acima da peça
-  for (const o of bursts) if (Math.abs(o.x - x) < W && Math.abs(o.y - y) < H) x = o.x + (x >= o.x ? W : -W);
-  x = Math.max(W / 2 + 8, Math.min(innerWidth - W / 2 - 8, x));
-  let top = top0;
-  for (const r of obst) if (x + W / 2 > r.left - 8 && x - W / 2 < r.right + 8) top = Math.max(top, r.bottom + 26); // folga para o anel e os raios
-  y = Math.max(top + H / 2, Math.min(bottom - H / 2, y));
-  el.style.left = `${x}px`; el.style.top = `${y}px`;
-  const b = { x, y }; bursts.push(b); $('qlabels').classList.add('dim'); // balões das bandeiras recuam enquanto a medalha está na tela
-  setTimeout(() => { el.remove(); bursts.splice(bursts.indexOf(b), 1); if (!bursts.length) $('qlabels').classList.remove('dim'); }, 2200 + delay);
+  const tray = rewardTray(), el = document.createElement('div');
+  delay += tray.children.length * 180; // medalhas da mesma jogada entram em cascata
+  el.className = `rburst rb-${kind}`; el.style.setProperty('--c', color); el.style.setProperty('--delay', `${delay}ms`); // prefixo rb-: "quest" puro herdava o fundo escuro do cartão de missão
+  const badge = (medal.match(/<i class="rb-badge">.*?<\/i>/) || [''])[0]; medal = medal.replace(badge, ''); // o selo ✓/✕ fica preso ao corpo, não ao ícone que balança
+  el.innerHTML = `<div class="rb-medal"><i class="rb-ring"></i><i class="rb-face"></i><span class="rb-icon">${medal}</span>${badge}</div>${chip ? `<div class="rb-chip">${chip}</div>` : ''}`;
+  tray.appendChild(el); document.body.classList.add('tray-on');
+  setTimeout(() => { const sb = $('score-box'); sb.classList.remove('pulse'); void sb.offsetWidth; sb.classList.add('pulse'); }, delay + RB_T * 0.8); // o placar engole a medalha
+  setTimeout(() => { el.remove(); if (!tray.children.length) document.body.classList.remove('tray-on'); }, delay + RB_T + 60);
 }
 // Letreiro neon animado com os pontos: letras pulam uma a uma, o letreiro voa até o placar e o número rola
 let scoreShown = 0, scoreRoll = null;

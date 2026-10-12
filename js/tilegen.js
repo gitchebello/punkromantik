@@ -1,4 +1,4 @@
-import { RNG } from './rng.js?v=20261011h';
+import { RNG } from './rng.js?v=20261011k';
 
 // Terrenos. Cada bioma é uma vertente -punk da mesma proposta estética (é daí que vem o nome
 // do jogo): Cyberpunk, Solarpunk, Sandpunk e Snowpunk. Regiões preenchem setores; conectores atravessam a peça de uma
@@ -60,7 +60,7 @@ let tileCounter = 0;
 // Saídas do conector: 2 (reta/curva), 3 (bifurcação), 4 (cruzamento) ou 1 (ponto final)
 function connectorExits(rng, opts) {
   const a = rng.int(6);
-  const kind = rng.weighted([['line', opts.forkChance != null ? 1 - opts.forkChance - (opts.endChance || 0) : 0.72], ['fork', opts.forkChance ?? 0.17], ['end', opts.endChance ?? 0.11]]);
+  const kind = rng.weighted([['line', opts.forkChance != null ? 1 - opts.forkChance - (opts.endChance || 0) : 0.74], ['fork', opts.forkChance ?? 0.15], ['end', opts.endChance ?? 0.11]]);
   if (kind === 'end') return [a];
   if (kind === 'fork') {
     if (rng.chance(opts.crossChance ?? 0)) { // cruzamento: uma via se abre em três (4 saídas)
@@ -116,7 +116,7 @@ export function genTile(rng, opts = {}) {
     // Esgoto bifurca bem menos e nunca vira cruzamento de 4 saídas: canal que se abre em tudo
     // quanto é lado enchia o tabuleiro de pontas de esgoto impossíveis de fechar.
     const sew = type === 'sewage';
-    const exits = connectorExits(rng, { forkChance: sew ? (opts.forkChance ?? 0.17) * 0.45 : opts.forkChance, endChance: opts.endChance, crossChance: sew ? 0 : opts.crossChance });
+    const exits = connectorExits(rng, { forkChance: sew ? (opts.forkChance ?? 0.15) * 0.45 : opts.forkChance, endChance: opts.endChance, crossChance: sew ? 0 : opts.crossChance });
     for (const e of exits) edges[e] = type;
     conn = { type, exits };
   }
@@ -136,7 +136,7 @@ export const DUAL_CHANCE = 0.02; // das peças com conector: ~1 cruzamento a cad
 export function makeStack(rng, n) {
   const out = [];
   // primeiras peças simples; bifurcações e pontos finais só depois que o jogador já viu conectores comuns
-  for (let i = 0; i < n; i++) out.push(genTile(rng, { simple: i < 4, connChance: i < 8 ? 0.25 : 0.4, forkChance: i < 10 ? 0 : 0.2, endChance: i < 12 ? 0 : 0.14, crossChance: i < 14 ? 0 : 0.35, dualChance: i < 16 ? 0 : DUAL_CHANCE }));
+  for (let i = 0; i < n; i++) out.push(genTile(rng, { simple: i < 4, connChance: i < 8 ? 0.25 : 0.4, forkChance: i < 10 ? 0 : 0.17, endChance: i < 12 ? 0 : 0.14, crossChance: i < 14 ? 0 : 0.3, dualChance: i < 16 ? 0 : DUAL_CHANCE }));
   return out;
 }
 
@@ -144,7 +144,7 @@ export function makeStack(rng, n) {
 // (às vezes bifurca), nunca ponto final — sem isso as redes de trilho/rodovia ficavam em
 // pedaços de uma peça só e o trem nem tinha por onde andar. `ground` é o bioma ao redor da ponta.
 export function continuationTile(rng, type, ground) {
-  const fork = type === 'sewage' ? 0.06 : 0.16;
+  const fork = type === 'sewage' ? 0.05 : 0.13; // 11/10: um pouco menos de bifurcação (pedido do usuário)
   return genTile(rng, { forceConn: type, ground: ground && ground !== 'pool' ? ground : undefined, forkChance: fork, endChance: 0, crossChance: 0 });
 }
 

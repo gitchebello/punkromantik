@@ -85,43 +85,70 @@ button { font: inherit; cursor: pointer; border: 0; color: #fff; }
 .quest.lost { animation: questLost 0.9s ease-in forwards; filter: grayscale(1); }
 @keyframes questLost { 0% { transform: translateX(0); } 15% { transform: translateX(-6px) rotate(-2deg); } 30% { transform: translateX(6px) rotate(2deg); } 45% { transform: translateX(-4px); } 60% { transform: translateX(0); opacity: 1; } 100% { transform: translateY(14px) scale(0.85); opacity: 0; } }
 
-/* medalha de recompensa: nasce sobre a casa (missão, perfeito, harmonia, achado), pula, solta um anel,
-   mostra o selo "+N peças" e sobe sumindo. Fica numa área livre entre o HUD de cima e o de baixo. */
-.rburst { position: absolute; z-index: 45; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none;
-  transform: translate(-50%, -50%); animation: rbLife 2.1s cubic-bezier(0.2, 1, 0.3, 1) var(--delay, 0ms) both; }
-@keyframes rbLife { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.2) rotate(-20deg); } 14% { opacity: 1; transform: translate(-50%, -50%) scale(1.18) rotate(4deg); }
-  24% { transform: translate(-50%, -50%) scale(1) rotate(0); } 78% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: 0; transform: translate(-50%, calc(-50% - 28px)) scale(0.9); } }
-.rb-medal { position: relative; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; color: #fff;
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 70%, #fff), var(--c) 55%, color-mix(in srgb, var(--c) 45%, #000));
-  box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--c), 0 0 28px var(--c), 0 6px 14px rgba(0, 0, 0, 0.5); }
-.rb-medal > .ic { color: var(--ink); position: relative; z-index: 1; }
-.rb-star { position: relative; z-index: 1; font-size: 34px; line-height: 1; color: #fff; text-shadow: 0 0 8px #fff, 0 2px 0 rgba(0, 0, 0, 0.25); }
-.rburst.perfect .rb-medal { border-radius: 0; clip-path: none; background: none; box-shadow: none; }
-.rburst.perfect .rb-medal::before { content: ''; position: absolute; inset: -5px; background: #fff; clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); filter: drop-shadow(0 0 14px var(--c)); }
-.rburst.perfect .rb-medal::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 35% 30%, #d9ffe2, var(--c) 60%, #1f8a45); clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); }
-.rb-ring { position: absolute; inset: -4px; border-radius: 50%; border: 3px solid var(--c); opacity: 0; animation: rbRing 0.9s ease-out calc(var(--delay, 0ms) + 120ms) both; }
-@keyframes rbRing { 0% { opacity: 0.95; transform: scale(0.9); } 100% { opacity: 0; transform: scale(2.3); } }
-.rb-rays { position: absolute; inset: -26px; border-radius: 50%; z-index: -1; opacity: 0.55;
-  background: repeating-conic-gradient(from 0deg, var(--c) 0 8deg, transparent 8deg 30deg);
-  -webkit-mask: radial-gradient(circle, transparent 30%, #000 42%, transparent 70%); mask: radial-gradient(circle, transparent 30%, #000 42%, transparent 70%);
-  animation: rbSpin 2.4s linear var(--delay, 0ms) both; }
-@keyframes rbSpin { from { transform: rotate(0) scale(0.6); } 20% { transform: rotate(40deg) scale(1); } to { transform: rotate(160deg) scale(1); } }
-.rb-badge { position: absolute; z-index: 2; right: -4px; bottom: -4px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--acid); color: var(--ink); box-shadow: 0 0 0 2px #fff, 0 0 10px var(--acid);
-  animation: charPop 0.45s cubic-bezier(0.2, 1.7, 0.4, 1) calc(var(--delay, 0ms) + 260ms) both; }
-.rb-badge .ic { color: var(--ink); }
-.rb-chip { display: inline-flex; align-items: center; gap: 3px; padding: 3px 10px; border-radius: 999px; background: var(--acid); color: var(--ink); font-family: Orbitron, sans-serif; font-weight: 900; font-size: 17px;
-  box-shadow: 0 0 0 2px #fff, 0 0 16px rgba(196, 255, 42, 0.8); animation: rbChip 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) calc(var(--delay, 0ms) + 300ms) both; }
-.rb-chip .ic { color: var(--ink); }
-.rburst.harmony .rb-chip { background: #ffd166; box-shadow: 0 0 0 2px #fff, 0 0 16px rgba(255, 209, 102, 0.9); }
-@keyframes rbChip { from { opacity: 0; transform: translateY(-16px) scale(0.5); } to { opacity: 1; transform: none; } }
-.rburst.lost .rb-medal { filter: grayscale(0.85) brightness(0.8); animation: questLost 0.9s ease-in var(--delay, 0ms) both; }
-.rburst.lost .rb-rays { display: none; } .rburst.lost .rb-ring { border-color: #ff5c7a; }
-.rburst.lost .rb-badge { background: #ff5c7a; box-shadow: 0 0 0 2px #fff, 0 0 10px #ff5c7a; }
-@media (prefers-reduced-motion: reduce) { .rb-rays { display: none; } }
+/* Bandeja de recompensas logo abaixo do placar. Recorta no topo: a medalha nasce de trás do placar e
+   volta para dentro dele. Medalhas simultâneas ficam lado a lado, centradas sob o placar. */
+#rtray { position: fixed; z-index: 46; height: 64px; padding-top: 6px; overflow: hidden; pointer-events: none; display: flex; justify-content: center; gap: 8px; }
+/* coluna de missões desce junto (desktop: ela fica logo abaixo do placar) */
+.quests-wrap { transition: transform 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) 0.05s; }
+@media (min-width: 721px) { body.tray-on .quests-wrap { transform: translateY(54px); } }
+body.tray-on .sb-gain { display: none; } /* o selo da medalha já conta a novidade logo ali */
+.rburst { --T: 2.4s; position: relative; display: flex; align-items: center; height: 46px; pointer-events: none; }
+.rburst > * { animation-delay: var(--delay, 0ms) !important; }
+/* medalha: 40 px, pivô no topo (pendurada no placar) */
+.rb-medal { position: relative; width: 40px; height: 40px; flex: none; display: grid; place-items: center; transform-origin: 50% 0; animation: rbMedal var(--T) both; z-index: 1; }
+@keyframes rbMedal {
+  0%   { opacity: 0; transform: translateY(-52px) scale(0.7, 1.3); animation-timing-function: cubic-bezier(0.5, 0, 1, 0.6); }
+  5%   { opacity: 0.6; }
+  11%  { opacity: 1; transform: translateY(4px) scale(1.32, 0.7); animation-timing-function: cubic-bezier(0, 0.5, 0.4, 1); }
+  17%  { transform: translateY(-7px) scale(0.88, 1.14); animation-timing-function: cubic-bezier(0.5, 0, 1, 0.6); }
+  22%  { transform: translateY(1px) scale(1.1, 0.9); animation-timing-function: ease-out; }
+  27%  { transform: translateY(0) scale(0.97, 1.03); }
+  31%  { transform: none; animation-timing-function: ease-in-out; }
+  50%  { transform: scale(1.06); animation-timing-function: ease-in-out; }
+  70%  { opacity: 1; transform: none; animation-timing-function: cubic-bezier(0.3, 0, 0.6, 1); }
+  77%  { opacity: 1; transform: translateY(5px) scale(1.18, 0.8); animation-timing-function: cubic-bezier(0.5, 0, 1, 0.5); }
+  88%  { opacity: 0.7; transform: translateY(-30px) scale(0.66, 1.4); }
+  100% { opacity: 0; transform: translateY(-60px) scale(0.5, 1.5); } }
+.rb-face { position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
+  background: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--c) 55%, #fff), var(--c) 55%, color-mix(in srgb, var(--c) 55%, #000));
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--c), 0 0 16px color-mix(in srgb, var(--c) 80%, transparent), 0 4px 8px rgba(0, 0, 0, 0.45); }
+.rb-face::before { content: ''; position: absolute; inset: 3px; border-radius: 50%; border: 1.5px dashed rgba(255, 255, 255, 0.5); } /* serrilha de medalha */
+.rb-face::after { content: ''; position: absolute; top: -20%; bottom: -20%; width: 30%; left: -60%; transform: skewX(-20deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent); animation: rbGlint var(--T) var(--delay, 0ms) both; }
+@keyframes rbGlint { 0%, 30% { left: -60%; } 46%, 100% { left: 130%; } }
+.rburst.rb-perfect .rb-face { border-radius: 0; box-shadow: none; clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); background: radial-gradient(circle at 35% 28%, #e6fff0, var(--c) 58%, #1f8a45); }
+.rburst.rb-perfect .rb-face::before { display: none; }
+.rburst.rb-perfect .rb-medal::before { content: ''; position: absolute; inset: -3px; background: #fff; clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); filter: drop-shadow(0 0 8px var(--c)); }
+.rb-icon { position: relative; z-index: 1; display: grid; place-items: center; animation: rbIcon var(--T) var(--delay, 0ms) both; }
+.rb-icon .ic { color: var(--ink); width: 18px; height: 18px; }
+@keyframes rbIcon { 0%, 9% { transform: translateY(-5px); } 13% { transform: translateY(3px) rotate(-12deg) scale(1.14, 0.84); } 19% { transform: translateY(-3px) rotate(9deg) scale(0.92, 1.1); }
+  25% { transform: rotate(-4deg); } 32%, 72% { transform: none; } 78% { transform: translateY(3px) scale(1.1, 0.88); } 90%, 100% { transform: translateY(-5px) scale(0.9, 1.12); } }
+.rb-star { font-size: 21px; line-height: 1; color: #fff; font-weight: 900; text-shadow: 0 0 6px #fff, 0 1px 0 rgba(0, 0, 0, 0.25); }
+.rb-ring { position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--c); opacity: 0; animation: rbRing var(--T) var(--delay, 0ms) both; }
+@keyframes rbRing { 0%, 10% { opacity: 0; transform: scale(0.8); } 11% { opacity: 1; transform: scale(1, 0.75); } 36%, 100% { opacity: 0; transform: scale(2.1, 1.7); } }
+.rb-badge { position: absolute; z-index: 2; right: -5px; bottom: -3px; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; background: var(--acid); color: var(--ink); box-shadow: 0 0 0 1.5px #fff, 0 0 8px var(--acid);
+  animation: rbBadge var(--T) var(--delay, 0ms) both; }
+.rb-badge .ic { color: var(--ink); width: 10px; height: 10px; }
+@keyframes rbBadge { 0%, 19% { opacity: 0; transform: scale(0) rotate(-60deg); } 24% { opacity: 1; transform: scale(1.5, 0.7) rotate(8deg); } 28% { transform: scale(0.85, 1.2); } 32%, 76% { opacity: 1; transform: none; } 86%, 100% { opacity: 0; transform: scale(0.4); } }
+/* selo "+N peças": escorrega de trás da medalha para a direita com quique próprio; sai antes dela (overlap) */
+.rb-chip { position: relative; margin-left: -10px; padding: 3px 9px 3px 15px; border-radius: 0 999px 999px 0; display: inline-flex; align-items: center; gap: 2px; background: var(--acid); color: var(--ink);
+  font-family: Orbitron, sans-serif; font-weight: 900; font-size: 13px; box-shadow: 0 0 12px rgba(196, 255, 42, 0.6); transform-origin: 0 50%; animation: rbChip var(--T) both; }
+.rb-chip .ic { color: var(--ink); width: 11px; height: 11px; }
+@keyframes rbChip { 0%, 14% { opacity: 0; transform: translateX(-26px) scale(0.2, 0.6); animation-timing-function: cubic-bezier(0.2, 0.8, 0.4, 1); }
+  21% { opacity: 1; transform: translateX(4px) scale(1.18, 0.86); } 26% { transform: translateX(-2px) scale(0.94, 1.08); } 31%, 68% { opacity: 1; transform: none; animation-timing-function: cubic-bezier(0.5, 0, 1, 0.5); }
+  78%, 100% { opacity: 0; transform: translateX(-30px) scale(0.2, 0.6); } }
+.rburst.rb-harmony .rb-chip { background: #ffd166; box-shadow: 0 0 12px rgba(255, 209, 102, 0.8); }
+/* missão perdida: cai pesada, achata sem quicar, treme e escorrega para baixo apagando */
+.rburst.rb-lost .rb-medal { animation-name: rbLost; filter: grayscale(0.85) brightness(0.85); }
+@keyframes rbLost { 0% { opacity: 0; transform: translateY(-40px) scale(0.8, 1.2); animation-timing-function: cubic-bezier(0.5, 0, 1, 0.6); } 11% { opacity: 1; transform: translateY(3px) scale(1.25, 0.75); } 18% { transform: scale(1.04, 0.96); }
+  26% { transform: translateX(-4px) rotate(-8deg); } 32% { transform: translateX(4px) rotate(8deg); } 38% { transform: translateX(-3px) rotate(-4deg); } 44%, 70% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(14px) scale(1.1, 0.6); } }
+.rburst.rb-lost .rb-face::after { display: none; } .rburst.rb-lost .rb-ring { border-color: #ff5c7a; }
+.rburst.rb-lost .rb-badge { background: #ff5c7a; box-shadow: 0 0 0 1.5px #fff, 0 0 8px #ff5c7a; }
+@media (prefers-reduced-motion: reduce) { .rb-face::after, .rb-ring { display: none; } }
 
 /* balões flutuando sobre as bandeiras: ícone + quanto falta */
 #qlabels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; transition: opacity 0.3s; }
-#qlabels.dim { opacity: 0.18; }
 /* Balão da missão: amarelo e claro de propósito — escuro, ele sumia no tabuleiro e a bandeira sozinha
    não dizia "aqui tem peças a ganhar". O grupo aparece no disco colorido à esquerda. */
 .qlabel { position: absolute; transform: translate(-50%, -100%); display: flex; align-items: center; gap: 4px; background: var(--yellow); border: 2px solid #fff; color: var(--ink);
