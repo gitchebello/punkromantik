@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011u';
-import { RNG } from './rng.js?v=20261011u';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011u';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011u';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011u';
-import { CameraRig, attachInput } from './controls.js?v=20261011u';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011v';
+import { RNG } from './rng.js?v=20261011v';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011v';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011v';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011v';
+import { CameraRig, attachInput } from './controls.js?v=20261011v';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -908,7 +908,9 @@ const ORD = ['', '', 'DUPLO', 'TRIPLO', 'QUÁDRUPLO', 'QUÍNTUPLO', 'SÊXTUPLO']
 // Clique duplo em "Colocar" ou espaço segurado colocavam a peça seguinte sem o jogador vê-la (ela já
 // chega sólida numa casa válida). Os comandos do JOGADOR passam por aqui; PR.commitPlacement (bot/auto) não.
 let lastCommit = 0;
-const PERFECT_TILES = 5; // 11/10, pedido do usuário: o encaixe perfeito (6 lados) sempre dá +5 peças para seguir jogando (era +1)
+// 11/10, pedido do usuário: a peça em HARMONIA (cercada pelos 6 vizinhos do mesmo bioma — a que brilha e
+// acende a luz hexagonal no mapa) dá +5 peças para seguir jogando. O encaixe perfeito de 6 lados (+60) continua +1.
+const HARMONY_TILES = 5;
 function playerCommit() { const now = performance.now(); if (now - lastCommit < 450) return; lastCommit = now; commitPlacement(); }
 function commitPlacement() {
   if (!S.current || !S.selected || S.over) return;
@@ -921,13 +923,13 @@ function commitPlacement() {
   S.placed++;
   const w = toWorld(q, r);
   let pts = ev.matches * 10 + ev.links * LINK_PTS, gained = 0; // continuar trilho/rodovia/esgoto vale extra
-  if (ev.perfect) { pts += 60; S.perfects++; for (let i = 0; i < PERFECT_TILES; i++) S.stack.push(genTile(S.rng)); gained += PERFECT_TILES; gain('perfect', PERFECT_TILES); }
+  if (ev.perfect) { pts += 60; S.perfects++; S.stack.push(genTile(S.rng)); gained++; gain('perfect'); }
   let closed = false;
   if (isTerminal(tile) && ev.sides[(tile.conn.exits[0] + rot) % 6] === 1) { pts += 20; S.stack.push(genTile(S.rng)); gained++; closed = true; gain('terminal'); } // fechou uma linha: sensação de "ponto final"
   const shut = closedRegions(q, r, tile, rot); // regiões que esta peça acabou de cercar por completo
   for (const c of shut) { pts += c.points; if (c.tiles) { for (let i = 0; i < c.tiles; i++) S.stack.push(genTile(S.rng)); gained += c.tiles; gain('closed', c.tiles); } }
   const harm = newHarmonies(q, r); // peças que acabaram de ficar perfeitamente cercadas pelo mesmo ambiente
-  for (const h of harm) { pts += HARMONY_PTS; S.tiles.get(h.k).harmony = h.g; addHarmonyFx(h.k, h.g); }
+  for (const h of harm) { pts += HARMONY_PTS; S.tiles.get(h.k).harmony = h.g; addHarmonyFx(h.k, h.g); for (let i = 0; i < HARMONY_TILES; i++) S.stack.push(genTile(S.rng)); gained += HARMONY_TILES; gain('harmony', HARMONY_TILES); }
   S.undo.harmony = harm.map((h) => h.k);
   let relicHit = null;
   S.undo.revealed = revealAround(q, r); // achado oculto ao lado acende (o encaixe com ele já contou de verdade em `ev`)
@@ -943,7 +945,7 @@ function commitPlacement() {
   spawnBurst(w, ev.matchedTypes.map((t) => TERRAIN[t].color), ev.perfect ? 34 : 4 + ev.matches * 3);
   if (ev.perfect) {
     play('perfect'); pulse(w, 0xffd166); confettiBurst(2);
-    rewardBurst(w, 'perfect', '#7dff9a', '<b class="rb-star">★</b>', `+${PERFECT_TILES}${icon('tile', 13)}`, 0, 'ENCAIXE PERFEITO!'); // aviso em texto (pedido do usuário, 11/10)
+    rewardBurst(w, 'perfect', '#7dff9a', '<b class="rb-star">★</b>', `+1${icon('tile', 13)}`);
   } else if (ev.matches >= 3) {
     confettiBurst(ev.matches >= 4 ? 2 : 1); play('confetti');
   }
@@ -955,7 +957,7 @@ function commitPlacement() {
       play('harmony'); confettiBurst(1); starBurst(color); pulse(hw, GROUP_HEX[h.g]); pulse(hw, 0xffd166); spawnBurst(hw, [color, '#ffd166', '#ffffff'], 46, 1.3); cameraShake = { t: 0, dur: 0.5, amp: 0.09 };
       [0, 300, 600, 900].forEach((ms, n) => setTimeout(() => kick(0.38, n % 2 ? ['#ffd166', color] : [color], 1.25), ms)); // flashes curtos na cor do bioma
     }, 260);
-    rewardBurst(hw0(h), 'harmony', '#ffd166', '<b class="rb-star">✺</b>', `+${HARMONY_PTS}`, 260);
+    rewardBurst(hw0(h), 'harmony', '#ffd166', '<b class="rb-star">✺</b>', `+${HARMONY_TILES}${icon('tile', 13)}`, 260, 'HARMONIA PERFEITA!'); // aviso em texto (pedido do usuário, 11/10)
   }
   if (relicHit) {
     const rw = toWorld(relicHit.q, relicHit.r);
@@ -1839,7 +1841,7 @@ function rewardTray() {
 function syncTrayTitle(tray) { const on = !!tray.querySelector('.titled'); tray.classList.toggle('titled', on); document.body.classList.toggle('tray-title', on); }
 // ponto de onde as peças ganhas decolam: o selo da medalha mais recente (ou nada, se não há medalha)
 function trayPoint() { const c = [...document.querySelectorAll('#rtray .rb-chip')].pop() || document.querySelector('#rtray .rb-medal'); if (!c) return null; const r = c.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 + 12 }; }
-function rewardBurst(w, kind, color, medal, chip, delay = 0, title = '') { // `title`: aviso em texto embaixo da medalha (encaixe perfeito)
+function rewardBurst(w, kind, color, medal, chip, delay = 0, title = '') { // `title`: aviso em texto embaixo da medalha (harmonia)
   const tray = rewardTray(), el = document.createElement('div');
   delay += tray.children.length * 180; // medalhas da mesma jogada entram em cascata
   el.className = `rburst rb-${kind}`; el.style.setProperty('--c', color); el.style.setProperty('--delay', `${delay}ms`); // prefixo rb-: "quest" puro herdava o fundo escuro do cartão de missão

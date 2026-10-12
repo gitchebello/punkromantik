@@ -1,4 +1,4 @@
-import { RNG } from './rng.js?v=20261011u';
+import { RNG } from './rng.js?v=20261011v';
 
 // Terrenos. Cada bioma é uma vertente -punk da mesma proposta estética (é daí que vem o nome
 // do jogo): Cyberpunk, Solarpunk, Sandpunk e Snowpunk. Regiões preenchem setores; conectores atravessam a peça de uma
