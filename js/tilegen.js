@@ -1,4 +1,4 @@
-import { RNG } from './rng.js?v=20261011r';
+import { RNG } from './rng.js?v=20261011t';
 
 // Terrenos. Cada bioma é uma vertente -punk da mesma proposta estética (é daí que vem o nome
 // do jogo): Cyberpunk, Solarpunk, Sandpunk e Snowpunk. Regiões preenchem setores; conectores atravessam a peça de uma
@@ -159,7 +159,7 @@ export function questCandidates(tile) {
 }
 
 // Missão = alvo ABSOLUTO numa ESCADA que sobe com a partida (11/10, pedido do usuário: "as primeiras
-// missões vão cobrar 3 tiles de solarpunk, depois 5, depois 7, depois 9, depois 10… a progressão vai
+// missões vão cobrar 3 tiles de solarpunk, depois 5, depois 7…" — e depois: "dar saltos maiores". A progressão vai
 // aumentando junto com a dificuldade e a expansão do jogo").
 //  - O alvo NÃO depende do tabuleiro: sai do degrau da escada. O degrau é o maior entre (a) quantas
 //    missões daquele grupo já saíram nesta partida (`ctx.seq[group]`) e (b) o nível (peças colocadas
@@ -167,22 +167,26 @@ export function questCandidates(tile) {
 //  - Conta o que já foi construído: a bandeira que entra numa área de 8 Solarpunk numa missão de 10
 //    soma 9 e o cartão mostra 1. Área já maior que o alvo → cumpre no encaixe (terreno preparado paga).
 //  - Antes do encaixe o cartão/balão mostram o alvo e não mudam ao passear o fantasma; depois, quanto falta.
-//  - Recompensa cresce com o alvo (2 → 5 peças): missão mais difícil, prêmio maior.
+//  - Recompensa cresce com o alvo (2 → 3 peças): missão mais difícil, prêmio maior.
 export const QUEST_LEVEL_EVERY = 20;
 export const questLevel = (placed) => Math.floor(placed / QUEST_LEVEL_EVERY);
-// degraus: biomas 3, 5, 7, 9, depois +1 por degrau (10, 11, 12…); conectores (redes dependem das
-// peças certas) 3, 4, 5, 6…; Cyberpunk em PRÉDIOS, sobe devagar: 6, 10, 14, 18…
-// (uma peça de cidade soma ~5 prédios em média; peça cheia ~10).
+// Degraus com saltos que CRESCEM (11/10, pedido do usuário: "ficou um pouco fácil… dar saltos maiores"):
+//  - biomas:     3, 6, 10, 14, 19, 24, 30…   (+3, +4, +4, +5, +5, +6…)
+//  - conectores: 3, 5, 7, 9, 11…             (+2; redes dependem das peças certas aparecerem)
+//  - Cyberpunk:  6, 12, 19, 27, 36…  prédios (+6, +7, +8…; uma peça de cidade soma ~5 prédios, cheia ~10)
+// (a escada anterior, 3/5/7/9/+1, ficou fácil: bot com 73 peças e 11 missões por partida)
 const CONNECTOR_GROUPS = ['toxic', 'rail', 'road'];
 export function questTarget(group, step) {
-  if (group === 'cyber') return 6 + 4 * step;
-  if (CONNECTOR_GROUPS.includes(group)) return 3 + step;
-  return step < 4 ? 3 + 2 * step : 9 + (step - 3);
+  let t = group === 'cyber' ? 6 : 3;
+  for (let i = 1; i <= step; i++) t += group === 'cyber' ? 5 + i : CONNECTOR_GROUPS.includes(group) ? 2 : 3 + Math.floor(i / 2);
+  return t;
 }
-// prêmio em peças, entre 2 e 5, pelo tamanho do alvo (biomas: 3–5 → 2, 7–9 → 3, 10–12 → 4, 13+ → 5)
+// prêmio em peças pelo tamanho do alvo, entre 2 e QUEST_REWARD_MAX (biomas: 3–6 → 2, 10+ → 3).
+// 11/10: teto 3 (pedido do usuário: com teto 5 "a recompensa ficou muito forte"; +5 é só do encaixe perfeito)
+export const QUEST_REWARD_MAX = 3;
 export function questReward(group, target) {
-  const k = group === 'cyber' ? target / 4.5 : CONNECTOR_GROUPS.includes(group) ? target / 1.6 : target / 2.6;
-  return Math.max(2, Math.min(5, Math.round(k)));
+  const k = group === 'cyber' ? target / 6 : CONNECTOR_GROUPS.includes(group) ? target / 1.8 : target / 3.4;
+  return Math.max(2, Math.min(QUEST_REWARD_MAX, Math.round(k)));
 }
 
 // Dois tipos de missão:
