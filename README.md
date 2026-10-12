@@ -72,7 +72,8 @@ Peças com conector têm sempre **um único bioma** de chão. Conectores: `conn 
 ## Pontuação
 
 - +10 por lado encaixado com terreno igual (esgoto ⇄ lagoa também casa).
-- Encaixe perfeito (6 vizinhos, 6 lados casando): +60 e **+5 peças** (`PERFECT_TILES`, era +1 até 11/10).
+- Encaixe perfeito (6 vizinhos, 6 lados casando): +60 e +1 peça.
+- Harmonia (peça cercada pelos 6 vizinhos do mesmo bioma, a que acende a luz hexagonal): +100 e **+2 peças** (`HARMONY_TILES`; era +5 em 11/10 e virava bola de neve: bot com média 124 peças, até 231 — 12/10, "o jogo ficou muito demorado"), com aviso em texto "HARMONIA PERFEITA!" na bandeja. Bot com +2: média ~66 peças (51–86).
 - Peças com bandeira abrem missões: conecte N+ peças do mesmo grupo a partir dela, ou monte uma cidade com N+ prédios → pontos e peças extras. Passar do número cumpre; missão só some quando a formação fica cercada.
 - Harmonia (peça cercada por 6 vizinhos do mesmo bioma): +100.
 - Ligar o tabuleiro a um achado distante: +80 e +2 peças (+1 a partir do nível 4).

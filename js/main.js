@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261011v';
-import { RNG } from './rng.js?v=20261011v';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261011v';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261011v';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261011v';
-import { CameraRig, attachInput } from './controls.js?v=20261011v';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261012a';
+import { RNG } from './rng.js?v=20261012a';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261012a';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261012a';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261012a';
+import { CameraRig, attachInput } from './controls.js?v=20261012a';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -909,8 +909,10 @@ const ORD = ['', '', 'DUPLO', 'TRIPLO', 'QUÁDRUPLO', 'QUÍNTUPLO', 'SÊXTUPLO']
 // chega sólida numa casa válida). Os comandos do JOGADOR passam por aqui; PR.commitPlacement (bot/auto) não.
 let lastCommit = 0;
 // 11/10, pedido do usuário: a peça em HARMONIA (cercada pelos 6 vizinhos do mesmo bioma — a que brilha e
-// acende a luz hexagonal no mapa) dá +5 peças para seguir jogando. O encaixe perfeito de 6 lados (+60) continua +1.
-const HARMONY_TILES = 5;
+// acende a luz hexagonal no mapa) dá peças extras; o encaixe perfeito de 6 lados (+60) continua +1.
+// 12/10: +5 → +2 (pedido do usuário: "o jogo ficou muito demorado"). Com +5 virava bola de neve —
+// bot: média 124 peças, até 231, a harmonia sozinha rendendo 70–155 peças; com +2, média ~66.
+const HARMONY_TILES = 2;
 function playerCommit() { const now = performance.now(); if (now - lastCommit < 450) return; lastCommit = now; commitPlacement(); }
 function commitPlacement() {
   if (!S.current || !S.selected || S.over) return;

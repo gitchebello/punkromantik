@@ -2,8 +2,8 @@
 // tubos, frustos, chanfros, folhas), biomas redesenhados e partes animáveis.
 // Três malhas por peça: "lit" (iluminada), "glow" (neon, sem luz) e "water"
 // (shader de água animada). Cor por vértice, flat shading.
-import { edgeAngle, vertexAngle, APO } from './hex.js?v=20261011v';
-import { RNG } from './rng.js?v=20261011v';
+import { edgeAngle, vertexAngle, APO } from './hex.js?v=20261012a';
+import { RNG } from './rng.js?v=20261012a';
 
 const THREE = window.THREE;
 export const TILE_H = 0.16;
