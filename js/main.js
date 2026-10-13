@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261012z';
-import { RNG } from './rng.js?v=20261012z';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel, connsOf, pickLadders } from './tilegen.js?v=20261012z';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildMillRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildChipGeometry, buildNessieGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261012z';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261012z';
-import { CameraRig, attachInput } from './controls.js?v=20261012z';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261013a';
+import { RNG } from './rng.js?v=20261013a';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel, connsOf, pickLadders } from './tilegen.js?v=20261013a';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildMillRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildChipGeometry, buildNessieGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261013a';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261013a';
+import { CameraRig, attachInput } from './controls.js?v=20261013a';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;

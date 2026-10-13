@@ -2,8 +2,8 @@
 // tubos, frustos, chanfros, folhas), biomas redesenhados e partes animáveis.
 // Três malhas por peça: "lit" (iluminada), "glow" (neon, sem luz) e "water"
 // (shader de água animada). Cor por vértice, flat shading.
-import { edgeAngle, vertexAngle, APO } from './hex.js?v=20261012z';
-import { RNG } from './rng.js?v=20261012z';
+import { edgeAngle, vertexAngle, APO } from './hex.js?v=20261013a';
+import { RNG } from './rng.js?v=20261013a';
 
 const THREE = window.THREE;
 export const TILE_H = 0.16;
@@ -1999,8 +1999,9 @@ function mall(B, rng, x, z, a, sch) {
 // área de neve, com a fogueira na porta. Sai como marco (as trilhas dos ursos contornam pelo anel).
 function bigIgloo(B, rng, x, z, a) {
   const snow = col(PAL.snow);
-  igloo(B, rng, { x, z, a: a + Math.PI }, 2.05);
-  const fx = x + Math.cos(a) * 0.42 + Math.sin(a) * 0.12, fz = z + Math.sin(a) * 0.42 - Math.cos(a) * 0.12; // fogueira ao lado da porta
+  const sc = B.iglooSc || 2.05, k = sc / 2.05; // escala pelo trecho de neve da peça (ver buildTile)
+  igloo(B, rng, { x, z, a: a + Math.PI }, sc);
+  const fx = x + (Math.cos(a) * 0.42 + Math.sin(a) * 0.12) * k, fz = z + (Math.sin(a) * 0.42 - Math.cos(a) * 0.12) * k; // fogueira ao lado da porta
   B.annulus(B.lit, fx, H + 0.003, fz, 0.03, 0.055, 10, shade(snow, 0.84));
   for (let k = 0; k < 5; k++) { const t = (k / 5) * PI2; B.tube(B.lit, [[fx + Math.cos(t) * 0.025, H, fz + Math.sin(t) * 0.025], [fx, H + 0.045, fz]], [0.005, 0.003], 4, col(PAL.woodDark)); }
   B.sphere(B.glow, fx, H + 0.042, fz, 0.022, col('#ff7a1a'), 7, 4);
@@ -2092,37 +2093,17 @@ function drawLandmark(B, rng, type, x, z, a, sch, dom = 3) {
       B.sphere(B.glow, mx, H + 1.38, mz, 0.022, col(PAL.beacon), 6, 3);
       for (let k = 0; k < 4; k++) { const ang = a + k * 1.6 + 0.9; boulders(B, rng, x + Math.cos(ang) * 0.5, z + Math.sin(ang) * 0.5, 1.1); }
       B.anims.push({ type: 'bolt', x0: x + Math.cos(a + 2.2) * 0.22, z0: z + Math.sin(a + 2.2) * 0.22, x1: x, z1: z, y: H + 0.7, color: '#fff1c8' });
-    } else if (v === 1) { // COLOSSO DE SUCATA: a cabeça de um robô gigante meio engolida pela duna
-      // 12/10: entrou no lugar dos picos gêmeos com ponte pênsil (o usuário achava a ponte estranha).
-      // Ozymandias do Sandpunk: a máquina antiga que o deserto venceu, com gente morando em volta.
-      const c2 = Math.cos(a), sn = Math.sin(a), px = -sn, pz = c2, metal = col(PAL.scrap[1]), rust = col(PAL.rust[0]), dune = col(PAL.sandTrail);
-      B.sphere(B.lit, x, H - 0.06, z, 0.58, shade(dune, 0.98), 14, 4, { dome: true, sy: 0.28 }); // duna
-      const hx = x + c2 * 0.04, hz = z + sn * 0.04, ca = Math.cos(a + 0.12), sa = Math.sin(a + 0.12);
-      // capacete redondo meio enterrado: a silhueta de "cabeça de robô" tem que ler de qualquer lado
-      B.extrude(B.lit, ngon(hx, hz, 0.25, 14, a), H, 0.2, shade(metal, 1.05), { sideShade: true, noTop: true });
-      B.sphere(B.lit, hx, H + 0.2, hz, 0.25, shade(metal, 1.12), 14, 5, { dome: true, sy: 0.92 });
-      B.sphere(B.lit, hx - ca * 0.04, H + 0.36, hz - sa * 0.04, 0.16, col(PAL.sandTrail), 10, 3, { dome: true, sy: 0.35 }); // areia acumulada no topo
-      for (const y of [0.05, 0.13]) B.annulus(B.lit, hx, H + y, hz, 0.25, 0.262, 14, rust); // aros de ferrugem
-      // visor: uma faixa âmbar contínua contornando a frente — o "olhar" do colosso ainda aceso
-      for (let k = -4; k <= 4; k++) { const t = a + 0.12 + k * 0.22; B.panel(B.glow, hx + Math.cos(t) * 0.255, H + 0.2, hz + Math.sin(t) * 0.255, 0.062, 0.05, t, shade(col(PAL.ore), k === 0 ? 1 : 0.8), 0.008); }
-      for (const sd of [1, -1]) B.sphere(B.glow, hx + ca * 0.25 - sa * sd * 0.09, H + 0.225, hz + sa * 0.25 + ca * sd * 0.09, 0.03, col(PAL.oreGlow), 7, 4); // olhos
-      for (let k = -2; k <= 2; k++) B.panel(B.lit, hx + ca * 0.252 - sa * k * 0.04, H + 0.03, hz + sa * 0.252 + ca * k * 0.04, 0.018, 0.12, a + 0.12, col('#1a120c'), 0.01); // grade da boca
-      for (const sd of [1, -1]) { // orelhas: discos laterais com antena torta
-        const ax = hx - sa * sd * 0.25, az = hz + ca * sd * 0.25;
-        B.tube(B.lit, [[ax + sa * sd * 0.02, H + 0.2, az - ca * sd * 0.02], [ax - sa * sd * 0.05, H + 0.2, az + ca * sd * 0.05]], [0.09, 0.09], 10, rust, { capEnd: true });
-        B.tube(B.lit, [[ax - sa * sd * 0.04, H + 0.28, az + ca * sd * 0.04], [ax - sa * sd * 0.08, H + 0.48, az + ca * sd * 0.08], [ax - sa * sd * 0.05 - ca * 0.08, H + 0.6, az + ca * sd * 0.05 - sa * 0.08]], [0.012, 0.009, 0.006], 5, col(PAL.post));
-        B.sphere(B.glow, ax - sa * sd * 0.05 - ca * 0.08, H + 0.61, az + ca * sd * 0.05 - sa * 0.08, 0.016, col(PAL.beacon), 5, 3);
-      }
-      // a mão do colosso saindo da areia ao lado, dedos dobrados
-      const mx = x - c2 * 0.3 + px * 0.42, mz = z - sn * 0.3 + pz * 0.42;
-      B.extrude(B.lit, chamfer(mx, mz, 0.16, 0.12, a - 0.5, 0.03), H, 0.12, metal, { sideShade: true });
-      for (let k = 0; k < 4; k++) B.tube(B.lit, [[mx + c2 * 0.06 + px * (k - 1.5) * 0.035, H + 0.1, mz + sn * 0.06 + pz * (k - 1.5) * 0.035], [mx + c2 * 0.12 + px * (k - 1.5) * 0.035, H + 0.2, mz + sn * 0.12 + pz * (k - 1.5) * 0.035], [mx + c2 * 0.17 + px * (k - 1.5) * 0.035, H + 0.16, mz + sn * 0.17 + pz * (k - 1.5) * 0.035]], [0.018, 0.016, 0.013], 6, shade(metal, 1.05));
-      // moradores: tendas encostadas na cabeça e a escada até a boca
-      nomadCamp(B, rng, { x: x - c2 * 0.38 - px * 0.3, z: z - sn * 0.38 - pz * 0.3, a: a + Math.PI });
-      vaporator(B, rng, { x: x + c2 * 0.46 - px * 0.36, z: z + sn * 0.46 - pz * 0.36, a });
-      for (let k = 0; k < 5; k++) B.extrude(B.lit, rect(hx + ca * (0.42 - k * 0.04), hz + sa * (0.42 - k * 0.04), 0.03, 0.12, a + 0.12), H, 0.012 + k * 0.012, col(PAL.woodDark));
-      for (const sd of [1, -1]) brazier(B, x + c2 * 0.45 + px * sd * 0.16, z + sn * 0.45 + pz * sd * 0.16, 1.4);
-      B.anims.push({ type: 'bolt', x0: hx - sa * 0.26 - ca * 0.08, z0: hz + ca * 0.26 - sa * 0.08, x1: hx + sa * 0.26 - ca * 0.08, z1: hz - ca * 0.26 - sa * 0.08, y: H + 0.62, color: '#fff1c8' });
+    } else if (v === 1) { // GRANDE PIRÂMIDE: uma só, enorme, no miolo da peça
+      // 13/10: entrou no lugar do Colosso de Sucata (usuário: "substituísse por uma grande pirâmide do egito").
+      // Faces alinhadas à peça, fiadas marcadas, entrada escura na face norte e o piramídio de ouro aceso.
+      const lime = col('#f0c873'), course = col('#b98a45'), b = 0.6, h = 0.66, ry = a + Math.PI / 4, c2 = Math.cos(a), sn = Math.sin(a);
+      B.frustum(B.lit, x, H, z, b, 0.001, h, 4, lime, ry, { topCol: lime });
+      for (let k = 1; k <= 11; k++) { const t = k / 12, rr = b * (1 - t); B.frustum(B.lit, x, H + h * t - 0.002, z, rr * 1.01 + 0.003, rr * 1.01, 0.004, 4, course, ry, { noTop: true }); } // fiadas
+      B.frustum(B.glow, x, H + h * 0.88, z, b * 0.12 + 0.003, 0.001, h * 0.12 + 0.003, 4, col(PAL.goldGlow), ry); // piramídio
+      const ex = b / Math.SQRT2 * 0.62, ey = h * 0.38; // entrada: na face voltada para o ângulo da peça, um pouco acima da base
+      B.panel(B.lit, x + c2 * (ex + 0.01), H + ey, z + sn * (ex + 0.01), 0.05, 0.06, a, col('#2a1a0e'), 0.01);
+      for (let k = 0; k < 5; k++) { const ang = a + 0.6 + k * 1.15, d = rng.range(0.58, 0.7); B.extrude(B.lit, rect(x + Math.cos(ang) * d, z + Math.sin(ang) * d, 0.05, 0.035, ang), H, 0.025, col('#d9b06a')); } // blocos tombados
+      for (let k = 0; k < 2; k++) { const ang = a + 2.2 + k * 1.9; palm(B, rng, x + Math.cos(ang) * 0.74, z + Math.sin(ang) * 0.74, 0.9); }
     } else if (v === 5) { // PIRÂMIDES DE GIZÉ, versão marco: o trio inteiro no miolo da peça (12/10)
       gizaGroup(B, rng, { x, z, a }, 1.45);
     } else if (v === 2) { // vulcão com cratera de lava e rios de âmbar
@@ -2373,12 +2354,19 @@ export function buildTile(tile) {
     B.hero.solar = 'baobab';
   }
   const plainIdx = tile.ground.map((g, i) => (g === 'plain' ? i : -1)).filter((i) => i >= 0);
-  if (!landmark && !tile.conn && plainIdx.length >= 2) { // grande iglu: o herói do Snowpunk
+  // 13/10 (usuário: iglu "muito fora de proporção, atrapalhando o tile compartilhado"): o tamanho e o
+  // recuo saem do maior TRECHO CONTÍNUO de neve, não do total. Com 2 setores ele é menor e fica bem dentro
+  // da cunha de neve (antes saía 2,05× quase no miolo e invadia os biomas vizinhos).
+  let run = [];
+  if (plainIdx.length === 6) run = plainIdx;
+  else for (const i0 of plainIdx) { if (tile.ground[(i0 + 5) % 6] === 'plain') continue; const r = []; for (let i = i0; tile.ground[i % 6] === 'plain' && r.length < 6; i++) r.push(i % 6); if (r.length > run.length) run = r; }
+  if (!landmark && !tile.conn && run.length >= 2) { // grande iglu: o herói do Snowpunk
     let sx = 0, sz = 0;
-    for (const i of plainIdx) { sx += Math.cos(edgeAngle(i)); sz += Math.sin(edgeAngle(i)); }
-    const m = Math.hypot(sx, sz), off = plainIdx.length === 6 ? 0 : plainIdx.length >= 4 ? 0.16 : 0.24;
+    for (const i of run) { sx += Math.cos(edgeAngle(i)); sz += Math.sin(edgeAngle(i)); }
+    const n = run.length, m = Math.hypot(sx, sz), off = n === 6 ? 0 : n >= 4 ? 0.2 : n === 3 ? 0.34 : 0.44;
     landmark = { x: m > 1e-6 ? (sx / m) * off : 0, z: m > 1e-6 ? (sz / m) * off : 0, a: Math.atan2(sz, sx), type: 'igloo' };
-    occupied.push({ x: landmark.x, z: landmark.z, r: 0.38 });
+    B.iglooSc = n === 6 ? 2.05 : n >= 4 ? 1.8 : n === 3 ? 1.5 : 1.2;
+    occupied.push({ x: landmark.x, z: landmark.z, r: 0.38 * B.iglooSc / 2.05 });
     B.hero.plain = true;
   }
   // Trilhas de fauna: um setor é caminhável quando a ARESTA é do bioma (numa peça com conector,
