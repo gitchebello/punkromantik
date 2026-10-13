@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261012a';
-import { RNG } from './rng.js?v=20261012a';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel } from './tilegen.js?v=20261012a';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261012a';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261012a';
-import { CameraRig, attachInput } from './controls.js?v=20261012a';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261012s';
+import { RNG } from './rng.js?v=20261012s';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel, connsOf } from './tilegen.js?v=20261012s';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildMillRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildChipGeometry, buildNessieGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261012s';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261012s';
+import { CameraRig, attachInput } from './controls.js?v=20261012s';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -68,9 +68,29 @@ const sun = new THREE.DirectionalLight(0xfff1dc, 0.66); sun.position.set(6, 12, 
 const fill = new THREE.DirectionalLight(0x4a7dff, 0.28); fill.position.set(-8, 5, -6); scene.add(fill);
 const rimL = new THREE.DirectionalLight(0xff2bd6, 0.14); rimL.position.set(2, 3, -10); scene.add(rimL);
 
-const litMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+// Grão de superfície (12/10, pedido do usuário: "as cores estão sólidas demais... algo que possa granular"):
+// cada face lisa ganha um pontilhado fino e manchas largas suaves, presos à posição LOCAL do modelo —
+// o grão anda junto com a peça e com os bichos, não escorre pela tela como a granulação da lente.
+function grainy(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGrainPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGrainPos = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+varying vec3 vGrainPos;
+float gHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float gNoise(vec3 p) {
+  vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(gHash(i), gHash(i + vec3(1, 0, 0)), f.x), mix(gHash(i + vec3(0, 1, 0)), gHash(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(gHash(i + vec3(0, 0, 1)), gHash(i + vec3(1, 0, 1)), f.x), mix(gHash(i + vec3(0, 1, 1)), gHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}`).replace('#include <color_fragment>', `#include <color_fragment>
+  float gFine = gHash(floor(vGrainPos * 160.0)) - 0.5, gMottle = gNoise(vGrainPos * 9.0) - 0.5;
+  diffuseColor.rgb *= 1.0 + gFine * 0.11 + gMottle * 0.16;`);
+  };
+  return mat;
+}
+const litMat = grainy(new THREE.MeshLambertMaterial({ vertexColors: true }));
 const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
-const ghostLit = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.5 });
+const ghostLit = grainy(new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.5 }));
 const ghostGlow = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5 });
 // Achado oculto: a peça inteira em cinza, "desligada". Dessatura mantendo o claro/escuro, então a
 // silhueta continua legível — a cor o jogador deduz pelo ambiente ao redor, e só vê ao encostar nela.
@@ -138,7 +158,7 @@ const auroraMats = AURORA_COLS.map((_, hue) => new THREE.ShaderMaterial({
   }));
 const boltMats = {};
 const boltMat = (c) => boltMats[c] || (boltMats[c] = new THREE.MeshBasicMaterial({ color: c }));
-const ringGeo = buildSlotRing(), discGeo = buildHexDisc(), rotorGeo = buildRotorGeometry(), vaxRotorGeo = buildVaxRotorGeometry();
+const ringGeo = buildSlotRing(), discGeo = buildHexDisc(), rotorGeo = buildRotorGeometry(), vaxRotorGeo = buildVaxRotorGeometry(), millRotorGeo = buildMillRotorGeometry();
 const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, depthWrite: false });
 const ringSel = {
   ok: new THREE.MeshBasicMaterial({ color: 0x7dff9a, transparent: true, opacity: 0.95, depthWrite: false }),
@@ -580,12 +600,12 @@ function makeTileGroup(tile, lit, glow, live) {
     if (a.type === 'rotor') {
       const pivot = new THREE.Group(); pivot.position.set(a.x, a.y, a.z);
       if (a.axis === 'y') pivot.rotation.z = Math.PI / 2; else pivot.rotation.y = -a.a;
-      const rotor = new THREE.Mesh(a.geo === 'vax' ? vaxRotorGeo : rotorGeo, lit); rotor.userData.speed = a.speed; rotor.rotation.x = Math.random() * 6; rotor.scale.setScalar(a.scale || 1);
+      const rotor = new THREE.Mesh(a.geo === 'vax' ? vaxRotorGeo : a.geo === 'mill' ? millRotorGeo : rotorGeo, lit); rotor.userData.speed = a.speed; rotor.rotation.x = Math.random() * 6; rotor.scale.setScalar(a.scale || 1);
       pivot.add(rotor); g.add(pivot); g.userData.rotors.push(rotor);
     } else if (a.type === 'bolt') {
       const m = makeBolt(a, boltMat(a.color)); g.add(m); g.userData.bolts.push(m);
     } else if (a.type === 'drone') {
-      const gk = (a.geo || 'drone') + a.color, dg = droneGeos[gk] || (droneGeos[gk] = a.geo === 'glyph' ? buildGlyphGeometry(a.color) : buildDroneGeometry(a.color));
+      const gk = (a.geo || 'drone') + a.color, dg = droneGeos[gk] || (droneGeos[gk] = a.geo === 'glyph' ? buildGlyphGeometry(a.color) : a.geo === 'chip' ? buildChipGeometry(a.color) : buildDroneGeometry(a.color));
       const dm = new THREE.Group(); const dgl = new THREE.Mesh(dg.glow, glow); dgl.layers.enable(BLOOM); dm.add(new THREE.Mesh(dg.lit, lit), dgl);
       dm.position.set(a.x + a.r, a.y, a.z); g.add(dm); g.userData.drones.push({ mesh: dm, a, ph: Math.random() * 6.28 });
     } else if (a.type === 'aurora') {
@@ -615,7 +635,7 @@ function evalPlacement(q, r, tile, rot, peek = false) {
     neighbors++;
     const mine = edgeAt(tile, rot, i), theirs = edgeAt(nb.tile, nb.rot, opp(i));
     if (nb.tile.hidden && !peek) { if (isConnector(mine)) { legal = false; sides.push(-1); } else sides.push(3); continue; }
-    if (compatible(mine, theirs)) { matches++; matchedTypes.push(mine); sides.push(1); if (isConnector(mine) && isConnector(theirs)) links++; } // rede só continua em rede (esgoto na lagoa encaixa, mas não é "rede continua")
+    if (compatible(mine, theirs) || (isConnector(mine) && isConnector(theirs) && (tile.hub || nb.tile.hub))) { matches++; matchedTypes.push(mine); sides.push(1); if (isConnector(mine) && isConnector(theirs)) links++; } // rede só continua em rede (esgoto na lagoa encaixa, mas não é "rede continua")
     else if (isConnector(mine) || isConnector(theirs)) { legal = false; sides.push(-1); } // conector interrompido: proibido (friso vermelho baixo)
     else sides.push(2);
   }
@@ -681,6 +701,29 @@ function addTile(q, r, tile, rot, animate, ev) {
   for (const v of group.userData.vehicles || []) { v.tileKey = k; vehicles.push(v); }
   if (animate) anims.push({ obj: group, prop: 'drop', t: 0, dur: 0.46, y0: ghostGroup.position.y, w, ev, impact: false });
   if (!tile.hidden) spawnFauna(k);
+}
+// Estação intermodal = DOCAS UNIVERSAIS (12/10, pedido do usuário: em vez de ser ponto final dos três
+// meios, "algo que permita o jogador juntar os TIPOS DIFERENTES"). Qualquer trilho/esgoto/rodovia encaixa em
+// qualquer raio; o raio vira o meio do vizinho (tipo, aresta e desenho), então a rede de cada meio passa a
+// incluir a estação e o comboio que chega pode sair por outro raio — de outro meio ou do mesmo.
+function adaptHub(tile, q, r, rot) {
+  let changed = false;
+  for (const c of connsOf(tile)) {
+    const e = c.exits[0], we = (e + rot) % 6, nb = S.tiles.get(key(q + DIRS[we][0], r + DIRS[we][1]));
+    if (!nb || nb.tile.hidden) continue;
+    const theirs = edgeAt(nb.tile, nb.rot, opp(we));
+    if (isConnector(theirs) && theirs !== c.type) { c.type = theirs; tile.edges[e] = theirs; changed = true; }
+  }
+  if (changed) tile._geo = null;
+  return changed;
+}
+function syncHubsAround(q, r) { // a peça recém-colocada pode ter encostado num raio de estação já no tabuleiro
+  for (const d of DIRS) {
+    const k = key(q + d[0], r + d[1]), t = S.tiles.get(k);
+    if (!t || !t.tile.hub || !adaptHub(t.tile, t.q, t.r, t.rot)) continue;
+    const old = removeTile(k); addTile(old.q, old.r, old.tile, old.rot, false);
+    if (old.harmony) S.tiles.get(k).harmony = old.harmony;
+  }
 }
 function removeTile(k) {
   const t = S.tiles.get(k); if (!t) return null;
@@ -764,7 +807,7 @@ let slotCache = '';
 function updateSlotStatus() {
   const t = S.current, ck = t ? `${t.id}:${S.tiles.size}:${S.slots.size}` : '';
   if (ck === slotCache) return; slotCache = ck;
-  const types = t ? [t.conn, t.conn2].filter(Boolean).map((c) => c.type) : [];
+  const types = t ? connsOf(t).map((c) => c.type) : [];
   for (const s of S.slots.values()) {
     s.status = 'ok'; s.link = null; s.bad = [];
     if (!t) continue;
@@ -851,7 +894,7 @@ function frontier() {
 // Às vezes troca a 3ª peça da pilha (ainda escondida: só as duas primeiras aparecem) por uma que
 // continua uma ponta aberta de trilho/rodovia/esgoto. Sem isso as redes ficavam em pedaços de uma
 // peça e as missões de conector empacavam com progresso 1.
-const STEER_CHANCE = 0.38;
+const STEER_CHANCE = 0.33; // 12/10: era 0.38 — menos conector na pilha (pedido do usuário)
 function steerStack() {
   const t = S.stack[2]; if (!t || t.quest || t._steered) return;
   const { ends } = frontier(); if (!ends.length || !S.rng.chance(STEER_CHANCE)) return;
@@ -921,7 +964,9 @@ function commitPlacement() {
   if (!ev.legal) { play('bad'); return; }
   // instantâneo para o único "desfazer" permitido
   S.undo = { q, r, tile, rot, score: S.score, placed: S.placed, perfects: S.perfects, questsDone: S.questsDone, questsLost: S.questsLost, quests: S.quests.map((x) => ({ ...x })), gained: 0, sinceQuest: S.sinceQuest, lowWarned: S.lowWarned, hintGain: 0, best: S.best, sinceRelic: S.sinceRelic, gains: { ...S.gains }, questSeq: { ...S.questSeq }, rng: S.rng.state };
+  if (tile.hub) adaptHub(tile, q, r, rot);
   addTile(q, r, tile, rot, true, ev);
+  syncHubsAround(q, r);
   S.placed++;
   const w = toWorld(q, r);
   let pts = ev.matches * 10 + ev.links * LINK_PTS, gained = 0; // continuar trilho/rodovia/esgoto vale extra
@@ -944,26 +989,25 @@ function commitPlacement() {
   play('place', ev.matches);
   const medal = ev.perfect || harm.length || relicHit;
   if (pts > 0) scoreSign(pts, ev.perfect || harm.length ? 'perfect' : ev.matches >= 3 ? 'good' : ev.matches >= 2 ? 'ok' : '', harm.length ? 'harmonia!' : relicHit ? 'achado distante' : S.undo.revealed.length ? (ev.sides.some((st, i) => st === 1 && S.undo.revealed.some((R) => R.k === key(q + DIRS[i][0], r + DIRS[i][1]))) ? 'bom palpite!' : 'achado revelado') : ev.perfect ? 'encaixe perfeito!' : shut.length ? `${GROUP_INFO[shut[0].group].name} fechado` : closed ? 'ponto final' : ev.links ? (ev.links >= 2 ? 'rede ligada!' : 'rede continua') : ev.matches >= 2 ? `encaixe ${ORD[ev.matches].toLowerCase()}` : '', medal && isNarrow() ? null : w);
-  spawnBurst(w, ev.matchedTypes.map((t) => TERRAIN[t].color), ev.perfect ? 34 : 4 + ev.matches * 3);
   if (ev.perfect) {
-    play('perfect'); pulse(w, 0xffd166); confettiBurst(2);
+    play('perfect'); pulse(w, 0xffd166); confettiBurst(1);
     rewardBurst(w, 'perfect', '#7dff9a', '<b class="rb-star">★</b>', `+1${icon('tile', 13)}`);
-  } else if (ev.matches >= 3) {
-    confettiBurst(ev.matches >= 4 ? 2 : 1); play('confetti');
+  } else if (ev.matches >= 4) {
+    confettiBurst(1); play('confetti');
   }
   if (closed) pulse(w, GROUP_HEX[groupOf(tile.conn.type)]);
   for (const c of shut) flashRegion(c);
   for (const h of harm) {
     const t = S.tiles.get(h.k), hw = toWorld(t.q, t.r), color = GROUP_INFO[h.g].color;
     setTimeout(() => {
-      play('harmony'); confettiBurst(1); starBurst(color); pulse(hw, GROUP_HEX[h.g]); pulse(hw, 0xffd166); spawnBurst(hw, [color, '#ffd166', '#ffffff'], 46, 1.3); cameraShake = { t: 0, dur: 0.5, amp: 0.09 };
-      [0, 300, 600, 900].forEach((ms, n) => setTimeout(() => kick(0.38, n % 2 ? ['#ffd166', color] : [color], 1.25), ms)); // flashes curtos na cor do bioma
+      play('harmony'); confettiBurst(1); starBurst(color, 12); pulse(hw, GROUP_HEX[h.g]); spawnBurst(hw, [color, '#ffd166', '#ffffff'], 24, 1.1); cameraShake = { t: 0, dur: 0.4, amp: 0.05 };
+      [0, 400].forEach((ms, n) => setTimeout(() => kick(0.38, n % 2 ? ['#ffd166', color] : [color], 1), ms)); // dois flashes curtos na cor do bioma
     }, 260);
     rewardBurst(hw0(h), 'harmony', '#ffd166', '<b class="rb-star">✺</b>', `+${HARMONY_TILES}${icon('tile', 13)}`, 260, 'HARMONIA PERFEITA!'); // aviso em texto (pedido do usuário, 11/10)
   }
   if (relicHit) {
     const rw = toWorld(relicHit.q, relicHit.r);
-    play('relic'); confettiBurst(2); pulse(rw, GROUP_HEX[relicHit.g]); spawnBurst(rw, [GROUP_INFO[relicHit.g].color, '#ffffff'], 36, 1.1);
+    play('relic'); confettiBurst(1); pulse(rw, GROUP_HEX[relicHit.g]); spawnBurst(rw, [GROUP_INFO[relicHit.g].color, '#ffffff'], 20, 1);
     rewardBurst(rw, 'relic', GROUP_INFO[relicHit.g].color, '<b class="rb-star">✦</b>', `+${relicHit._tiles}${icon('tile', 13)}`);
   }
   if (tile.quest) { const nq = { ...tile.quest, tileKey: key(q, r) }; rebaseQuest(nq); S.quests.push(nq); }
@@ -1261,11 +1305,11 @@ function checkQuests() {
     gained += qst.reward.tiles; gain('quest', qst.reward.tiles);
     if (qst.reward.hints) { S.hints += qst.reward.hints; if (S.undo) S.undo.hintGain += qst.reward.hints; updateHintButton(); }
     const t = S.tiles.get(qst.tileKey), w = toWorld(t.q, t.r);
-    play('quest'); confettiBurst(2); kick(0.6, ['#c4ff2a', qst.color], 0.3);
+    play('quest'); confettiBurst(1); kick(0.5, ['#c4ff2a', qst.color], 0.25);
     scoreSign(qst.reward.points, 'quest', `${icon(questIcon(qst), 16)} missão`, isNarrow() ? null : w);
     rewardBurst(w, 'quest', qst.color, `${icon(questIcon(qst), 26)}<i class="rb-badge">${icon('check', 12)}</i>`, `+${qst.reward.tiles}${icon('tile', 13)}${qst.reward.hints ? ` +${qst.reward.hints}${icon('bulb', 13)}` : ''}`, 120);
     pulse(w, new THREE.Color(qst.color).getHex());
-    spawnBurst(w, [qst.color, '#ffffff'], 40);
+    spawnBurst(w, [qst.color, '#ffffff'], 20);
     if (qst._card) { qst._card.classList.add('done'); const c = qst._card; setTimeout(() => c.remove(), 900); qst._card = null; }
   }
   for (const qst of lost) {
@@ -1395,8 +1439,9 @@ const FAUNA = {
   // sem os três o bando virava uma fila reta que dava trancos nas quinas do caminho.
   bird:  { group: 'solar', fly: true,  speed: 0.6,  turn: 2.4, flock: [3, 6], gap: 0.13, side: 0.13,  bob: 0.035, bobHz: 2.2, roll: 0,    pause: [0, 0],     cap: 3, p2: 0.13, p3: 0.26,
            smooth: 2.6, wander: 0.11, wanderY: 0.06, lag: 0.26, bank: 0.3 },
-  // Iéti: sozinho, lento e raro — é o que faz valer a pena topar com um.
-  yeti:  { group: 'plain', fly: false, speed: 0.15, turn: 1.8, flock: [1, 1], gap: 0.3,  side: 0,     bob: 0.012, bobHz: 3.4, roll: 0.09, pause: [1.5, 4.5], cap: 2, p2: 0.05, p3: 0.11 },
+  // Iéti: sozinho e grande (12/10: "um abominável homem das neves enorme, um a cada 10 peças de Snowpunk";
+  // na 3ª rodada do dia o usuário pediu "diminua consideravelmente": 2.7× → 1.3×, ainda maior que o urso).
+  yeti:  { group: 'plain', fly: false, speed: 0.2,  turn: 1.4, flock: [1, 1], gap: 0.3,  side: 0,     bob: 0.03,  bobHz: 2.2, roll: 0.07, pause: [2, 5],     cap: 3, p2: 0.1,  p3: 0.1, scale: 1.3 },
 };
 const FLY_Y = 0.45, PI2 = Math.PI * 2;
 const fauna = [];
@@ -1410,6 +1455,7 @@ function faunaMesh(kind, v) {
   const g = new THREE.Group(), gl = new THREE.Mesh(geo.glow, glowMat);
   gl.layers.enable(BLOOM);
   g.add(new THREE.Mesh(geo.lit, litMat), gl);
+  if (FAUNA[kind].scale) g.scale.setScalar(FAUNA[kind].scale);
   if (kind === 'bird') { // asas separadas para bater; a direita é a mesma malha espelhada
     birdWingGeo = birdWingGeo || buildBirdWingGeometry();
     const wl = new THREE.Mesh(birdWingGeo, litMat), wr = new THREE.Mesh(birdWingGeo, litMat);
@@ -1590,13 +1636,13 @@ const CONVOY = {
   // Antes o trem exigia rede de 2+ peças e saía a cada 9-19 s: como as redes ficam picadas em
   // pedaços de uma peça boa parte da partida, trem e barco quase nunca apareciam ("sumiram").
   rail:   { minNet: 1, speed: 0.85, gap: 0.215, scale: 1.18, every: [5, 11], ends: 'stop', life: 70 },
-  sewage: { minNet: 1, speed: 0.26, gap: 0.085, scale: 1.25, every: [4, 9], ends: 'turn', life: 55 },
+  sewage: { minNet: 1, speed: 0.26, gap: 0.105, scale: 1.55, every: [4, 9], ends: 'turn', life: 55 }, // 12/10: barco 1.25× → 1.55× ("pode aumentar um pouco mais"), fila espaçada junto
 };
 const trains = [];
 let trainGeos = null, boatGeos = {};
 const nextIn = { rail: 3, sewage: 4 };
 const _tv = new THREE.Vector3();
-const hasConnType = (tile, type) => !!((tile.conn && tile.conn.type === type) || (tile.conn2 && tile.conn2.type === type));
+const hasConnType = (tile, type) => connsOf(tile).some((c) => c.type === type);
 function connNetworks(type) {
   const seen = new Set(), nets = [];
   for (const [k, t] of S.tiles) {
@@ -1611,9 +1657,18 @@ function exitOpen(t, localExit, type) { // a saída `localExit` desta peça não
   const we = (localExit + t.rot) % 6, nb = S.tiles.get(key(t.q + DIRS[we][0], t.r + DIRS[we][1]));
   return !(nb && edgeAt(nb.tile, nb.rot, opp(we)) === type);
 }
+// Monstro do lago Ness do esgoto (12/10, pedido do usuário: "eventualmente ele aparece"): ~7% dos
+// comboios do esgoto, um por vez. Vem em segmentos — cabeça no pescoço, corcovas, rabo — e cada um lê o
+// rastro do anterior como os vagões do trem, então o bicho serpenteia pelas curvas do canal.
+let nessieGeos = null;
 function convoyMeshes(type, lit, glow) {
   const geos = [];
-  if (type === 'rail') {
+  if (type === 'sewage' && !trains.some((x) => x.nessie) && Math.random() < 0.07) {
+    nessieGeos = nessieGeos || { head: buildNessieGeometry('head'), hump: buildNessieGeometry('hump'), tail: buildNessieGeometry('tail') };
+    geos.push({ geo: nessieGeos.head, scale: 1, nessie: 0 });
+    for (let k = 0; k < 3; k++) geos.push({ geo: nessieGeos.hump, scale: 1 - k * 0.16, nessie: k + 1 });
+    geos.push({ geo: nessieGeos.tail, scale: 0.9, nessie: 4 });
+  } else if (type === 'rail') {
     if (!trainGeos) trainGeos = { head: buildTrainCarGeometry(true), car: buildTrainCarGeometry(false) };
     for (let c = 0; c < 3; c++) geos.push({ geo: c === 0 || c === 2 ? trainGeos.head : trainGeos.car, flip: c === 2, scale: 1 });
   } else if (Math.random() < 0.55) { // patinho de borracha (às vezes com a ninhada)
@@ -1628,7 +1683,7 @@ function convoyMeshes(type, lit, glow) {
   }
   return geos.map((g) => {
     const m = new THREE.Group(), gl = new THREE.Mesh(g.geo.glow, glow); gl.layers.enable(BLOOM); m.add(new THREE.Mesh(g.geo.lit, lit), gl);
-    m.userData = { flip: !!g.flip, s: g.scale, duck: g.duck, tug: g.tug, ph: Math.random() * 6.28 };
+    m.userData = { flip: !!g.flip, s: g.scale, duck: g.duck, tug: g.tug, nessie: g.nessie, ph: Math.random() * 6.28 };
     m.visible = false; m.scale.setScalar(CONVOY[type].scale * g.scale); boardGroup.add(m);
     return m;
   });
@@ -1641,11 +1696,34 @@ function spawnConvoy(type) {
   for (const k of net) { const t = S.tiles.get(k), rs = tileGeo(t.tile).routes || []; rs.forEach((r, i) => { if (!ok(r)) return; if (r.to >= 0 && exitOpen(t, r.from, type)) starts.push({ k, i, dir: 1 }); if (r.to >= 0 && exitOpen(t, r.to, type) && !exitOpen(t, r.from, type)) starts.push({ k, i, dir: -1 }); }); }
   let st = starts.length ? starts[(Math.random() * starts.length) | 0] : null;
   if (!st) { const k = net[(Math.random() * net.length) | 0], rs = (tileGeo(S.tiles.get(k).tile).routes || []).map((r, i) => (ok(r) ? i : -1)).filter((i) => i >= 0); if (!rs.length) return false; st = { k, i: rs[(Math.random() * rs.length) | 0], dir: 1 }; }
-  const t = S.tiles.get(st.k), r = tileGeo(t.tile).routes[st.i];
-  const lit = litMat.clone(), glow = glowMat.clone(); lit.transparent = glow.transparent = true; lit.opacity = glow.opacity = 0;
-  const cars = convoyMeshes(type, lit, glow);
-  trains.push({ type, spec, tileKey: st.k, route: st.i, dir: st.dir, s: st.dir > 0 ? 0 : r.L, d: 0, trail: [], cars, lit, glow, fade: 0, state: 'run', wait: 0, age: 0, puff: 0 });
+  const r = tileGeo(S.tiles.get(st.k).tile).routes[st.i];
+  launchConvoy(type, st.k, st.i, st.dir, st.dir > 0 ? 0 : r.L);
   return true;
+}
+function launchConvoy(type, k, ri, dir, s0) {
+  const lit = grainy(litMat.clone()), glow = glowMat.clone(); lit.transparent = glow.transparent = true; lit.opacity = glow.opacity = 0;
+  const cars = convoyMeshes(type, lit, glow);
+  trains.push({ type, spec: CONVOY[type], tileKey: k, route: ri, dir, s: s0, d: 0, trail: [], cars, lit, glow, fade: 0, state: 'run', wait: 0, age: 0, puff: 0, nessie: cars.some((m) => m.userData.nessie != null) });
+}
+// Estação intermodal: o que chega por um meio sai pelo outro — o trem para na estação e, um pouco
+// depois, um barco (ou o monstro) sai pelo canal; o barco que chega faz sair um trem. A rodovia não
+// entra na troca: carros moram na peça e só param e voltam, como no estacionamento.
+const hubQueue = [];
+function convertAtHub(k, from, fromRoute) {
+  const t = S.tiles.get(k); if (!t || !t.tile.hub || hubQueue.length > 4) return;
+  // sai por outro raio que tenha comboio (trilho ou esgoto; carro mora na peça): de preferência de outro
+  // meio — a troca é a graça da estação —, senão segue no mesmo meio pelo outro raio (passa direto)
+  const rs = tileGeo(t.tile).routes || [], outs = rs.map((r, i) => i).filter((i) => i !== fromRoute && CONVOY[rs[i].type]);
+  if (!outs.length) return;
+  const other = outs.filter((i) => rs[i].type !== from), pick = (other.length ? other : outs)[(Math.random() * (other.length || outs.length)) | 0];
+  hubQueue.push({ k, ri: pick, type: rs[pick].type, wait: 1.4 + Math.random() });
+}
+function departFromHub(k, type, ri) {
+  const t = S.tiles.get(k); if (!t) return;
+  const rs = tileGeo(t.tile).routes || []; if (!rs[ri] || rs[ri].type !== type) return;
+  const r = rs[ri]; let s0 = r.L;
+  if (r.stop) while (s0 > 0 && (() => { const p = pointAt(r.pts, s0); return Math.hypot(p.x, p.z) < r.stop + 0.02; })()) s0 -= 0.01; // barco nasce fora da praça
+  launchConvoy(type, k, ri, -1, s0);
 }
 function removeTrain(i) {
   const tr = trains[i]; for (const m of tr.cars) boardGroup.remove(m); tr.lit.dispose(); tr.glow.dispose(); trains.splice(i, 1);
@@ -1659,6 +1737,7 @@ function trailAt(tr, d) { // ponto do rastro na distância percorrida `d` (inter
 }
 function updateTrains(dt, now) {
   if (!S.started && !S.tiles.size) return;
+  for (let i = hubQueue.length - 1; i >= 0; i--) if ((hubQueue[i].wait -= dt) <= 0) { const h = hubQueue.splice(i, 1)[0]; departFromHub(h.k, h.type, h.ri); }
   for (const type in CONVOY) {
     const live = trains.filter((x) => x.type === type).length, max = 1 + (S.tiles.size >= 25 ? 1 : 0) + (S.tiles.size >= 55 ? 1 : 0), ev = CONVOY[type].every;
     if (live < max && (nextIn[type] -= dt) <= 0) nextIn[type] = spawnConvoy(type) ? ev[0] + Math.random() * (ev[1] - ev[0]) : 2;
@@ -1672,7 +1751,10 @@ function updateTrains(dt, now) {
       const step = spec.speed * dt; tr.s += tr.dir * step; tr.d += step;
       if (route.stop) { // barco: obstáculo no miolo (tanque, filtro, grade) → meia-volta
         const p = pointAt(route.pts, Math.max(0, Math.min(route.L, tr.s)));
-        if (Math.hypot(p.x, p.z) < route.stop) { tr.dir *= -1; tr.s += tr.dir * step * 2; }
+        if (Math.hypot(p.x, p.z) < route.stop) {
+          if (t.tile.hub && tr.dir > 0) { tr.state = 'leave'; tr.parked = true; convertAtHub(tr.tileKey, type, tr.route); } // chegou na estação: some ali e sai um trem
+          else { tr.dir *= -1; tr.s += tr.dir * step * 2; }
+        }
       }
       if (tr.s > route.L || tr.s < 0) {
         const localExit = tr.dir > 0 ? route.to : route.from, over = tr.dir > 0 ? tr.s - route.L : -tr.s;
@@ -1692,7 +1774,7 @@ function updateTrains(dt, now) {
         }
         if (!moved) {
           if (localExit < 0 && spec.ends === 'turn') { tr.dir *= -1; tr.s = Math.max(0, Math.min(route.L, tr.s)); } // barco no fim do canal: volta
-          else { tr.ext = Math.abs(over); tr.s = Math.max(0, Math.min(route.L, tr.s)); tr.state = localExit < 0 ? 'stop' : 'leave'; tr.wait = localExit < 0 ? 2.2 : 0; tr.ext = localExit < 0 ? 0 : tr.ext; }
+          else { if (localExit < 0) convertAtHub(tr.tileKey, type, tr.route); tr.ext = Math.abs(over); tr.s = Math.max(0, Math.min(route.L, tr.s)); tr.state = localExit < 0 ? 'stop' : 'leave'; tr.wait = localExit < 0 ? 2.2 : 0; tr.ext = localExit < 0 ? 0 : tr.ext; }
         }
       }
       if (tr.age > spec.life + 10 && tr.state === 'run') { tr.state = 'leave'; tr.parked = true; } // barco perdido num canal fechado: some devagar
@@ -1714,7 +1796,9 @@ function updateTrains(dt, now) {
       m.visible = true; m.position.set(a.x, a.y, a.z);
       const dx = f.x - b.x, dz = f.z - b.z; if (Math.abs(dx) + Math.abs(dz) > 1e-5) m.rotation.y = -Math.atan2(dz, dx) + (m.userData.flip ? Math.PI : 0);
       if (type === 'sewage') { // boia: sobe e desce, balança, e o patinho dá umas viradinhas de curiosidade
-        const u = m.userData; m.position.y += Math.sin(tt * 3.1 + u.ph) * 0.004;
+        const u = m.userData;
+        if (u.nessie != null) { m.position.y += Math.sin(tt * 2.2 - u.nessie * 1.1) * 0.012 - 0.004; m.rotation.z = Math.sin(tt * 2.2 - u.nessie * 1.1 + 1.2) * 0.12; return; } // ondula da cabeça ao rabo
+        m.position.y += Math.sin(tt * 3.1 + u.ph) * 0.004;
         m.rotation.z = Math.sin(tt * 2.3 + u.ph) * 0.12; m.rotation.x = Math.sin(tt * 1.7 + u.ph) * 0.08;
         if (u.duck) m.rotation.y += Math.sin(tt * 0.9 + u.ph) * 0.35;
       }
@@ -1806,11 +1890,13 @@ function updateStars(dt, dpr) {
     cctx.restore();
   }
 }
+// 12/10 (usuário: as festividades que brotam das laterais estavam demais): 40 → 16
+// → 12 e por força, mais lentos, e só nos momentos grandes (perfeito, harmonia, achado, missão, encaixe de 4+).
 function confettiBurst(strength = 1) {
-  const W = innerWidth, H = innerHeight, n = 40 * strength;
+  const W = innerWidth, H = innerHeight, n = 12 * strength;
   for (const side of [0, 1]) for (let i = 0; i < n; i++) {
     const dir = side ? -1 : 1;
-    confetti.push({ x: side ? W + 8 : -8, y: H * (0.3 + Math.random() * 0.35), vx: dir * (260 + Math.random() * 520), vy: -(250 + Math.random() * 450), rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 14,
+    confetti.push({ x: side ? W + 8 : -8, y: H * (0.3 + Math.random() * 0.35), vx: dir * (200 + Math.random() * 380), vy: -(200 + Math.random() * 340), rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 14,
       w: 5 + Math.random() * 6, h: 9 + Math.random() * 8, c: NEON[(Math.random() * NEON.length) | 0], t: 0, life: 2 + Math.random() * 1.2 });
   }
 }
@@ -1984,13 +2070,13 @@ function renderQuests(delayMs = 0) {
     el.innerHTML = ''; lab.innerHTML = '';
     const pend = S.current && S.current.quest && !S.over ? S.current.quest : null;
     if (pend) { // missão da peça na mão: cartão tracejado, anel vazio, meta (começa quando a peça for colocada)
-      const d = document.createElement('div'); d.className = 'quest pending'; d.style.setProperty('--qc', pend.color || questColor(pend.group));
+      const d = document.createElement('div'); d.className = 'quest pending' + (pend._seenPend ? '' : ' fresh'); pend._seenPend = true; d.style.setProperty('--qc', pend.color || questColor(pend.group));
       d.innerHTML = `<span class="qicon">${ringSVG(0, true)}${icon(questIcon(pend), 21)}<i class="qflag">${icon('flag', 9)}</i></span><span class="qleft">${pendGoal(pend)}</span>${unitIcon(pend, 13)}<span class="qrew">${rewardHTML(pend)}</span>`;
       el.appendChild(d);
     }
     for (const q of S.quests) {
       const info = GROUP_INFO[q.group], left = questLeft(q), pct = Math.max(0, Math.min(1, q.progress / q.target));
-      const d = document.createElement('div'); d.className = 'quest'; d.style.setProperty('--qc', q.color || questColor(q.group));
+      const d = document.createElement('div'); d.className = 'quest' + (q._seen ? '' : ' fresh'); q._seen = true; d.style.setProperty('--qc', q.color || questColor(q.group));
       d.innerHTML = `<span class="qicon">${ringSVG(pct)}${icon(questIcon(q), 21)}</span><span class="qleft${q._bump ? ' bump' : ''}">${left}</span>${unitIcon(q, 13)}<span class="qrew">${rewardHTML(q)}</span>`;
       q._bump = false;
       d.addEventListener('click', () => { if (!questDrag.moved) flyToQuest(q); });
@@ -2225,7 +2311,8 @@ $('btn-menu').addEventListener('click', () => { syncMenuToggles(); showOverlay('
 $('btn-sound').addEventListener('click', () => { setMuted(!isMuted()); $('btn-sound').textContent = isMuted() ? '🔇' : '🔊'; });
 $('btn-start').addEventListener('click', () => { initAudio(); showOverlay(null); newGame(); });
 $('btn-rank').addEventListener('click', openRanking);
-$('btn-daily').addEventListener('click', () => { initAudio(); showOverlay(null); newGame(null, todayStr()); });
+// 12/10: desafio diário removido a pedido do usuário (botão, aba "Hoje" do ranking e ?daily). O resto do
+// código de `S.daily` ficou dormente — sempre null.
 document.querySelectorAll('.rank-tab').forEach((b) => b.addEventListener('click', () => openRanking(b.dataset.tab)));
 $('btn-restart').addEventListener('click', () => { showOverlay(null); newGame(null, S.daily ? todayStr() : null); });
 $('btn-look').addEventListener('click', () => showOverlay(null));
@@ -2330,13 +2417,14 @@ function loop(now) {
       else {
         if (!a.impact) {
           a.impact = true; o.position.y = 0;
-          spawnBurst({ x: a.w.x, z: a.w.z }, ['#6a6a7a', '#9a9aaa', '#ffd166'], 10, 0.55);
-          spawnBurst({ x: a.w.x, z: a.w.z }, a.ev.matchedTypes.map((t) => TERRAIN[t].color), a.ev.perfect ? 34 : 3 + a.ev.matches * 3);
+          // 12/10 (usuário: "menos partículas de festividade ao pontuar... excessivo visualmente"): pouso mais calmo
+          spawnBurst({ x: a.w.x, z: a.w.z }, ['#6a6a7a', '#9a9aaa', '#ffd166'], 6, 0.5);
+          spawnBurst({ x: a.w.x, z: a.w.z }, a.ev.matchedTypes.map((t) => TERRAIN[t].color), a.ev.perfect ? 18 : 2 + a.ev.matches * 2);
           for (const d of DIRS) { const nb = S.tiles.get(key(fromWorld(a.w.x, a.w.z).q + d[0], fromWorld(a.w.x, a.w.z).r + d[1])); if (nb && nb.group !== o) anims.push({ obj: nb.group, prop: 'settle', t: -0.03, dur: 0.3, amp: 0.03 }); }
           sealSeams(a.ev, a.w);
-          cameraShake = { t: 0, dur: a.ev.perfect ? 0.45 : 0.22, amp: a.ev.perfect ? 0.07 : 0.028 };
+          cameraShake = { t: 0, dur: a.ev.perfect ? 0.35 : 0.18, amp: a.ev.perfect ? 0.04 : 0.014 };
           const cols = a.ev.sides.map((st, i) => (st === 1 ? hexCss(EDGE_COLORS[a.ev.types[i]] || 0xffffff) : null)).filter(Boolean);
-          if (cols.length) kick(a.ev.perfect ? 0.8 : 0.45 + 0.05 * cols.length, a.ev.perfect ? cols.concat('#ffd166') : cols, a.ev.perfect ? 0.4 : 0.22 + 0.03 * cols.length);
+          if (a.ev.perfect || cols.length >= 3) kick(a.ev.perfect ? 0.6 : 0.35 + 0.04 * cols.length, a.ev.perfect ? cols.concat('#ffd166') : cols, a.ev.perfect ? 0.3 : 0.16 + 0.02 * cols.length); // faixas nas laterais só nos encaixes bons
         }
         const q = (p - 0.55) / 0.45, sq = Math.sin(Math.PI * Math.min(1, q * 1.6)) * (1 - q) * 0.2;
         o.scale.set(1 + sq * 0.55, 1 - sq, 1 + sq * 0.55);
@@ -2405,7 +2493,7 @@ if (params.has('nolens')) prefs.lens = false;
 if (params.has('nograin')) prefs.grain = false;
 $('grain').classList.toggle('hidden', !prefs.grain);
 if (params.has('play')) {
-  showOverlay(null); newGame(params.has('seed') ? +params.get('seed') : undefined, params.has('daily') ? todayStr() : null);
+  showOverlay(null); newGame(params.has('seed') ? +params.get('seed') : undefined);
   if (params.get('zoom')) rig.dist = +params.get('zoom');
   const auto = +(params.get('auto') || 0); // ?play&auto=N joga N peças sozinho (teste/demonstração)
   if (auto > 0) { let n = 0; const iv = setInterval(() => { if (S.over || n++ >= auto) return clearInterval(iv); applyBest(); commitPlacement(); }, 350); }

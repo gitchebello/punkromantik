@@ -1,4 +1,4 @@
-import { RNG } from './rng.js?v=20261012a';
+import { RNG } from './rng.js?v=20261012s';
 
 // Terrenos. Cada bioma é uma vertente -punk da mesma proposta estética (é daí que vem o nome
 // do jogo): Cyberpunk, Solarpunk, Sandpunk e Snowpunk. Regiões preenchem setores; conectores atravessam a peça de uma
@@ -27,6 +27,8 @@ export const GROUP_INFO = {
 };
 
 export const isConnector = (t) => !!TERRAIN[t].connector;
+// Todos os meios de uma peça: o de baixo, o viaduto (cruzamento) e, na estação intermodal, o terceiro raio.
+export const connsOf = (tile) => [tile.conn, tile.conn2, tile.conn3].filter(Boolean);
 export const groupOf = (t) => TERRAIN[t].group;
 // Peça com conector tem DUAS qualidades em cada lado de saída: o conector e o bioma do chão.
 // A rodovia que atravessa a cidade é rodovia E cidade — conta para a rede e para a região.
@@ -75,7 +77,7 @@ function connectorExits(rng, opts) {
 }
 
 export function genTile(rng, opts = {}) {
-  const connChance = opts.simple ? 0 : (opts.connChance ?? 0.4);
+  const connChance = opts.simple ? 0 : (opts.connChance ?? CONN_CHANCE);
   const hasConn = !!opts.forceConn || rng.chance(connChance);
   const ground = new Array(6);
   if (hasConn) { // peças com estrada/trilho/esgoto têm sempre um único bioma
@@ -111,6 +113,18 @@ export function genTile(rng, opts = {}) {
     for (const e of conn2.exits) edges[e] = hi;
     return { id: ++tileCounter, ground, edges, conn, conn2, quest: null, seed: rng.int(2 ** 31) };
   }
+  // Estação intermodal (12/10, pedido do usuário, à la Dorfromantik): um hub em Y com os TRÊS meios,
+  // um em cada raio — trilho, esgoto e rodovia. Desde a 3ª rodada de 12/10 as três docas são UNIVERSAIS:
+  // qualquer meio encaixa em qualquer raio e o raio vira o meio do vizinho (`adaptHub` em main.js) — é a
+  // peça que junta redes de TIPOS diferentes. O que chega por um raio sai por outro (`convertAtHub`).
+  // Não é "ponto final" (não vale o bônus de fechar linha).
+  const hubChance = opts.hubChance ?? HUB_CHANCE;
+  if (hasConn && !opts.forceConn && hubChance && rng.chance(hubChance)) {
+    const a = rng.int(6), order = rng.pick([['rail', 'sewage', 'road'], ['rail', 'road', 'sewage'], ['sewage', 'rail', 'road'], ['sewage', 'road', 'rail'], ['road', 'rail', 'sewage'], ['road', 'sewage', 'rail']]);
+    const [c1, c2, c3] = order.map((type, k) => ({ type, exits: [(a + 2 * k) % 6] }));
+    for (const c of [c1, c2, c3]) edges[c.exits[0]] = c.type;
+    return { id: ++tileCounter, ground, edges, conn: c1, conn2: c2, conn3: c3, hub: true, quest: null, seed: rng.int(2 ** 31) };
+  }
   if (hasConn) {
     const type = opts.forceConn || rng.weighted(CONN_WEIGHTS);
     // Esgoto bifurca bem menos e nunca vira cruzamento de 4 saídas: canal que se abre em tudo
@@ -133,10 +147,14 @@ export function starterTile(rng) {
 }
 
 export const DUAL_CHANCE = 0.02; // das peças com conector: ~1 cruzamento a cada ~120 peças (era 0.07; o usuário quer raro de verdade)
+export const HUB_CHANCE = 0.08;  // das peças com conector: ~1 estação intermodal a cada ~45 peças (quase toda partida vê uma)
+// 12/10: um pouco menos de trilho/rodovia/esgoto (pedido do usuário: "o jogo está muito baseado" neles,
+// "só um pouco mesmo"): 40% → 35% das peças (no começo, 25% → 22%); o empurrão da pilha também caiu.
+export const CONN_CHANCE = 0.35;
 export function makeStack(rng, n) {
   const out = [];
   // primeiras peças simples; bifurcações e pontos finais só depois que o jogador já viu conectores comuns
-  for (let i = 0; i < n; i++) out.push(genTile(rng, { simple: i < 4, connChance: i < 8 ? 0.25 : 0.4, forkChance: i < 10 ? 0 : 0.17, endChance: i < 12 ? 0 : 0.14, crossChance: i < 14 ? 0 : 0.3, dualChance: i < 16 ? 0 : DUAL_CHANCE }));
+  for (let i = 0; i < n; i++) out.push(genTile(rng, { simple: i < 4, connChance: i < 8 ? 0.22 : CONN_CHANCE, forkChance: i < 10 ? 0 : 0.17, endChance: i < 12 ? 0 : 0.14, crossChance: i < 14 ? 0 : 0.3, dualChance: i < 16 ? 0 : DUAL_CHANCE, hubChance: i < 16 ? 0 : HUB_CHANCE }));
   return out;
 }
 
@@ -148,8 +166,8 @@ export function continuationTile(rng, type, ground) {
   return genTile(rng, { forceConn: type, ground: ground && ground !== 'pool' ? ground : undefined, forkChance: fork, endChance: 0, crossChance: 0 });
 }
 
-export const isTerminal = (tile) => !!(tile.conn && tile.conn.exits.length === 1);
-export const isFork = (tile) => !!(tile.conn && tile.conn.exits.length >= 3);
+export const isTerminal = (tile) => !!(tile.conn && !tile.hub && tile.conn.exits.length === 1);
+export const isFork = (tile) => !!(tile.conn && (tile.hub || tile.conn.exits.length >= 3));
 
 // Grupos que uma peça pode "puxar" numa missão: todos, Snowpunk e Baldio inclusive (desde 10/10)
 export function questCandidates(tile) {
@@ -163,7 +181,7 @@ export function questCandidates(tile) {
 // aumentando junto com a dificuldade e a expansão do jogo").
 //  - O alvo NÃO depende do tabuleiro: sai do degrau da escada. O degrau é o maior entre (a) quantas
 //    missões daquele grupo já saíram nesta partida (`ctx.seq[group]`) e (b) o nível (peças colocadas
-//    / QUEST_LEVEL_EVERY) — assim um bioma que ficou sem missão não volta pedindo 3 no fim do jogo.
+//    / QUEST_LEVEL_EVERY) — assim um bioma que ficou sem missão não volta pedindo 5 no fim do jogo.
 //  - Conta o que já foi construído: a bandeira que entra numa área de 8 Solarpunk numa missão de 10
 //    soma 9 e o cartão mostra 1. Área já maior que o alvo → cumpre no encaixe (terreno preparado paga).
 //  - Antes do encaixe o cartão/balão mostram o alvo e não mudam ao passear o fantasma; depois, quanto falta.
@@ -171,13 +189,15 @@ export function questCandidates(tile) {
 export const QUEST_LEVEL_EVERY = 20;
 export const questLevel = (placed) => Math.floor(placed / QUEST_LEVEL_EVERY);
 // Degraus com saltos que CRESCEM (11/10, pedido do usuário: "ficou um pouco fácil… dar saltos maiores"):
-//  - biomas:     3, 6, 10, 14, 19, 24, 30…   (+3, +4, +4, +5, +5, +6…)
+//  - biomas:     5, 8, 12, 16, 21, 26, 32…   (+3, +4, +4, +5, +5, +6…; 12/10: começa em 5, não 3 — pedido do
+//                usuário para "frear o jogador um pouco"; conectores e Cyberpunk não mudaram)
 //  - conectores: 3, 5, 7, 9, 11…             (+2; redes dependem das peças certas aparecerem)
 //  - Cyberpunk:  6, 12, 19, 27, 36…  prédios (+6, +7, +8…; uma peça de cidade soma ~5 prédios, cheia ~10)
 // (a escada anterior, 3/5/7/9/+1, ficou fácil: bot com 73 peças e 11 missões por partida)
 const CONNECTOR_GROUPS = ['toxic', 'rail', 'road'];
+export const BIOME_QUEST_START = 5;
 export function questTarget(group, step) {
-  let t = group === 'cyber' ? 6 : 3;
+  let t = group === 'cyber' ? 6 : CONNECTOR_GROUPS.includes(group) ? 3 : BIOME_QUEST_START;
   for (let i = 1; i <= step; i++) t += group === 'cyber' ? 5 + i : CONNECTOR_GROUPS.includes(group) ? 2 : 3 + Math.floor(i / 2);
   return t;
 }
