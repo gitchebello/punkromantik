@@ -2,8 +2,8 @@
 // tubos, frustos, chanfros, folhas), biomas redesenhados e partes animáveis.
 // Três malhas por peça: "lit" (iluminada), "glow" (neon, sem luz) e "water"
 // (shader de água animada). Cor por vértice, flat shading.
-import { edgeAngle, vertexAngle, APO } from './hex.js?v=20261012a';
-import { RNG } from './rng.js?v=20261012a';
+import { edgeAngle, vertexAngle, APO } from './hex.js?v=20261012z';
+import { RNG } from './rng.js?v=20261012z';
 
 const THREE = window.THREE;
 export const TILE_H = 0.16;
@@ -116,7 +116,7 @@ function distToPath(path, x, z) {
 const v3 = { sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], norm: (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; } };
 
 class Builder {
-  constructor() { this.lit = { pos: [], col: [] }; this.glow = { pos: [], col: [] }; this.water = { pos: [], col: [] }; this.anims = []; this.buildings = 0; }
+  constructor() { this.hero = {}; this.lit = { pos: [], col: [] }; this.glow = { pos: [], col: [] }; this.water = { pos: [], col: [] }; this.anims = []; this.buildings = 0; this.roofs = []; }
   tri(tgt, a, b, c, color, hint) {
     if (this.yf) { const f = this.yf; a = [a[0], a[1] + f(a[0], a[2]), a[2]]; b = [b[0], b[1] + f(b[0], b[2]), b[2]]; c = [c[0], c[1] + f(c[0], c[2]), c[2]]; } // rampa do viaduto
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
@@ -400,14 +400,52 @@ function seracs(B, rng, p) {
   }
 }
 function pines(B, rng, p) { for (let k = 0, n = 2 + rng.int(2); k < n; k++) snowPine(B, rng, p.x + rng.range(-0.07, 0.07), p.z + rng.range(-0.07, 0.07), rng.range(0.8, 1.2)); }
+// Iglu (12/10: "maior e mais característico"; 7ª rodada: "maior e melhor desenhado"). Cúpula lisa e alta; as
+// fiadas e juntas de bloco são SULCOS claros rentes à superfície (anéis horizontais saltados liam como bolo de
+// andares, e as juntas escuras como palitos); túnel em arco de verdade com a boca escura e luz quente lá dentro;
+// janela redonda de gelo acesa, claraboia de cristal no topo e neve acumulada na base.
 function igloo(B, rng, p, sc = 1) {
-  const ry = p.a + Math.PI + rng.range(-0.4, 0.4), c = Math.cos(ry), s = Math.sin(ry), r = rng.range(0.07, 0.09) * sc, snow = col(PAL.snow);
-  B.sphere(B.lit, p.x, H, p.z, r, snow, 10, 5, { dome: true, sy: 0.75 });
-  for (const ph of [0.35, 0.8]) B.annulus(B.lit, p.x, H + r * 0.75 * Math.sin(ph), p.z, r * Math.cos(ph) * 0.96, r * Math.cos(ph) * 1.03, 10, shade(snow, 0.84)); // fiadas de blocos
-  B.sphere(B.lit, p.x + c * r * 0.85, H, p.z + s * r * 0.85, r * 0.45, shade(snow, 0.95), 8, 4, { dome: true, sy: 0.9 }); // túnel de entrada
-  B.panel(B.glow, p.x + c * (r * 0.85 + r * 0.36), H + 0.004, p.z + s * (r * 0.85 + r * 0.36), 0.034 * sc, 0.028 * sc, ry, col(rng.pick(['#ffb35c', '#ff2bd6', '#22f3ff'])), 0.006); // porta iluminada
-  B.annulus(B.glow, p.x, H + 0.004, p.z, r + 0.004, r + 0.018, 12, col(PAL.crystalGlow));
-  if (sc > 0.85 && rng.chance(0.45)) { B.extrude(B.lit, ngon(p.x - s * 0.02, p.z + c * 0.02, 0.005, 5), H + r * 0.7, 0.09, col(PAL.post)); B.sphere(B.glow, p.x - s * 0.02, H + r * 0.7 + 0.095, p.z + c * 0.02, 0.009, col('#ff3b5c'), 6, 3); } // antena
+  const ry = p.a + Math.PI + rng.range(-0.4, 0.4), c = Math.cos(ry), s = Math.sin(ry), r = rng.range(0.1, 0.115) * sc, sy = 0.82;
+  const snow = col('#f7fbff'), groove = col('#bcd4e6'), light = col(rng.pick(['#ffb35c', '#ffb35c', '#ff6fb5', '#5fe0ff']));
+  const onDome = (t, ph, k = 1.004) => [p.x + Math.cos(t) * r * Math.cos(ph) * k, H + r * sy * Math.sin(ph), p.z + Math.sin(t) * r * Math.cos(ph) * k];
+  B.sphere(B.lit, p.x, H, p.z, r, snow, 20, 9, { dome: true, sy });
+  const courses = [0.2, 0.42, 0.66, 0.9], gw = 0.0022 * Math.max(1, sc * 0.8);
+  const front = (t) => Math.cos(t - ry) > 0.86; // onde o túnel encosta: sem sulco
+  for (const f of courses) { // fiadas: anel de sulco seguindo a curva
+    const ph = (f * Math.PI) / 2, pts = [];
+    for (let k = 0; k <= 28; k++) { const t = ry + 0.55 + (k / 28) * (PI2 - 1.1); pts.push(onDome(t, ph)); }
+    B.tube(B.lit, pts, Array(pts.length).fill(gw), 3, groove);
+    if (f >= 0.42) B.tube(B.lit, [onDome(ry - 0.6, ph), onDome(ry, ph), onDome(ry + 0.6, ph)], [gw, gw, gw], 3, groove);
+  }
+  for (let j = 0; j < courses.length; j++) { // juntas verticais, desencontradas como tijolo
+    const ph0 = j ? (courses[j - 1] * Math.PI) / 2 : 0, ph1 = (courses[j] * Math.PI) / 2, n = [12, 10, 8, 5][j];
+    for (let k = 0; k < n; k++) {
+      const t = ry + ((k + (j % 2) * 0.5) / n) * PI2;
+      if (j < 2 && front(t)) continue;
+      B.tube(B.lit, [onDome(t, ph0 + 0.01), onDome(t, (ph0 + ph1) / 2, 1.006), onDome(t, ph1 - 0.01)], [gw, gw, gw], 3, groove);
+    }
+  }
+  // túnel: meio-cilindro deitado saindo da frente, com dois anéis de bloco e a boca escura
+  const tr = r * 0.4, t0 = r * 0.72, t1 = r * 1.28, P = (d, y = 0) => [p.x + c * d, H + y, p.z + s * d];
+  B.tube(B.lit, [P(t0), P(t1)], [tr, tr], 14, shade(snow, 0.98), { capEnd: true });
+  for (const d of [t0 + (t1 - t0) * 0.35, t0 + (t1 - t0) * 0.7]) {
+    const pts = []; for (let k = 0; k <= 10; k++) { const a = (k / 10) * Math.PI; pts.push([p.x + c * d - s * Math.cos(a) * tr * 1.01, H + Math.sin(a) * tr * 1.01, p.z + s * d + c * Math.cos(a) * tr * 1.01]); }
+    B.tube(B.lit, pts, Array(pts.length).fill(gw), 3, groove);
+  }
+  const mouth = []; for (let k = 0; k <= 10; k++) { const a = (k / 10) * Math.PI; mouth.push([p.x + c * (t1 + 0.002) - s * Math.cos(a) * tr * 0.72, H + Math.sin(a) * tr * 0.82, p.z + s * (t1 + 0.002) + c * Math.cos(a) * tr * 0.72]); }
+  for (let k = 0; k < 10; k++) B.tri(B.lit, P(t1 + 0.002, 0), mouth[k], mouth[k + 1], col('#2a3550'), [c, 0, s]); // boca escura em arco
+  B.panel(B.glow, p.x + c * (t1 + 0.004), H, p.z + s * (t1 + 0.004), tr * 0.6, tr * 0.5, ry, light, 0.003); // luz quente lá dentro
+  B.extrude(B.lit, ngon(p.x + c * (t1 + tr * 0.5), p.z + s * (t1 + tr * 0.5), tr * 0.7, 9), H, 0.003, shade(col(light), 0.35).lerp(col('#e8f1fa'), 0.6)); // reflexo na neve
+  // janela redonda de gelo na lateral
+  const wa = ry + 1.25, wph = 0.5, wc = onDome(wa, wph, 1.01);
+  B.sphere(B.glow, wc[0], wc[1], wc[2], r * 0.13, col('#9ff5ff'), 8, 4, { sy: 1 });
+  // claraboia de cristal no topo (o respiro punk, sem chaminé preta)
+  B.annulus(B.glow, p.x, H + r * sy + 0.001, p.z, r * 0.1, r * 0.17, 12, col('#9ff5ff'));
+  B.sphere(B.lit, p.x, H + r * sy - r * 0.02, p.z, r * 0.1, col('#dff6ff'), 8, 3, { dome: true, sy: 0.6 });
+  // neve acumulada na base, mais do lado do vento
+  for (let k = 0; k < 7; k++) { const t = ry + 0.9 + (k / 7) * (PI2 - 1.8), d = r * rng.range(0.92, 1.05); B.sphere(B.lit, p.x + Math.cos(t) * d, H - r * 0.08, p.z + Math.sin(t) * d, r * rng.range(0.22, 0.34), shade(snow, 0.99), 8, 3, { dome: true, sy: 0.6 }); }
+  B.annulus(B.glow, p.x, H + 0.003, p.z, r * 1.22, r * 1.3, 18, shade(col(PAL.crystalGlow), 0.7));
+  if (sc > 1.3 && rng.chance(0.5)) { const ax = p.x - s * r * 0.45, az = p.z + c * r * 0.45; B.extrude(B.lit, ngon(ax, az, 0.004, 5), H + r * 0.7, 0.12, col('#8d93ad')); B.sphere(B.glow, ax, H + r * 0.7 + 0.125, az, 0.008, col('#ff3b5c'), 6, 3); } // antena fina
 }
 function iceHole(B, rng, p) { // buraco no gelo com luz saindo de dentro
   const r = rng.range(0.06, 0.09);
@@ -422,6 +460,24 @@ function snowbot(B, rng, p) { // boneco de neve robô
   for (let k = 0; k < 3; k++) B.sphere(B.glow, p.x + cx * 0.042, H + 0.12 + k * 0.02, p.z + cz * 0.042, 0.005, col('#ff3b5c'), 5, 3); // botões
   B.extrude(B.lit, ngon(p.x, p.z, 0.03, 8), H + 0.24, 0.028, col('#2a2d3a')); B.annulus(B.lit, p.x, H + 0.241, p.z, 0.03, 0.042, 8, col('#2a2d3a')); // cartola
   for (const sd of [1, -1]) B.tube(B.lit, [[p.x - cz * sd * 0.04, H + 0.15, p.z + cx * sd * 0.04], [p.x - cz * sd * 0.1, H + 0.2, p.z + cx * sd * 0.1]], [0.005, 0.004], 4, col(PAL.trunk)); // braços
+}
+// Boneco de neve de verdade (12/10, usuário: "faça mais bonecos de neve no gelo"): três bolas, nariz de
+// cenoura, olhos de carvão, galhos de braço e um cachecol neon — a única peça de cor quente no branco.
+function snowman(B, rng, x, z, a, s = 1) {
+  const c = col('#f6fbff'), cx = Math.cos(a), cz = Math.sin(a), scarf = col(rng.pick(['#ff2bd6', '#ff3b5c', '#22f3ff', '#ffe93a', '#38ff9b']));
+  const r0 = 0.05 * s, r1 = 0.037 * s, r2 = 0.027 * s, y0 = H + r0 * 0.85, y1 = y0 + r0 * 0.8 + r1 * 0.75, y2 = y1 + r1 * 0.75 + r2 * 0.8;
+  B.sphere(B.lit, x, y0, z, r0, c, 9, 5); B.sphere(B.lit, x, y1, z, r1, c, 9, 5); B.sphere(B.lit, x, y2, z, r2, c, 9, 5);
+  B.annulus(B.lit, x, H + 0.002, z, r0 * 0.6, r0 * 1.25, 10, shade(c, 0.9)); // neve socada em volta
+  B.tube(B.lit, [[x + cx * r2 * 0.85, y2, z + cz * r2 * 0.85], [x + cx * (r2 + 0.028 * s), y2 - 0.003 * s, z + cz * (r2 + 0.028 * s)]], [0.006 * s, 0.001], 5, col('#ff7a1a')); // cenoura
+  for (const sd of [1, -1]) B.sphere(B.lit, x + cx * r2 * 0.88 - cz * sd * r2 * 0.38, y2 + r2 * 0.32, z + cz * r2 * 0.88 + cx * sd * r2 * 0.38, 0.0045 * s, col('#1a1c26'), 4, 2); // olhos
+  for (let k = 0; k < 3; k++) B.sphere(B.lit, x + cx * r1 * 0.97, y1 + r1 * (0.45 - k * 0.4), z + cz * r1 * 0.97, 0.0045 * s, col('#1a1c26'), 4, 2); // botões
+  B.annulus(B.lit, x, y1 + r1 * 0.72, z, r1 * 0.55, r1 * 0.85, 10, scarf); // cachecol
+  B.tube(B.lit, [[x + cx * r1 * 0.6 - cz * r1 * 0.5, y1 + r1 * 0.7, z + cz * r1 * 0.6 + cx * r1 * 0.5], [x + cx * r1 * 0.95 - cz * r1 * 0.6, y1 - r1 * 0.2, z + cz * r1 * 0.95 + cx * r1 * 0.6]], [0.007 * s, 0.006 * s], 4, scarf); // ponta do cachecol
+  for (const sd of [1, -1]) { // braços de galho
+    const bx = x - cz * sd * r1 * 0.9, bz = z + cx * sd * r1 * 0.9, ex = x - cz * sd * (r1 + 0.05 * s), ez = z + cx * sd * (r1 + 0.05 * s);
+    B.tube(B.lit, [[bx, y1, bz], [ex, y1 + 0.03 * s * (sd > 0 ? 1 : 0.4), ez]], [0.0035 * s, 0.002 * s], 4, col(PAL.woodDark));
+  }
+  if (rng.chance(0.5)) { B.extrude(B.lit, ngon(x, z, r2 * 0.75, 8), y2 + r2 * 0.7, r2 * 0.9, col('#2a2d3a')); B.annulus(B.lit, x, y2 + r2 * 0.72, z, r2 * 0.75, r2 * 1.15, 8, col('#2a2d3a')); B.annulus(B.glow, x, y2 + r2 * 0.95, z, r2 * 0.76, r2 * 0.8, 8, scarf); } // cartola
 }
 function inuksuk(B, rng, p) { // marco de pedras empilhadas: o "poste indicativo" do gelo
   const c = col(rng.pick(PAL.inuksukStone)), ry = p.a + rng.range(-0.5, 0.5), s = rng.range(0.85, 1.25);
@@ -481,13 +537,9 @@ export function buildAuroraGeometry(a) {
   return g;
 }
 
-function iglooCamp(B, rng, p) { // acampamento: um iglu grande, um ou dois menores e a fogueira no meio
-  igloo(B, rng, p, 1);
-  for (let k = 0, n = 1 + rng.int(2); k < n; k++) {
-    const a = p.a + 1.7 + k * 1.9 + rng.range(-0.3, 0.3), d = rng.range(0.115, 0.155);
-    igloo(B, rng, { x: p.x + Math.cos(a) * d, z: p.z + Math.sin(a) * d, a: a + Math.PI }, rng.range(0.58, 0.78));
-  }
-  const fa = p.a + rng.range(0.6, 1.2), fx = p.x + Math.cos(fa) * 0.085, fz = p.z + Math.sin(fa) * 0.085;
+function iglooCamp(B, rng, p) { // acampamento: UM iglu e a fogueira (12/10: os iglus menores em volta saíram)
+  igloo(B, rng, p, 1.15);
+  const fa = p.a + rng.range(0.6, 1.2), fx = p.x + Math.cos(fa) * 0.135, fz = p.z + Math.sin(fa) * 0.135;
   B.annulus(B.lit, fx, H + 0.003, fz, 0.026, 0.046, 10, shade(col(PAL.snow), 0.84));
   for (let k = 0; k < 5; k++) { const a = (k / 5) * PI2 + rng.float(); B.tube(B.lit, [[fx + Math.cos(a) * 0.02, H, fz + Math.sin(a) * 0.02], [fx, H + 0.032, fz]], [0.004, 0.0025], 4, col(PAL.woodDark)); }
   B.sphere(B.glow, fx, H + 0.03, fz, 0.017, col('#ff7a1a'), 7, 4);
@@ -528,9 +580,29 @@ function icebreaker(B, rng, p) { // quebra-gelo preso: casco vermelho tombado, p
   B.frustum(B.lit, p.x - c * 0.07, H + 0.09, p.z - s * 0.07, 0.016, 0.013, 0.05, 8, col('#2a2d3a')); // chaminé
   B.sphere(B.glow, p.x + c * 0.12, H + 0.06, p.z + s * 0.12, 0.009, col(PAL.beacon), 5, 3);
 }
+// Cerejeira na neve (12/10, pedido do usuário: "de vez em quando"): galhos escuros, copa rosa com
+// neve por cima e pétalas caídas no branco. O rosa só existe aqui no gelo — é isso que faz ela saltar.
+function cherryTree(B, rng, x, z, s = 1) {
+  const h = rng.range(0.13, 0.18) * s, lean = rng.float() * PI2, tx = x + Math.cos(lean) * 0.025 * s, tz = z + Math.sin(lean) * 0.025 * s, bark = col('#3b2730');
+  B.tube(B.lit, [[x, H, z], [x + Math.cos(lean) * 0.01 * s, H + h * 0.5, z + Math.sin(lean) * 0.01 * s], [tx, H + h, tz]], [0.016 * s, 0.012 * s, 0.008 * s], 6, bark);
+  const tips = [];
+  for (let k = 0; k < 3; k++) { const a = lean + (k - 1) * 2.1 + rng.range(-0.3, 0.3), L = rng.range(0.05, 0.08) * s, tip = [tx + Math.cos(a) * L, H + h + rng.range(0.01, 0.04) * s, tz + Math.sin(a) * L]; B.tube(B.lit, [[x + Math.cos(lean) * 0.012 * s, H + h * 0.65, z + Math.sin(lean) * 0.012 * s], tip], [0.007 * s, 0.004 * s], 5, bark); tips.push(tip); }
+  const pinks = ['#ffb7d5', '#ff9cc6', '#ffd0e4', '#ff86b8'];
+  for (const t of tips.concat([[tx, H + h + 0.03 * s, tz]])) {
+    for (let k = 0; k < 3; k++) B.sphere(B.lit, t[0] + rng.range(-0.025, 0.025) * s, t[1] + rng.range(0, 0.025) * s, t[2] + rng.range(-0.025, 0.025) * s, rng.range(0.03, 0.042) * s, col(rng.pick(pinks)), 8, 4);
+    B.sphere(B.lit, t[0], t[1] + 0.03 * s, t[2], 0.026 * s, col(PAL.snow), 7, 3, { dome: true, sy: 0.4 }); // neve em cima da copa
+  }
+  for (let k = 0; k < 5; k++) { const a = rng.float() * PI2; B.sphere(B.glow, tx + Math.cos(a) * 0.07 * s, H + h + rng.range(0.01, 0.06) * s, tz + Math.sin(a) * 0.07 * s, 0.007 * s, col('#ffd6ec'), 4, 2); }
+  for (let k = 0; k < 10; k++) { const a = rng.float() * PI2, d = rng.range(0.03, 0.12) * s; B.extrude(B.lit, ngon(x + Math.cos(a) * d, z + Math.sin(a) * d, 0.007, 5, rng.float()), H, 0.002, col(rng.pick(pinks))); } // pétalas no chão
+}
 function drawIce(B, rng, pts) {
   for (const p of pts) {
-    const r = rng.float();
+    let r = rng.float();
+    if (r < 0.04) { cherryTree(B, rng, p.x, p.z, rng.range(1, 1.3)); if (rng.chance(0.5)) cherryTree(B, rng, p.x + rng.range(-0.07, 0.07), p.z + rng.range(-0.07, 0.07), 0.7); continue; }
+    r = (r - 0.04) / 0.96; // o resto do gelo mantém as proporções de antes
+    const big = r < 0.18 || (r >= 0.28 && r < 0.42) || (r >= 0.47 && r < 0.505) || (r >= 0.6 && r < 0.72); // pico, crista, seracs, estação, quebra-gelo, iglus
+    if (big) { if (B.hero.plain) { if (rng.chance(0.5)) pines(B, rng, p); continue; } B.hero.plain = true; } // um herói por peça (ver ROCK_BIG)
+    else if (B.hero.plain && rng.chance(0.45)) continue;
     if (r < 0.13) icePeak(B, rng, p, rng.range(0.9, 1.3));
     else if (r < 0.18) iceRidge(B, rng, p);
     else if (r < 0.28) pines(B, rng, p);
@@ -548,7 +620,7 @@ function drawIce(B, rng, pts) {
     } else if (r < 0.6) { // montes de neve
       B.sphere(B.lit, p.x, H - 0.02, p.z, rng.range(0.06, 0.11), col(PAL.snow), 9, 4, { dome: true, sy: 0.6 });
       if (rng.chance(0.5)) B.sphere(B.lit, p.x + 0.07, H - 0.02, p.z + 0.03, rng.range(0.04, 0.07), col(PAL.snow), 8, 3, { dome: true, sy: 0.6 });
-    } else if (r < 0.72) iglooCamp(B, rng, p);
+    } else if (r < 0.72) { if (!B.hero.plain) iglooCamp(B, rng, p); else pines(B, rng, p); } // com o grande iglu na peça, nada de outro acampamento
     else if (r < 0.78) inuksuk(B, rng, p);
     else if (r < 0.83) fishingHut(B, rng, p);
     else if (r < 0.865) sled(B, rng, p);
@@ -578,6 +650,45 @@ function wildFlower(B, rng, x, z, fc, h = rng.range(0.035, 0.06)) {
   const ph = rng.float() * PI2;
   for (let j = 0; j < 5; j++) { const a = ph + (j / 5) * PI2; B.sphere(B.glow, x + Math.cos(a) * 0.02, H + h, z + Math.sin(a) * 0.02, 0.017, fc, 5, 2); }
   B.sphere(B.lit, x, H + h + 0.005, z, 0.011, col('#fff3b0'), 5, 2);
+}
+// Moinho-bateria do Baldio (12/10, usuário: "estruturas de armazenamento de energia eólica nos terrenos
+// baldios, como se fossem moinhos de vento"): torre de estuque com cúpula de cobre azinhavrado e as quatro
+// velas de treliça girando (geo 'mill' em main.js); no pé, o banco de baterias com a carga acesa em verde.
+// Steampunk de estuque: o vento guardado em potes de latão.
+function windmill(B, rng, p) {
+  const a = p.a + Math.PI + rng.range(-0.5, 0.5), c = Math.cos(a), s = Math.sin(a), px = -s, pz = c, wall = col(rng.pick(PAL.stucco)), h = rng.range(0.28, 0.34);
+  B.frustum(B.lit, p.x, H, p.z, 0.075, 0.05, h, 8, wall, a, { topCol: shade(wall, 0.9) });
+  for (const f of [0.3, 0.62]) B.annulus(B.lit, p.x, H + h * f, p.z, 0.075 - 0.025 * f - 0.002, 0.075 - 0.025 * f + 0.006, 8, col(PAL.verdigrisDark)); // cintas
+  B.panel(B.lit, p.x + c * 0.074, H, p.z + s * 0.074, 0.036, 0.06, a, col(PAL.woodDark), 0.006); // porta
+  B.panel(B.glow, p.x + c * 0.062, H + h * 0.55, p.z + s * 0.062, 0.022, 0.03, a, col(PAL.lantern), 0.005); // janela acesa
+  B.frustum(B.lit, p.x, H + h, p.z, 0.062, 0.02, 0.07, 8, col(PAL.verdigris), a, { topCol: col(PAL.verdigrisDark) }); // cúpula de cobre
+  B.sphere(B.lit, p.x, H + h + 0.075, p.z, 0.012, col(PAL.gold), 6, 3);
+  B.tube(B.lit, [[p.x, H + h + 0.03, p.z], [p.x + c * 0.075, H + h + 0.03, p.z + s * 0.075]], [0.008, 0.008], 6, col(PAL.gold)); // eixo
+  B.anims.push({ type: 'rotor', geo: 'mill', x: p.x + c * 0.08, y: H + h + 0.03, z: p.z + s * 0.08, a, speed: rng.range(0.5, 1.0) * (rng.chance(0.5) ? 1 : -1), axis: 'x', scale: 1 });
+  for (let k = -1; k <= 1; k++) { // banco de baterias: três potes de latão com o medidor de carga em verde
+    const bx = p.x - c * 0.11 + px * k * 0.045, bz = p.z - s * 0.11 + pz * k * 0.045, bh = 0.06 + (k + 1) * 0.006;
+    B.frustum(B.lit, bx, H, bz, 0.019, 0.019, bh, 10, col(PAL.gold), 0, { topCol: shade(col(PAL.gold), 1.15) });
+    B.annulus(B.lit, bx, H + bh * 0.85, bz, 0.019, 0.023, 10, col(PAL.verdigrisDark));
+    for (let j = 0; j < 3; j++) B.panel(B.glow, bx + c * 0.0195, H + 0.008 + j * 0.016, bz + s * 0.0195, 0.014, 0.01, a, col(j < 2 || k < 1 ? '#38ff9b' : '#2a4a3a'), 0.004);
+    B.extrude(B.lit, ngon(bx, bz, 0.005, 6), H + bh, 0.012, col(PAL.post));
+  }
+  B.tube(B.lit, [[p.x - c * 0.07, H + 0.04, p.z - s * 0.07], [p.x - c * 0.09, H + 0.075, p.z - s * 0.09], [p.x - c * 0.11, H + 0.075, p.z - s * 0.11]], [0.004, 0.004, 0.004], 4, col(PAL.verdigrisDark)); // cabo da torre às baterias
+}
+// Pirâmides de Gizé no Sandpunk (12/10, usuário: "pirâmides egípcias clássicas... seria uma tentativa"):
+// a grande e duas menores em diagonal, calcário claro com fiadas marcadas e o piramídio de ouro aceso.
+// Calcário (não o tijolo cru dos zigurates) para as duas ruínas não se confundirem.
+function pyramid(B, x, z, a, b, h) {
+  const lime = col('#f0c873'), course = col('#b98a45');
+  B.frustum(B.lit, x, H, z, b, 0.001, h, 4, lime, a, { topCol: lime });
+  for (let k = 1; k <= 5; k++) { const t = k / 6, rr = b * (1 - t); B.frustum(B.lit, x, H + h * t - 0.002, z, rr * 1.012 + 0.002, rr * 1.012, 0.003, 4, course, a, { noTop: true }); } // fiadas
+  B.frustum(B.glow, x, H + h * 0.9, z, b * 0.1 + 0.002, 0.001, h * 0.1 + 0.002, 4, col(PAL.goldGlow), a); // piramídio
+}
+function gizaGroup(B, rng, p, k = 1) {
+  const a = rng.float() * Math.PI / 2, c = Math.cos(p.a + Math.PI / 2), s = Math.sin(p.a + Math.PI / 2), cr = Math.cos(p.a), sr = Math.sin(p.a), b0 = rng.range(0.15, 0.17) * k;
+  pyramid(B, p.x, p.z, a, b0, b0 * 1.3);
+  pyramid(B, p.x + c * 1.3 * b0 - cr * 0.3 * b0, p.z + s * 1.3 * b0 - sr * 0.3 * b0, a, b0 * 0.66, b0 * 0.86);
+  pyramid(B, p.x - c * 1.15 * b0 + cr * 0.45 * b0, p.z - s * 1.15 * b0 + sr * 0.45 * b0, a, b0 * 0.44, b0 * 0.57);
+  for (let j = 0; j < 4; j++) { const ang = rng.float() * PI2, d = rng.range(1.1, 1.6) * b0; B.extrude(B.lit, rect(p.x + Math.cos(ang) * d, p.z + Math.sin(ang) * d, 0.03, 0.02, ang), H, 0.014, col('#d9b06a')); } // blocos tombados
 }
 function drawGrass(B, rng, pts, iris) {
   for (const p of pts) {
@@ -641,7 +752,7 @@ function tower(B, rng, p, sch) {
   if (r < 0.35) { B.extrude(B.lit, ngon(p.x, p.z, 0.012, 6), y, 0.14, col('#8d93ad')); B.sphere(B.glow, p.x, y + 0.15, p.z, 0.014, col(sch.warm), 6, 3); }
   else if (r < 0.6) { B.sphere(B.lit, p.x, y, p.z, Math.min(w, d) * 0.45, shade(base, 1.6), 10, 4, { dome: true }); B.annulus(B.glow, p.x, y + 0.004, p.z, Math.min(w, d) * 0.42, Math.min(w, d) * 0.5, 12, schemeCol(rng, sch)); }
   else if (r < 0.8) { B.cone(B.glow, p.x, y, p.z, 0.03, 0.22, schemeCol(rng, sch), 6); }
-  else { B.extrude(B.lit, rect(p.x, p.z, w * 0.5, d * 0.5, ry), y, 0.04, shade(base, 0.8)); B.extrude(B.lit, ngon(p.x + 0.02, p.z, 0.02, 8), y + 0.04, 0.02, col('#8d93ad')); }
+  else { B.extrude(B.lit, rect(p.x, p.z, w * 0.5, d * 0.5, ry), y, 0.04, shade(base, 0.8)); B.extrude(B.lit, ngon(p.x + 0.02, p.z, 0.02, 8), y + 0.04, 0.02, col('#8d93ad')); B.roofs.push({ x: p.x, z: p.z, y, a: ry, depth: w, span: d }); }
   if (rng.chance(0.5)) { // letreiro vertical
     const c = Math.cos(ry), s = Math.sin(ry), sw = 0.03;
     B.extrude(B.lit, rect(p.x + c * (w / 2 + 0.02), p.z + s * (w / 2 + 0.02), 0.016, 0.05, ry), H + h * 0.2, Math.min(h * 0.55, 0.32), col('#2a2d44'));
@@ -679,6 +790,52 @@ function billboard(B, rng, p, sch) {
   B.panel(B.glow, p.x + Math.cos(ry) * 0.014, H + h + 0.015, p.z + Math.sin(ry) * 0.014, 0.27, 0.15, ry, c1, 0.006);
   B.panel(B.glow, p.x + Math.cos(ry) * 0.022, H + h + 0.05, p.z + Math.sin(ry) * 0.022, 0.12, 0.05, ry, c2, 0.006);
   B.panel(B.glow, p.x - Math.cos(ry) * 0.014, H + h + 0.015, p.z - Math.sin(ry) * 0.014, 0.27, 0.15, ry, c2, 0.006);
+}
+// ---------- OUTDOORS DE LED (12/10, pedido do usuário: "outdoors com led neon brilhante nas cidades") ----------
+// Telão de pixels: um fundo aceso fraco e, por cima, uma grade de 8×4 "LEDs" desenhando um motivo
+// (coração, setas, equalizador, glifos). A grade é o que separa o outdoor de LED do letreiro liso.
+const LED_ART = [
+  ['.XX..XX.', 'XXXXXXXX', '.XXXXXX.', '...XX...'], // coração
+  ['X...X...', '.X...X..', '.X...X..', 'X...X...'], // setas
+  ['XXX..XXX', 'X.X..X..', 'XXX..XXX', 'X....X..'], // glifos
+  ['..XXXX..', '.X....X.', '.X.XX.X.', '..XXXX..'], // olho
+];
+function ledScreen(B, rng, x, z, y0, W, Hs, ry, sch) {
+  const c = Math.cos(ry), s = Math.sin(ry), px = -s, pz = c, cols = 8, rows = 4, cw = W / cols, rh = Hs / rows;
+  const key = col(sch.key), acc = col(sch.accent), warm = col(sch.warm), kind = rng.int(LED_ART.length + 1);
+  const eq = Array.from({ length: cols }, () => 1 + rng.int(rows)); // equalizador: barras de altura sorteada
+  for (const f of [1, -1]) { // as duas faces
+    const ox = x + c * f * 0.016, oz = z + s * f * 0.016;
+    B.panel(B.glow, ox, y0, oz, W, Hs, ry, shade(acc, 0.28), 0.004);
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      const on = kind < LED_ART.length ? LED_ART[kind][j][f > 0 ? i : cols - 1 - i] === 'X' : rows - j <= eq[i];
+      if (!on) continue;
+      const u = -W / 2 + cw * (i + 0.5), cc = kind < LED_ART.length ? key : rows - j === eq[i] ? warm : key;
+      B.panel(B.glow, ox + c * f * 0.003 + px * u, y0 + Hs - rh * (j + 1) + rh * 0.1, oz + s * f * 0.003 + pz * u, cw * 0.82, rh * 0.8, ry, cc, 0.003);
+    }
+  }
+  for (let k = 0; k <= 10; k++) for (const yy of [y0 - 0.012, y0 + Hs + 0.012]) { // moldura de lâmpadas
+    const u = -W / 2 + (W * k) / 10;
+    B.sphere(B.glow, x + px * u, yy, z + pz * u, 0.007, k % 2 ? col('#ffffff') : warm, 4, 2);
+  }
+}
+// Outdoor de rua: dois pilares altos e o telão lá em cima, acima da altura dos prédios baixos.
+function ledBillboard(B, rng, p, sch) {
+  const ry = p.a + Math.PI + rng.range(-0.5, 0.5), c = Math.cos(ry), s = Math.sin(ry), px = -s, pz = c;
+  const big = rng.chance(0.4), W = big ? 0.36 : 0.28, Hs = big ? 0.19 : 0.15, hp = rng.range(0.28, 0.46);
+  lightPool(B, p.x, p.z, 0.22, col(sch.key), 1.2);
+  for (const sd of [1, -1]) B.extrude(B.lit, chamfer(p.x + px * sd * W * 0.3, p.z + pz * sd * W * 0.3, 0.024, 0.024, ry, 0.006), H, hp, col(PAL.post));
+  B.extrude(B.lit, rect(p.x, p.z, 0.026, W + 0.04, ry), H + hp - 0.03, Hs + 0.06, col('#14162a')); // caixa do telão
+  B.extrude(B.lit, rect(p.x - c * 0.03, p.z - s * 0.03, 0.04, W * 0.7, ry), H + hp - 0.035, 0.008, col('#2a2d44')); // passarela de manutenção
+  ledScreen(B, rng, p.x, p.z, H + hp, W, Hs, ry, sch);
+}
+// Outdoor de telhado: pernas curtas na laje, encostado na borda da fachada.
+function roofBillboard(B, rng, R, sch) {
+  const c = Math.cos(R.a), s = Math.sin(R.a), px = -s, pz = c, W = Math.max(0.16, Math.min(0.3, R.span * 1.25)), Hs = W * 0.5;
+  const x = R.x + c * R.depth * 0.38, z = R.z + s * R.depth * 0.38, legs = 0.05;
+  for (const sd of [1, -1]) B.extrude(B.lit, rect(x + px * sd * W * 0.32, z + pz * sd * W * 0.32, 0.016, 0.016, R.a), R.y, legs, col(PAL.post));
+  B.extrude(B.lit, rect(x, z, 0.026, W + 0.03, R.a), R.y + legs - 0.015, Hs + 0.03, col('#14162a'));
+  ledScreen(B, rng, x, z, R.y + legs, W, Hs, R.a, sch);
 }
 function stall(B, rng, p, sch) {
   const ry = p.a + rng.range(-0.3, 0.3), c = Math.cos(ry), s = Math.sin(ry), body = col(rng.pick(['#3a1d5a', '#1d3a4a', '#4a2a1d']));
@@ -720,6 +877,7 @@ function cityBlock(B, rng, p, sch) {
     }
     if (rng.chance(0.28)) B.cone(B.glow, bx, y, bz, 0.018, 0.11, schemeCol(rng, sch), 6);
     else if (rng.chance(0.3)) { B.extrude(B.lit, ngon(bx, bz, 0.009, 6), y, 0.1, col('#8d93ad')); B.sphere(B.glow, bx, y + 0.11, bz, 0.011, col(sch.warm), 6, 3); }
+    else B.roofs.push({ x: bx, z: bz, y, a: a + Math.PI / 2, depth: d, span: w }); // laje limpa: candidata a outdoor de LED
   }
   // rua molhada na frente (lado de dentro da peca, pra nunca vazar pela borda)
   if (lots === 1) { // lote unico ganha um podio baixo encostado: massa de quarteirao sem virar outro predio
@@ -978,28 +1136,164 @@ function flowerBed(B, rng, p) {
     }
   }
 }
+// Costela-de-adão (Monstera): folhas enormes recortadas, cada uma num talo que arqueia para fora.
+// O recorte é o que a faz ler como monstera e não como "folha grande": cada folha é uma nervura
+// central com lóbulos estreitos saindo dos dois lados, com fresta entre eles.
+function monstera(B, rng, x, z, s = 1) {
+  const n = 4 + rng.int(3), ph = rng.float() * PI2, base = col(rng.pick(['#1f8a3f', '#176b35', '#28a04a']));
+  for (let i = 0; i < n; i++) {
+    const a = ph + (i / n) * PI2 + rng.range(-0.25, 0.25), c = Math.cos(a), sn = Math.sin(a), L = rng.range(0.07, 0.1) * s, hgt = rng.range(0.07, 0.12) * s;
+    const tip = [x + c * L, H + hgt, z + sn * L];
+    B.tube(B.lit, [[x, H, z], [x + c * L * 0.3, H + hgt * 0.9, z + sn * L * 0.3], tip], [0.005 * s, 0.004 * s, 0.003 * s], 4, col(PAL.vine));
+    const lc = shade(base, rng.range(0.9, 1.15)), lobes = 4;
+    for (let k = 0; k < lobes; k++) { // nervura: os lóbulos saem ao longo dela, do talo até a ponta
+      const t = (k + 0.5) / lobes, bx = tip[0] + c * 0.07 * s * t, by = tip[1] - 0.02 * s * t * t, bz = tip[2] + sn * 0.07 * s * t, len = 0.05 * s * Math.sin(Math.PI * (0.25 + 0.6 * t));
+      for (const sd of [1, -1]) B.leaf(B.lit, [bx, by, bz], a + sd * 1.15, len, 0.022 * s, lc, { lift: 0.004 * s, droop: 0.02 * s, segs: 2, taper: 0.9 });
+    }
+  }
+}
+// Samambaia baixa: o sub-bosque que fecha o chão entre as árvores.
+function fern(B, rng, x, z, s = 1) {
+  const n = 5 + rng.int(3), ph = rng.float() * PI2, c = col(rng.pick(['#3fbf5a', '#55d46a', '#2ea44f', '#6fdc52']));
+  for (let i = 0; i < n; i++) B.leaf(B.lit, [x, H + 0.004, z], ph + (i / n) * PI2, rng.range(0.05, 0.08) * s, 0.022 * s, shade(c, rng.range(0.85, 1.15)), { lift: 0.05 * s, droop: 0.06 * s, segs: 3 });
+}
+// Superflora: flores gigantes, da altura das casas, com miolo aceso. É o exagero que diz "solarpunk"
+// de longe — a natureza tomou a escala da arquitetura. Uma moita de 1 a 3, cores de PAL.meadow/flower.
+function superFlower(B, rng, p) {
+  for (let f = 0, n = 1 + rng.int(3); f < n; f++) {
+    const x = p.x + (f ? rng.range(-0.08, 0.08) : 0), z = p.z + (f ? rng.range(-0.08, 0.08) : 0), h = (f ? rng.range(0.16, 0.24) : rng.range(0.28, 0.38));
+    const pc = col(rng.pick(['#ff4fa3', '#ff8a3c', '#ffe45c', '#c85cff', '#ff5c5c', '#ffffff'])), lean = rng.float() * PI2, k = rng.range(0.01, 0.03);
+    const top = [x + Math.cos(lean) * k, H + h, z + Math.sin(lean) * k];
+    B.tube(B.lit, [[x, H, z], [x + Math.cos(lean) * k * 0.4, H + h * 0.55, z + Math.sin(lean) * k * 0.4], top], [0.011, 0.009, 0.007], 6, col(PAL.vine));
+    for (let j = 0; j < 2; j++) B.leaf(B.lit, [x, H + h * (0.25 + 0.2 * j), z], lean + (j ? 2.6 : -0.5), 0.09, 0.045, col(rng.pick(PAL.leaf)), { lift: 0.03, droop: 0.05, segs: 3 });
+    const np = 6 + rng.int(3), ph = rng.float() * PI2, R = h * 0.42;
+    for (let j = 0; j < np; j++) B.leaf(B.lit, [top[0], top[1], top[2]], ph + (j / np) * PI2, R, R * 0.6, shade(pc, rng.range(0.9, 1.1)), { lift: R * 0.55, droop: R * 0.35, segs: 3 }); // pétalas em taça
+    B.sphere(B.glow, top[0], top[1] + 0.012, top[2], R * 0.28, col(rng.pick(['#ffe93a', '#ff9a3c', '#38ff9b'])), 8, 4, { sy: 0.6 }); // miolo aceso
+    for (let j = 0; j < 5; j++) { const a = (j / 5) * PI2; B.sphere(B.glow, top[0] + Math.cos(a) * R * 0.18, top[1] + R * 0.2, top[2] + Math.sin(a) * R * 0.18, 0.006, col('#fff4c0'), 4, 2); } // estames
+  }
+}
+// Sub-bosque: depois dos itens principais, mais plantas pequenas nas sobras do setor (12/10, pedido do
+// usuário: "um mato mais denso, estilo floresta"). Só verde e flor, nunca construção.
+function drawUnderstory(B, rng, pts) {
+  for (const p of pts) {
+    const r = rng.float();
+    if (r < 0.24) fern(B, rng, p.x, p.z, rng.range(0.8, 1.2));
+    else if (r < 0.4) monstera(B, rng, p.x, p.z, rng.range(0.7, 0.95));
+    else if (r < 0.52) bush(B, rng, p.x, p.z, rng.range(0.55, 0.8));
+    else if (r < 0.62) broadleaf(B, rng, p.x, p.z, rng.range(0.6, 0.9));
+    else if (r < 0.78) cloudTree(B, rng, p.x, p.z, rng.range(0.85, 1.15)); // árvores médias: mais copa no meio da mata
+    else if (r < 0.9) fruitTree(B, rng, p.x, p.z, rng.range(0.8, 1));
+    else wildFlower(B, rng, p.x, p.z, col(rng.pick(PAL.meadow)), rng.range(0.05, 0.08));
+  }
+}
+// ---------- PLANTAÇÕES (12/10, pedido do usuário: "mais plantações, árvores e vegetação" no Solarpunk) ----------
+// Roça de bairro: canteiro de terra com sulcos e fileiras de uma cultura só (milho, alface, trigo ou
+// morango), com a mangueira de gotejamento acesa correndo entre as linhas.
+function cropField(B, rng, p) {
+  const a = p.a + Math.PI / 2 + rng.range(-0.35, 0.35), c = Math.cos(a), sn = Math.sin(a), w = rng.range(0.2, 0.26), d = rng.range(0.14, 0.18);
+  const P = (u, v) => [p.x + c * u - sn * v, p.z + sn * u + c * v];
+  B.extrude(B.lit, rect(p.x, p.z, w, d, a), H, 0.006, col(PAL.soil), { topCol: shade(col(PAL.soil), 1.15) });
+  const kind = rng.int(4), rows = 4;
+  for (let j = 0; j < rows; j++) {
+    const v = (j / (rows - 1) - 0.5) * d * 0.8;
+    B.ribbon(B.lit, [P(-w * 0.46, v), P(w * 0.46, v)], 0.012, H + 0.007, shade(col(PAL.soil), 0.75)); // sulco
+    for (let k = 0; k < 6; k++) {
+      const [x, z] = P((k / 5 - 0.5) * w * 0.85, v + 0.012);
+      if (kind === 0) { B.extrude(B.lit, ngon(x, z, 0.005, 5), H, 0.07, col('#6fb43a')); B.leaf(B.lit, [x, H + 0.04, z], rng.float() * PI2, 0.03, 0.012, col('#4f9a2e'), { lift: 0.01, droop: 0.02, segs: 2 }); B.sphere(B.lit, x, H + 0.06, z, 0.008, col('#ffd21f'), 5, 2, { sy: 1.6 }); } // milho
+      else if (kind === 1) B.sphere(B.lit, x, H + 0.012, z, 0.016, col(rng.pick(['#8fe05a', '#6fcf4a', '#a6e86a'])), 6, 3, { sy: 0.7 }); // alface
+      else if (kind === 2) B.cone(B.lit, x, H + 0.004, z, 0.012, 0.05, col(rng.pick(['#e0c45c', '#d4b44a', '#c9b46a'])), 4, k); // trigo
+      else { B.sphere(B.lit, x, H + 0.01, z, 0.013, col('#3fbf5a'), 5, 3, { sy: 0.6 }); B.sphere(B.glow, x + 0.008, H + 0.014, z, 0.005, col('#ff3b4f'), 4, 2); } // morango
+    }
+  }
+  B.ribbon(B.glow, [P(-w * 0.48, 0), P(w * 0.48, 0)], 0.004, H + 0.009, shade(col('#5fd0ff'), 0.7)); // gotejamento
+  const [tx, tz] = P(w * 0.56, d * 0.4); // poste com painelzinho e regador
+  B.extrude(B.lit, ngon(tx, tz, 0.006, 5), H, 0.14, col(PAL.woodDark));
+  tiltPanel(B, tx, tz, 0.05, 0.04, a, H + 0.14, 0.015, col(PAL.panel), col(PAL.panelGlow));
+}
+// Pomar: três ou quatro frutíferas pequenas em fila.
+function orchard(B, rng, p) {
+  const a = p.a + Math.PI / 2 + rng.range(-0.3, 0.3), n = 3 + rng.int(2);
+  for (let k = 0; k < n; k++) { const t = (k - (n - 1) / 2) * 0.075; fruitTree(B, rng, p.x + Math.cos(a) * t, p.z + Math.sin(a) * t, rng.range(0.6, 0.75)); }
+}
+// Bananeira: tronco em gomos e folhas compridas rasgadas caindo — a agrofloresta tropical.
+function bananaTree(B, rng, x, z, s = 1) {
+  const h = rng.range(0.16, 0.22) * s;
+  B.tube(B.lit, [[x, H, z], [x, H + h, z]], [0.02 * s, 0.014 * s], 7, col('#7aa84a'));
+  const n = 6 + rng.int(3), ph = rng.float() * PI2;
+  for (let i = 0; i < n; i++) B.leaf(B.lit, [x, H + h, z], ph + (i / n) * PI2, rng.range(0.13, 0.18) * s, 0.05 * s, col(rng.pick(['#3fbf5a', '#55d46a', '#2ea44f'])), { lift: 0.07 * s, droop: 0.2 * s, segs: 4 });
+  if (rng.chance(0.6)) { const a = ph + 0.5; for (let k = 0; k < 4; k++) B.sphere(B.lit, x + Math.cos(a) * 0.03 * s, H + h * 0.82 - k * 0.012, z + Math.sin(a) * 0.03 * s, 0.012 * s, col('#e0d040'), 5, 2, { sy: 1.4 }); } // cacho
+}
+// ---------- DOSSEL (12/10, pedido do usuário: "árvores mais altas e florestas mais densas") ----------
+// Árvores emergentes, bem acima das casas: é a silhueta alta que faz o Solarpunk ler como floresta de
+// longe, do mesmo jeito que as torres fazem a cidade. Sumaúma (copa larga em guarda-chuva, raízes
+// tabulares, às vezes com casa na árvore) e araucária (tronco reto, galhos em candelabro).
+function sumauma(B, rng, x, z, s = 1) {
+  const h = rng.range(0.5, 0.68) * s, lean = rng.float() * PI2, tx = x + Math.cos(lean) * 0.02 * s, tz = z + Math.sin(lean) * 0.02 * s, bark = col('#6b5038');
+  B.tube(B.lit, [[x, H, z], [x + Math.cos(lean) * 0.006, H + h * 0.5, z + Math.sin(lean) * 0.006], [tx, H + h, tz]], [0.032 * s, 0.022 * s, 0.015 * s], 7, bark);
+  for (let k = 0; k < 4; k++) { const a = lean + (k / 4) * PI2 + 0.4; B.tube(B.lit, [[x, H + 0.07 * s, z], [x + Math.cos(a) * 0.05 * s, H + 0.015, z + Math.sin(a) * 0.05 * s]], [0.014 * s, 0.006 * s], 4, shade(bark, 0.9)); } // raízes tabulares
+  const crowns = [];
+  for (let k = 0; k < 4; k++) { // galhos abrindo para a copa
+    const a = lean + (k / 4) * PI2 + rng.range(-0.3, 0.3), r = rng.range(0.08, 0.12) * s, y = H + h + rng.range(-0.02, 0.04) * s;
+    const cx = tx + Math.cos(a) * r, cz = tz + Math.sin(a) * r;
+    B.tube(B.lit, [[tx, H + h * 0.8, tz], [cx, y, cz]], [0.012 * s, 0.006 * s], 5, bark);
+    crowns.push([cx, y, cz]);
+  }
+  crowns.push([tx, H + h + 0.04 * s, tz]);
+  const base = col(rng.pick(PAL.jungle));
+  for (const [cx, cy, cz] of crowns) B.sphere(B.lit, cx, cy + 0.02 * s, cz, rng.range(0.075, 0.1) * s, shade(base, rng.range(0.85, 1.2)), 9, 5, { sy: 0.55 });
+  for (let k = 0; k < 3; k++) { // cipós pendurados
+    const [cx, cy, cz] = crowns[k];
+    B.tube(B.lit, [[cx, cy, cz], [cx + rng.range(-0.01, 0.01), cy - rng.range(0.12, 0.22) * s, cz + rng.range(-0.01, 0.01)]], [0.004, 0.003], 3, col(PAL.vine));
+  }
+  if (rng.chance(0.35)) { // casa na árvore com lanterna acesa
+    const y = H + h * 0.55, a = lean + Math.PI;
+    B.annulus(B.lit, tx, y, tz, 0.012 * s, 0.075 * s, 10, col(PAL.wood[0]));
+    const hx = tx + Math.cos(a) * 0.045 * s, hz = tz + Math.sin(a) * 0.045 * s;
+    B.extrude(B.lit, rect(hx, hz, 0.05 * s, 0.045 * s, a), y, 0.04 * s, col(PAL.wood[2]), { sideShade: true });
+    prismRoof(B, B.lit, hx, hz, 0.06 * s, 0.055 * s, a, y + 0.04 * s, 0.03 * s, col(PAL.terracotta[0]));
+    B.panel(B.glow, hx + Math.cos(a) * 0.026 * s, y + 0.01 * s, hz + Math.sin(a) * 0.026 * s, 0.02 * s, 0.02 * s, a, col(PAL.lantern), 0.004);
+    B.sphere(B.glow, tx + Math.cos(a + 1.6) * 0.07 * s, y - 0.02 * s, tz + Math.sin(a + 1.6) * 0.07 * s, 0.009 * s, col(PAL.lantern), 5, 3);
+  }
+}
+function araucaria(B, rng, x, z, s = 1) {
+  const h = rng.range(0.55, 0.75) * s, bark = col('#5b3a22'), needle = col(rng.pick(['#1f6b3a', '#24804a', '#1a5c34']));
+  B.tube(B.lit, [[x, H, z], [x, H + h, z]], [0.02 * s, 0.01 * s], 6, bark);
+  const n = 7 + rng.int(3), ph = rng.float() * PI2;
+  for (let k = 0; k < n; k++) { // candelabro: galhos curtos em volta do topo, com tufos virados para cima
+    const a = ph + k * 2.4, r = rng.range(0.07, 0.11) * s, y0 = H + h * rng.range(0.78, 0.95), tip = [x + Math.cos(a) * r, y0 + 0.05 * s, z + Math.sin(a) * r];
+    B.tube(B.lit, [[x, y0, z], [x + Math.cos(a) * r * 0.7, y0 - 0.005, z + Math.sin(a) * r * 0.7], tip], [0.006 * s, 0.005 * s, 0.004 * s], 4, bark);
+    B.sphere(B.lit, tip[0], tip[1] + 0.012 * s, tip[2], 0.03 * s, shade(needle, rng.range(0.9, 1.15)), 7, 3, { sy: 0.6 });
+  }
+  B.sphere(B.lit, x, H + h + 0.02 * s, z, 0.035 * s, shade(needle, 1.1), 7, 3, { sy: 0.7 });
+}
+function drawCanopy(B, rng, pts) {
+  for (const p of pts) (rng.chance(0.6) ? sumauma : araucaria)(B, rng, p.x, p.z, rng.range(0.9, 1.15));
+}
 function drawSolar(B, rng, pts) {
   for (const p of pts) {
     const r = rng.float();
-    // ~40% construção, ~60% verde: o vilarejo é cercado de árvores e flores, não de casas
-    if (r < 0.14) stuccoHouse(B, rng, p);
-    else if (r < 0.2) containerHouse(B, rng, p);
-    else if (r < 0.27) ecoBuilding(B, rng, p);
-    else if (r < 0.3) greenhouse(B, rng, p.x, p.z, p.a);
-    else if (r < 0.32) solarCanopy(B, rng, p.x, p.z, p.a);
-    else if (r < 0.35) planterBed(B, rng, p.x, p.z, p.a);
-    else if (r < 0.39) vaxTurbine(B, rng, p);
-    else if (r < 0.41) turbine(B, rng, p);
-    else if (r < 0.46) palm(B, rng, p.x, p.z, rng.range(0.7, 0.95));
-    else if (r < 0.52) fruitTree(B, rng, p.x, p.z, rng.range(0.85, 1.15));
-    else if (r < 0.6) ipe(B, rng, p.x, p.z, rng.range(1.1, 1.4));
-    else if (r < 0.68) cloudTree(B, rng, p.x, p.z, rng.range(0.85, 1.15));
-    else if (r < 0.72) broadleaf(B, rng, p.x, p.z, rng.range(0.8, 1.1));
-    else if (r < 0.77) bush(B, rng, p.x, p.z, rng.range(0.8, 1.1));
-    else if (r < 0.83) sunflowers(B, rng, p);
-    else if (r < 0.89) flowerBed(B, rng, p);
+    // 12/10 (2ª): ~18% construção, ~20% plantação, o resto mata — o vilarejo mora dentro da floresta e da roça
+    if (r < 0.07) stuccoHouse(B, rng, p);
+    else if (r < 0.1) containerHouse(B, rng, p);
+    else if (r < 0.14) ecoBuilding(B, rng, p);
+    else if (r < 0.16) greenhouse(B, rng, p.x, p.z, p.a);
+    else if (r < 0.18) vaxTurbine(B, rng, p);
+    else if (r < 0.29) cropField(B, rng, p);
+    else if (r < 0.31) planterBed(B, rng, p.x, p.z, p.a);
+    else if (r < 0.37) orchard(B, rng, p);
+    else if (r < 0.41) palm(B, rng, p.x, p.z, rng.range(1, 1.3));
+    else if (r < 0.46) fruitTree(B, rng, p.x, p.z, rng.range(1.05, 1.35));
+    else if (r < 0.53) ipe(B, rng, p.x, p.z, rng.range(1.4, 1.8));
+    else if (r < 0.6) cloudTree(B, rng, p.x, p.z, rng.range(1.2, 1.6));
+    else if (r < 0.64) bananaTree(B, rng, p.x, p.z, rng.range(1.1, 1.4));
+    else if (r < 0.71) monstera(B, rng, p.x, p.z, rng.range(1, 1.35));
+    else if (r < 0.77) superFlower(B, rng, p);
+    else if (r < 0.8) broadleaf(B, rng, p.x, p.z, rng.range(0.9, 1.2));
+    else if (r < 0.83) bush(B, rng, p.x, p.z, rng.range(0.8, 1.1));
+    else if (r < 0.87) sunflowers(B, rng, p);
+    else if (r < 0.9) flowerBed(B, rng, p);
     else if (r < 0.93) gardenPond(B, rng, p);
-    else if (r < 0.96) bamboo(B, rng, p.x, p.z);
+    else if (r < 0.97) bamboo(B, rng, p.x, p.z);
     else stringLights(B, rng, p);
   }
 }
@@ -1110,14 +1404,28 @@ function nomadCamp(B, rng, p) { // tenda nômade + vela solar de pano esticada n
   B.sphere(B.glow, mx, H + mh + 0.008, mz, 0.009, col(PAL.goldGlow), 5, 3);
   for (let k = 0; k < 2; k++) B.frustum(B.lit, p.x + s * (0.06 + k * 0.02), H, p.z - c * (0.06 + k * 0.02), 0.012, 0.012, 0.02, 7, col(rng.pick(PAL.scrap))); // galões de água
 }
+// 12/10 (7ª, usuário: "um objeto grande por vez — um vulcão, uma pirâmide ou um zigurate — ao invés de um
+// monte de coisa misturada... não pode parecer um caos generalizado"): cada bioma de uma peça tem no máximo
+// UM herói (o marco, se houver, já é ele). Sorteio de coisa grande depois disso vira miudeza ou chão vazio.
+const ROCK_BIG = (r) => r < 0.10 || (r >= 0.56 && r < 0.63) || (r >= 0.70 && r < 0.78) || (r >= 0.85 && r < 0.89); // zigurate, casco, pico, mesa
+function rockSmall(B, rng, p) {
+  const r = rng.float();
+  if (r < 0.45) return; // areia limpa: a cor do bioma é a informação
+  if (r < 0.65) boulders(B, rng, p.x, p.z, rng.range(0.8, 1.1));
+  else if (r < 0.78) vaporator(B, rng, p);
+  else if (r < 0.88) steles(B, rng, p);
+  else obelisk(B, rng, p, rng.range(0.8, 1));
+}
 function drawRock(B, rng, pts) {
   for (const p of pts) {
     const r = rng.float();
+    if (ROCK_BIG(r)) { if (B.hero.rock) { rockSmall(B, rng, p); continue; } B.hero.rock = true; }
+    else if (r >= 0.10 && B.hero.rock && rng.chance(0.5)) { rockSmall(B, rng, p); continue; } // com herói na peça, metade do resto também emagrece
     if (r < 0.10) ziggurat(B, rng, p, rng.range(0.85, 1.15));
-    else if (r < 0.19) mudHouses(B, rng, p);
-    else if (r < 0.24) obelisk(B, rng, p, rng.range(0.85, 1.15));
-    else if (r < 0.31) steles(B, rng, p);
-    else if (r < 0.36) ishtarGate(B, rng, p);
+    else if (r < 0.21) mudHouses(B, rng, p); // 12/10: o Portal de Ishtar solto saiu (o usuário não entendia o que era)
+    else if (r < 0.26) obelisk(B, rng, p, rng.range(0.85, 1.15));
+    else if (r < 0.33) steles(B, rng, p);
+    else if (r < 0.36) vaporator(B, rng, p);
     else if (r < 0.41) oasis(B, rng, p);
     else if (r < 0.47) ruinRow(B, rng, p);
     else if (r < 0.56) vaporator(B, rng, p);
@@ -1214,26 +1522,6 @@ function steles(B, rng, p) {
     B.sphere(B.lit, x, H + hh, z, ww * 0.5, col(PAL.brickLight), 6, 3, { dome: true, sy: 0.45 });
     for (let j = 0; j < 3; j++) B.panel(B.glow, x + Math.cos(ry) * 0.0095, H + hh * (0.22 + j * 0.24), z + Math.sin(ry) * 0.0095, ww * 0.6, 0.007, ry, shade(col(PAL.lapisGlow), 0.62), 0.004);
   }
-}
-
-// Portal de Ishtar: duas torres revestidas de lápis, rosetas de ouro e dois guardiões.
-function ishtarGate(B, rng, p) {
-  const ry = p.a + Math.PI + rng.range(-0.3, 0.3), c = Math.cos(ry), sn = Math.sin(ry), px = -sn, pz = c;
-  const lap = col(PAL.lapis), gold = col(PAL.gold), d = 0.098, h = rng.range(0.19, 0.27);
-  for (const sd of [1, -1]) {
-    const tx = p.x + px * sd * d, tz = p.z + pz * sd * d;
-    B.extrude(B.lit, rect(tx, tz, 0.072, 0.072, ry), H, h, lap, { topCol: shade(lap, 1.7), sideShade: true });
-    for (let k = 0; k < 3; k++) B.sphere(B.glow, tx + c * 0.038, H + h * (0.24 + k * 0.26), tz + sn * 0.038, 0.011, gold, 6, 3); // rosetas
-    B.extrude(B.lit, rect(tx, tz, 0.086, 0.086, ry), H + h, 0.016, col(PAL.brickLight), { topCol: gold, sideShade: true });
-    const gx = tx + c * 0.075, gz = tz + sn * 0.075; // guardião (lamassu esquemático)
-    B.extrude(B.lit, rect(gx, gz, 0.05, 0.03, ry), H, 0.036, col(PAL.brickLight), { topCol: col(PAL.brick[2]) });
-    B.sphere(B.lit, gx + c * 0.016, H + 0.05, gz + sn * 0.016, 0.017, col(PAL.brickLight), 6, 3);
-    B.sphere(B.glow, gx + c * 0.03, H + 0.052, gz + sn * 0.03, 0.005, col(PAL.glyph), 5, 3); // olho
-    for (const wsd of [1, -1]) B.leaf(B.lit, [gx - c * 0.012, H + 0.038, gz - sn * 0.012], ry + Math.PI / 2 * wsd, 0.032, 0.02, gold, { lift: 0.018, droop: 0.004, segs: 2 }); // asas
-  }
-  B.extrude(B.lit, rect(p.x, p.z, 0.05, 2 * d + 0.072, ry), H + h * 0.8, 0.032, col(PAL.brickLight), { topCol: gold, sideShade: true }); // lintel
-  B.panel(B.glow, p.x + c * 0.027, H + h * 0.82, p.z + sn * 0.027, 2 * d, 0.022, ry, shade(col(PAL.lapisGlow), 0.62), 0.005);
-  B.panel(B.glow, p.x, H + 0.004, p.z, 2 * d - 0.072, h * 0.72, ry, shade(col(PAL.glyph), 0.8), 0.008); // vão aceso
 }
 
 // Oásis: a pausa do deserto. Água escura, tamareiras e juncos — e é para onde a caravana vai.
@@ -1567,8 +1855,196 @@ function drawBridge(B, rng, type, lay) {
 }
 
 // ---------- MARCOS ----------
-function drawLandmark(B, rng, type, x, z, a, sch) {
-  if (type === 'cyber') {
+// ---------- ESTAÇÃO INTERMODAL (hub dos três meios) ----------
+// Um raio de cada meio — trilho, esgoto, rodovia — chegando numa praça redonda com a torre da
+// estação no meio. A torre leva três anéis nas cores dos três meios e três drones orbitando:
+// é o que faz a peça ler como "aqui tudo se troca" de longe. Cada raio é uma rota que termina na
+// praça (to = -1); o comboio que chega por um meio sai pelo outro (convertAtHub em main.js).
+const HUB_SPOKE = 0.34; // onde o raio encontra a praça (fração do apótema)
+const HUB_COL = { rail: '#22f3ff', sewage: '#38ff9b', road: '#ffe36a' };
+function hubLayout(tile) {
+  const spokes = [tile.conn, tile.conn2, tile.conn3].map((cn) => {
+    const pts = radial(cn.exits[0], 1, HUB_SPOKE);
+    return { type: cn.type, e: cn.exits[0], pts };
+  });
+  return { spokes, polys: spokes.map((sp) => sp.pts), routes: spokes.map((sp) => ({ from: sp.e, to: -1, pts: sp.pts, L: pathLength(sp.pts), type: sp.type, stop: sp.type === 'sewage' ? 0.33 : 0 })) };
+}
+function drawHub(B, rng, hl) {
+  for (const sp of hl.spokes) {
+    const path = radial(sp.e, 1, HUB_SPOKE), L = pathLength(path), a = edgeAngle(sp.e), c = Math.cos(a), s = Math.sin(a);
+    if (sp.type === 'rail') { railTrack(B, path); catenaryPole(B, pointAt(path, L * 0.4)); catenaryWire(B, path, 0.4, 1); }
+    else if (sp.type === 'sewage') sewageChannel(B, rng, path);
+    else { roadStrip(B, path); streetLamp(B, pointAt(path, L * 0.45), 1); }
+    // portal na boca de cada raio, na cor do meio: diz por onde entra cada coisa
+    const gx = c * 0.4, gz = s * 0.4, px = -s, pz = c, hw = 0.21, nc = col(HUB_COL[sp.type]);
+    for (const sd of [1, -1]) B.extrude(B.lit, rect(gx + px * sd * hw, gz + pz * sd * hw, 0.03, 0.03, a), H, 0.26, col(PAL.post));
+    B.extrude(B.lit, rect(gx, gz, 0.035, 2 * hw + 0.04, a), H + 0.26, 0.035, col('#2a2d44'));
+    B.panel(B.glow, gx + c * 0.019, H + 0.267, gz + s * 0.019, 2 * hw - 0.06, 0.02, a, nc, 0.004);
+    ['rail', 'sewage', 'road'].forEach((t, k) => B.sphere(B.glow, gx + px * (k - 1) * 0.05, H + 0.31, gz + pz * (k - 1) * 0.05, 0.016, col(HUB_COL[t]), 6, 3)); // três luzes: doca universal, aceita qualquer meio
+  }
+  // praça redonda de concreto com o anel das três cores no chão
+  const conc = col(PAL.concrete), wallc = col(PAL.curb);
+  B.extrude(B.lit, ngon(0, 0, 0.36, 18), H, 0.006, conc, { topCol: shade(conc, 1.15) });
+  hl.spokes.forEach((sp, k) => { // cada terço do anel na cor do raio que chega ali
+    const a0 = edgeAngle(sp.e) - Math.PI / 3, nc = col(HUB_COL[sp.type]);
+    for (let i = 0; i < 6; i++) {
+      const t0 = a0 + (i / 6) * (PI2 / 3), t1 = a0 + ((i + 1) / 6) * (PI2 / 3), ro = 0.345, ri = 0.325;
+      B.quad(B.glow, [Math.cos(t0) * ro, H + 0.008, Math.sin(t0) * ro], [Math.cos(t1) * ro, H + 0.008, Math.sin(t1) * ro], [Math.cos(t1) * ri, H + 0.008, Math.sin(t1) * ri], [Math.cos(t0) * ri, H + 0.008, Math.sin(t0) * ri], nc, [0, 1, 0]);
+    }
+  });
+  // torre da estação: base larga, tambor de vidro, três anéis coloridos e o mastro com farol
+  B.extrude(B.lit, ngon(0, 0, 0.22, 12), H, 0.1, wallc, { topCol: shade(wallc, 1.2), sideShade: true });
+  hl.spokes.forEach((sp) => { const a = edgeAngle(sp.e); B.panel(B.glow, Math.cos(a) * 0.216, H + 0.02, Math.sin(a) * 0.216, 0.12, 0.06, a, shade(col(PAL.warmWin), 0.9), 0.006); }); // portas acesas viradas para cada raio
+  B.extrude(B.lit, ngon(0, 0, 0.15, 12), H + 0.1, 0.24, col('#1d2238'), { topCol: shade(col('#1d2238'), 1.8), sideShade: true });
+  ['rail', 'sewage', 'road'].forEach((t, k) => B.annulus(B.glow, 0, H + 0.14 + k * 0.07, 0, 0.152, 0.17, 12, col(HUB_COL[t])));
+  B.sphere(B.lit, 0, H + 0.34, 0, 0.14, col(PAL.glass), 12, 4, { dome: true, sy: 0.5 });
+  B.extrude(B.lit, ngon(0, 0, 0.014, 6), H + 0.4, 0.32, col('#8d93ad'));
+  B.sphere(B.glow, 0, H + 0.73, 0, 0.026, col(PAL.beacon), 6, 3);
+  ['rail', 'sewage', 'road'].forEach((t, k) => B.anims.push({ type: 'drone', x: 0, y: H + 0.5 + k * 0.06, z: 0, r: 0.2 + k * 0.03, speed: (0.7 + k * 0.2) * (k % 2 ? -1 : 1), color: HUB_COL[t] }));
+  B.anims.push({ type: 'car', dir: rng.pick([1, -1]), color: rng.pick(PAL.carColors) });
+}
+
+// ---------- MEGAESTRUTURAS DA CIDADE ----------
+// 12/10, pedido do usuário: "de vez em quando um shopping mall, um casino, um hotel — alguma construção
+// grande que chame atenção". Saem no lugar do marco de cidade em peças com 4+ setores de Cyberpunk
+// (precisam de chão) e contam como UM prédio, como o marco — a missão de cidade não muda de calibragem.
+// Cada uma tem uma silhueta própria que lê de longe: o cassino é largo e baixo com o letreiro gigante e
+// a ficha girando; o hotel é a lâmina mais alta do jogo com a coroa acesa; o shopping é um caixote
+// enorme com a cúpula de vidro, o estacionamento e os telões.
+function casino(B, rng, x, z, a, sch) {
+  const c = Math.cos(a), s = Math.sin(a), px = -s, pz = c, body = col('#2a1238'), gold = col(PAL.goldGlow), key = col(sch.key);
+  lightPool(B, x + c * 0.2, z + s * 0.2, 0.6, gold, 1.4);
+  B.extrude(B.lit, chamfer(x, z, 0.62, 0.78, a, 0.08), H, 0.2, body, { topCol: shade(body, 1.8), sideShade: true }); // salão de jogos
+  for (let k = 0; k < 3; k++) B.extrude(B.glow, chamfer(x, z, 0.63, 0.79, a, 0.08), H + 0.04 + k * 0.06, 0.008, k === 1 ? gold : key);
+  for (const sd of [1, -1]) { // duas torres de quartos curvas ladeando o salão
+    const tx = x - c * 0.12 + px * sd * 0.26, tz = z - s * 0.12 + pz * sd * 0.26;
+    B.extrude(B.lit, ngon(tx, tz, 0.13, 12, a), H + 0.2, 0.5, body, { topCol: shade(body, 1.9), sideShade: true });
+    windows(B, rng, tx, tz, 0.2, 0.2, a, H + 0.2, 0.5);
+    B.annulus(B.glow, tx, H + 0.71, tz, 0.12, 0.14, 12, gold);
+    B.sphere(B.lit, tx, H + 0.7, tz, 0.12, shade(body, 1.6), 12, 4, { dome: true, sy: 0.6 });
+    B.sphere(B.glow, tx, H + 0.79, tz, 0.025, key, 6, 3);
+  }
+  // letreiro gigante sobre a marquise, virado para fora: placa dourada com moldura de lâmpadas
+  const fx = x + c * 0.33, fz = z + s * 0.33;
+  B.extrude(B.lit, rect(fx, fz, 0.16, 0.7, a), H, 0.02, col('#3a1630')); // marquise
+  for (let k = -5; k <= 5; k++) B.sphere(B.glow, fx + c * 0.08 + px * k * 0.06, H + 0.1, fz + s * 0.08 + pz * k * 0.06, 0.012, k % 2 ? gold : col('#ffffff'), 5, 3);
+  B.extrude(B.lit, rect(fx, fz, 0.04, 0.03, a), H + 0.2, 0.16, col(PAL.post));
+  B.extrude(B.lit, rect(fx, fz, 0.03, 0.58, a), H + 0.36, 0.2, col('#1a0a20'));
+  B.panel(B.glow, fx + c * 0.018, H + 0.38, fz + s * 0.018, 0.54, 0.16, a, gold, 0.006);
+  B.panel(B.glow, fx + c * 0.024, H + 0.42, fz + s * 0.024, 0.4, 0.08, a, col('#ff3b5c'), 0.006);
+  for (let k = -4; k <= 4; k++) for (const y of [0.355, 0.585]) B.sphere(B.glow, fx + c * 0.02 + px * k * 0.07, H + y, fz + s * 0.02 + pz * k * 0.07, 0.01, col('#ffffff'), 4, 2);
+  // ficha de cassino gigante girando no telhado (disco = drone lento) e os dados no letreiro
+  B.extrude(B.lit, ngon(x - c * 0.05, z - s * 0.05, 0.02, 6), H + 0.2, 0.2, col(PAL.post));
+  B.anims.push({ type: 'drone', geo: 'chip', x: x - c * 0.05, y: H + 0.5, z: z - s * 0.05, r: 0.001, speed: 1.2, color: sch.key });
+  for (const sd of [1, -1]) { const dx = fx + px * sd * 0.36, dz = fz + pz * sd * 0.36; B.extrude(B.lit, rect(dx, dz, 0.07, 0.07, a + 0.4 * sd), H + 0.36, 0.07, col('#f4f6fb'), { topCol: col('#ffffff') }); B.sphere(B.glow, dx + c * 0.036, H + 0.395, dz + s * 0.036, 0.009, col('#ff3b5c'), 4, 2); }
+  for (let k = 0; k < 2; k++) B.anims.push({ type: 'drone', x, y: H + 0.95 + k * 0.1, z, r: 0.42 + k * 0.1, speed: k ? -0.5 : 0.6, color: k ? sch.accent : PAL.goldGlow });
+}
+function hotel(B, rng, x, z, a, sch) {
+  const c = Math.cos(a), s = Math.sin(a), px = -s, pz = c, body = col('#121a33'), key = col(sch.key), acc = col(sch.accent);
+  lightPool(B, x, z, 0.55, key, 1.3);
+  B.extrude(B.lit, chamfer(x, z, 0.6, 0.5, a, 0.06), H, 0.14, shade(body, 1.2), { topCol: shade(body, 2.2), sideShade: true }); // pódio do lobby
+  B.panel(B.glow, x + c * 0.302, H + 0.02, z + s * 0.302, 0.4, 0.08, a, shade(col(PAL.warmWin), 0.95), 0.006);
+  // lâmina alta e fina, com faixas de janelas em fita e a quina chanfrada acesa
+  const W = 0.24, D = 0.42, Hh = 1.45;
+  B.extrude(B.lit, chamfer(x - c * 0.04, z - s * 0.04, W, D, a, 0.04), H + 0.14, Hh, body, { topCol: shade(body, 2), sideShade: true });
+  for (let k = 0; k < 14; k++) for (const fs of [1, -1]) B.panel(B.glow, x - c * 0.04 + c * fs * (W / 2 + 0.003), H + 0.2 + k * 0.095, z - s * 0.04 + s * fs * (W / 2 + 0.003), D - 0.06, 0.03, a, shade(col(k % 3 ? PAL.coolWin : PAL.warmWin), 0.75), 0.006);
+  for (const sd of [1, -1]) B.extrude(B.glow, rect(x - c * 0.04 + px * sd * (D / 2), z - s * 0.04 + pz * sd * (D / 2), 0.02, 0.02, a), H + 0.14, Hh, key); // quinas de neon
+  // coroa: anéis escalonados e a agulha com o letreiro vertical do hotel
+  let y = H + 0.14 + Hh, w = W, d = D;
+  for (let k = 0; k < 3; k++) { w *= 0.78; d *= 0.72; B.extrude(B.lit, chamfer(x - c * 0.04, z - s * 0.04, w, d, a, 0.03), y, 0.06, shade(body, 1.3), { topCol: shade(body, 2.2) }); B.extrude(B.glow, chamfer(x - c * 0.04, z - s * 0.04, w + 0.01, d + 0.01, a, 0.03), y + 0.05, 0.008, k % 2 ? acc : key); y += 0.06; }
+  B.cone(B.glow, x - c * 0.04, y, z - s * 0.04, 0.03, 0.34, key, 6, a);
+  const sx = x - c * 0.04 + px * (D / 2 + 0.03), sz = z - s * 0.04 + pz * (D / 2 + 0.03);
+  B.extrude(B.lit, rect(sx, sz, 0.05, 0.05, a), H + 0.6, 0.85, col('#2a2d44'));
+  B.panel(B.glow, sx + c * 0.028, H + 0.64, sz + s * 0.028, 0.04, 0.78, a, acc, 0.006);
+  B.panel(B.glow, sx - c * 0.028, H + 0.64, sz - s * 0.028, 0.04, 0.78, a, acc, 0.006);
+  // heliponto na laje do pódio (12/10: o holofote que subia da coroa saiu — pesava demais na paisagem)
+  const hx = x + c * 0.2 + px * 0.18, hz = z + s * 0.2 + pz * 0.18;
+  B.annulus(B.glow, hx, H + 0.145, hz, 0.07, 0.085, 12, col('#ffe93a'));
+  B.anims.push({ type: 'drone', x: x - c * 0.04, y: H + 1.2, z: z - s * 0.04, r: 0.4, speed: 0.45, color: sch.warm });
+}
+function mall(B, rng, x, z, a, sch) {
+  const c = Math.cos(a), s = Math.sin(a), px = -s, pz = c, body = col('#1c2140'), key = col(sch.key), acc = col(sch.accent);
+  lightPool(B, x, z, 0.7, key, 1.2);
+  // caixote largo de dois pavimentos com a fachada em fita de vidro
+  B.extrude(B.lit, chamfer(x - c * 0.06, z - s * 0.06, 0.66, 0.86, a, 0.06), H, 0.3, body, { topCol: shade(body, 1.9), sideShade: true });
+  for (const y of [0.07, 0.19]) B.extrude(B.glow, chamfer(x - c * 0.06, z - s * 0.06, 0.67, 0.87, a, 0.06), H + y, 0.04, shade(col(PAL.coolWin), 0.55));
+  B.extrude(B.glow, chamfer(x - c * 0.06, z - s * 0.06, 0.68, 0.88, a, 0.06), H + 0.29, 0.012, key);
+  // átrio central com cúpula de vidro e o anel de neon
+  B.extrude(B.lit, ngon(x - c * 0.06, z - s * 0.06, 0.2, 14, a), H + 0.3, 0.08, shade(body, 1.3), { topCol: shade(body, 2) });
+  B.sphere(B.lit, x - c * 0.06, H + 0.38, z - s * 0.06, 0.2, col(PAL.glass), 14, 5, { dome: true, sy: 0.75 });
+  B.annulus(B.glow, x - c * 0.06, H + 0.385, z - s * 0.06, 0.2, 0.225, 14, acc);
+  // anexos: a âncora alta numa ponta e o cinema na outra, cada um com o seu telão
+  for (const sd of [1, -1]) {
+    const ax = x - c * 0.06 + px * sd * 0.36, az = z - s * 0.06 + pz * sd * 0.36, hh = sd > 0 ? 0.55 : 0.42;
+    B.extrude(B.lit, chamfer(ax, az, 0.28, 0.2, a, 0.03), H, hh, shade(body, 0.85), { topCol: shade(body, 1.8), sideShade: true });
+    B.panel(B.glow, ax + c * 0.142, H + hh * 0.42, az + s * 0.142, 0.22, hh * 0.45, a, sd > 0 ? key : acc, 0.008); // telão
+    B.extrude(B.glow, chamfer(ax, az, 0.29, 0.21, a, 0.03), H + hh - 0.02, 0.012, col(sch.warm));
+  }
+  // entrada com marquise e letreiro em cima, virada para fora
+  const fx = x + c * 0.28, fz = z + s * 0.28;
+  B.extrude(B.lit, rect(fx, fz, 0.14, 0.4, a), H + 0.12, 0.02, col('#2a2d44'));
+  B.panel(B.glow, fx - c * 0.005, H + 0.004, fz - s * 0.005, 0.3, 0.11, a, shade(col(PAL.warmWin), 0.9), 0.006);
+  B.panel(B.glow, fx - c * 0.01, H + 0.31, fz - s * 0.01, 0.48, 0.12, a, col(sch.warm), 0.008);
+  // estacionamento com vaguinhas e carros na frente
+  const lx = x + c * 0.5, lz = z + s * 0.5;
+  B.extrude(B.lit, rect(lx, lz, 0.18, 0.74, a), H, 0.003, col(PAL.asphalt));
+  for (let k = -3; k <= 3; k++) B.extrude(B.glow, rect(lx, lz + 0, 0.14, 0.008, a).map(([u, v]) => [u + px * k * 0.1, v + pz * k * 0.1]), H + 0.004, 0.002, shade(col(PAL.dash), 0.7));
+  for (let k = -3; k <= 2; k++) if (rng.chance(0.6)) drawCar(B, lx + px * (k + 0.5) * 0.1, lz + pz * (k + 0.5) * 0.1, a, H, rng.pick(PAL.carColors));
+  B.anims.push({ type: 'drone', x: x - c * 0.06, y: H + 0.75, z: z - s * 0.06, r: 0.32, speed: 0.55, color: sch.key });
+  B.anims.push({ type: 'drone', x: x - c * 0.06, y: H + 0.9, z: z - s * 0.06, r: 0.22, speed: -0.8, color: sch.accent });
+}
+
+// Grande iglu (12/10, 7ª — usuário: "faça um grande iglu e torne-o fundamental e principal no tile de Snowpunk";
+// os acampamentos de iglus pequenos espalhados atrapalhavam a leitura). Herói da neve: um por peça, no miolo da
+// área de neve, com a fogueira na porta. Sai como marco (as trilhas dos ursos contornam pelo anel).
+function bigIgloo(B, rng, x, z, a) {
+  const snow = col(PAL.snow);
+  igloo(B, rng, { x, z, a: a + Math.PI }, 2.05);
+  const fx = x + Math.cos(a) * 0.42 + Math.sin(a) * 0.12, fz = z + Math.sin(a) * 0.42 - Math.cos(a) * 0.12; // fogueira ao lado da porta
+  B.annulus(B.lit, fx, H + 0.003, fz, 0.03, 0.055, 10, shade(snow, 0.84));
+  for (let k = 0; k < 5; k++) { const t = (k / 5) * PI2; B.tube(B.lit, [[fx + Math.cos(t) * 0.025, H, fz + Math.sin(t) * 0.025], [fx, H + 0.045, fz]], [0.005, 0.003], 4, col(PAL.woodDark)); }
+  B.sphere(B.glow, fx, H + 0.042, fz, 0.022, col('#ff7a1a'), 7, 4);
+}
+// Baobá gigante (12/10, 7ª — usuário: "alguns tiles de Solarpunk poderiam ter um baobá enorme no meio ao invés de
+// espalhar trilhões de pequenas árvores"). Tronco-garrafa largo, galhos curtos e grossos no alto com copa rala,
+// e gente morando dentro: porta acesa no pé e um cordão de luz dando a volta no tronco.
+function baobab(B, rng, x, z, a) {
+  const bark = col('#8b6b55'), barkD = col('#6f5443'), leaf = col(rng.pick(['#3fae38', '#2f9e3a', '#4fbf45']));
+  lightPoolGreen(B, x, z);
+  B.frustum(B.lit, x, H, z, 0.17, 0.2, 0.18, 12, bark, a, { noTop: true });          // pé largo
+  B.frustum(B.lit, x, H + 0.18, z, 0.2, 0.15, 0.3, 12, bark, a, { noTop: true });    // barriga da garrafa
+  B.frustum(B.lit, x, H + 0.48, z, 0.15, 0.09, 0.2, 12, shade(bark, 1.05), a, { topCol: barkD }); // gargalo
+  for (let k = 0; k < 6; k++) B.panel(B.lit, x + Math.cos(a + k) * 0.19, H + 0.05, z + Math.sin(a + k) * 0.19, 0.012, 0.36, a + k + Math.PI / 2, barkD, 0.01); // sulcos da casca
+  const top = H + 0.68, tips = [];
+  for (let k = 0; k < 7; k++) { // galhos curtos e grossos, abertos como raízes viradas para o céu
+    const t = a + (k / 7) * PI2 + rng.range(-0.2, 0.2), r = rng.range(0.16, 0.24), up = rng.range(0.08, 0.16);
+    const tip = [x + Math.cos(t) * r, top + up, z + Math.sin(t) * r];
+    B.tube(B.lit, [[x + Math.cos(t) * 0.05, top - 0.02, z + Math.sin(t) * 0.05], [x + Math.cos(t) * r * 0.6, top + up * 0.4, z + Math.sin(t) * r * 0.6], tip], [0.03, 0.02, 0.012], 6, barkD);
+    tips.push(tip);
+  }
+  for (const [tx, ty, tz] of tips) B.sphere(B.lit, tx, ty + 0.025, tz, rng.range(0.06, 0.085), shade(leaf, rng.range(0.88, 1.15)), 9, 4, { sy: 0.45 }); // copa rala em chapéus
+  B.sphere(B.lit, x, top + 0.1, z, 0.1, shade(leaf, 1.05), 9, 4, { sy: 0.45 });
+  B.panel(B.glow, x + Math.cos(a) * 0.205, H, z + Math.sin(a) * 0.205, 0.07, 0.11, a, col(PAL.lantern), 0.006); // porta acesa
+  B.panel(B.glow, x + Math.cos(a + 0.9) * 0.2, H + 0.26, z + Math.sin(a + 0.9) * 0.2, 0.04, 0.04, a + 0.9, col(PAL.lantern), 0.006); // janelinha
+  for (let k = 0; k < 14; k++) { const t = (k / 14) * PI2, y = H + 0.36 + 0.04 * Math.sin(t * 3); B.sphere(B.glow, x + Math.cos(t) * 0.185, y, z + Math.sin(t) * 0.185, 0.008, col(k % 3 ? PAL.string : '#ff6fb5'), 4, 2); } // cordão de luz
+  // 12/10 (7ª): "um pouco mais de vegetação no tile do baobá" — roda de mata baixa no pé, deixando a porta livre
+  for (let k = 0; k < 11; k++) {
+    const t = a + 0.55 + (k / 11) * (PI2 - 1.1) + rng.range(-0.12, 0.12), d = rng.range(0.25, 0.36), px = x + Math.cos(t) * d, pz = z + Math.sin(t) * d, r = rng.float();
+    if (r < 0.32) fern(B, rng, px, pz, rng.range(0.9, 1.25));
+    else if (r < 0.55) monstera(B, rng, px, pz, rng.range(0.8, 1.05));
+    else if (r < 0.78) bush(B, rng, px, pz, rng.range(0.6, 0.85));
+    else if (r < 0.9) bananaTree(B, rng, px, pz, rng.range(0.8, 1));
+    else wildFlower(B, rng, px, pz, col(rng.pick(PAL.meadow)), rng.range(0.05, 0.08));
+  }
+}
+function lightPoolGreen(B, x, z) { B.extrude(B.lit, ngon(x, z, 0.36, 16), H, 0.0015, shade(col(PAL.ground.solar), 1.08)); } // clareira um tom mais clara
+function drawLandmark(B, rng, type, x, z, a, sch, dom = 3) {
+  if (type === 'igloo') return bigIgloo(B, rng, x, z, a);
+  if (type === 'baobab') return baobab(B, rng, x, z, a);
+  if (type === 'cyber' && dom >= 4 && rng.chance(0.6)) { // megaestrutura no lugar da torre-marco
+    const v = rng.int(3);
+    if (v === 0) casino(B, rng, x, z, a, sch); else if (v === 1) hotel(B, rng, x, z, a, sch); else mall(B, rng, x, z, a, sch);
+  } else if (type === 'cyber') {
     const base = col('#1b1f3d');
     lightPool(B, x, z, 0.5, col(sch.key), 1.2);
     B.extrude(B.lit, chamfer(x, z, 0.3, 0.3, a, 0.05), H, 0.5, base, { topCol: shade(base, 2.1), sideShade: true });
@@ -1599,7 +2075,7 @@ function drawLandmark(B, rng, type, x, z, a, sch) {
     vaxTurbine(B, rng, { x: x - c * 0.1 + s * 0.02, z: z - s * 0.1 - c * 0.02, a });
     for (let k = 0; k < 2; k++) { const ang = a + 2.4 + k * 1.5; palm(B, rng, x + Math.cos(ang) * 0.42, z + Math.sin(ang) * 0.42, 0.75); }
   } else if (type === 'rock') { // 3 marcos de montanha, sorteados pela semente da peça
-    const v = rng.int(5), c = col(PAL.rock[2]);
+    const v = rng.int(6), c = col(PAL.rock[2]);
     if (v === 0) { // maciço em degraus com antena no cume (escalonado: cone liso lia como pirâmide)
       B.frustum(B.lit, x, H, z, 0.46, 0.34, 0.34, 7, c, a, { topCol: shade(c, 1.16) });
       B.frustum(B.lit, x + Math.cos(a + 0.7) * 0.04, H + 0.34, z + Math.sin(a + 0.7) * 0.04, 0.32, 0.21, 0.3, 7, shade(c, 1.08), a + 0.5, { topCol: shade(c, 1.26) });
@@ -1616,19 +2092,39 @@ function drawLandmark(B, rng, type, x, z, a, sch) {
       B.sphere(B.glow, mx, H + 1.38, mz, 0.022, col(PAL.beacon), 6, 3);
       for (let k = 0; k < 4; k++) { const ang = a + k * 1.6 + 0.9; boulders(B, rng, x + Math.cos(ang) * 0.5, z + Math.sin(ang) * 0.5, 1.1); }
       B.anims.push({ type: 'bolt', x0: x + Math.cos(a + 2.2) * 0.22, z0: z + Math.sin(a + 2.2) * 0.22, x1: x, z1: z, y: H + 0.7, color: '#fff1c8' });
-    } else if (v === 1) { // picos gêmeos com ponte pênsil iluminada
-      const px = Math.cos(a + Math.PI / 2), pz = Math.sin(a + Math.PI / 2), d = 0.3, c2 = col(PAL.rock[3]);
-      const P1 = [x + px * d, z + pz * d], P2 = [x - px * d, z - pz * d];
-      B.frustum(B.lit, P1[0], H, P1[1], 0.3, 0.04, 0.86, 6, c, a); B.cone(B.lit, P1[0], H + 0.64, P1[1], 0.13, 0.26, col(PAL.brickLight), 6, a);
-      B.frustum(B.lit, P2[0], H, P2[1], 0.28, 0.035, 0.72, 6, c2, a + 0.4); B.cone(B.lit, P2[0], H + 0.53, P2[1], 0.12, 0.22, col(PAL.brickLight), 6, a + 0.4);
-      B.frustum(B.lit, x + Math.cos(a) * 0.2, H, z + Math.sin(a) * 0.2, 0.22, 0.02, 0.36, 5, shade(c, 0.85), a - 0.6); // ombro entre os dois
-      const y = H + 0.42;
-      B.extrude(B.lit, rect(x, z, 0.05, 2 * d, a), y, 0.012, col(PAL.sleeper)); // tabuleiro da ponte
-      for (const side of [1, -1]) B.ribbon(B.glow, [[P1[0] + Math.cos(a) * side * 0.03, P1[1] + Math.sin(a) * side * 0.03], [P2[0] + Math.cos(a) * side * 0.03, P2[1] + Math.sin(a) * side * 0.03]], 0.006, y + 0.06, col(PAL.oreGlow)); // cabos
-      for (let k = 0; k < 4; k++) { const t = 0.2 + k * 0.2, bx = P1[0] + (P2[0] - P1[0]) * t, bz = P1[1] + (P2[1] - P1[1]) * t; B.extrude(B.lit, ngon(bx, bz, 0.006, 5), y, 0.06, col(PAL.post)); B.sphere(B.glow, bx, y + 0.068, bz, 0.011, col(PAL.lampWarm), 6, 3); }
-      for (let k = 0; k < 4; k++) { const ang = a + k * 1.5 + 0.3, P = k % 2 ? P1 : P2; B.panel(B.glow, P[0] + Math.cos(ang) * 0.18, H + 0.08 + 0.1 * k, P[1] + Math.sin(ang) * 0.18, 0.03, 0.16, ang + Math.PI / 2, col(PAL.ore), 0.008); }
-      for (let k = 0; k < 3; k++) { const ang = a + k * 2.1 + 1.1; boulders(B, rng, x + Math.cos(ang) * 0.55, z + Math.sin(ang) * 0.55, 1); }
-      B.anims.push({ type: 'bolt', x0: P1[0], z0: P1[1], x1: P2[0], z1: P2[1], y: H + 0.78, color: '#fff1c8' });
+    } else if (v === 1) { // COLOSSO DE SUCATA: a cabeça de um robô gigante meio engolida pela duna
+      // 12/10: entrou no lugar dos picos gêmeos com ponte pênsil (o usuário achava a ponte estranha).
+      // Ozymandias do Sandpunk: a máquina antiga que o deserto venceu, com gente morando em volta.
+      const c2 = Math.cos(a), sn = Math.sin(a), px = -sn, pz = c2, metal = col(PAL.scrap[1]), rust = col(PAL.rust[0]), dune = col(PAL.sandTrail);
+      B.sphere(B.lit, x, H - 0.06, z, 0.58, shade(dune, 0.98), 14, 4, { dome: true, sy: 0.28 }); // duna
+      const hx = x + c2 * 0.04, hz = z + sn * 0.04, ca = Math.cos(a + 0.12), sa = Math.sin(a + 0.12);
+      // capacete redondo meio enterrado: a silhueta de "cabeça de robô" tem que ler de qualquer lado
+      B.extrude(B.lit, ngon(hx, hz, 0.25, 14, a), H, 0.2, shade(metal, 1.05), { sideShade: true, noTop: true });
+      B.sphere(B.lit, hx, H + 0.2, hz, 0.25, shade(metal, 1.12), 14, 5, { dome: true, sy: 0.92 });
+      B.sphere(B.lit, hx - ca * 0.04, H + 0.36, hz - sa * 0.04, 0.16, col(PAL.sandTrail), 10, 3, { dome: true, sy: 0.35 }); // areia acumulada no topo
+      for (const y of [0.05, 0.13]) B.annulus(B.lit, hx, H + y, hz, 0.25, 0.262, 14, rust); // aros de ferrugem
+      // visor: uma faixa âmbar contínua contornando a frente — o "olhar" do colosso ainda aceso
+      for (let k = -4; k <= 4; k++) { const t = a + 0.12 + k * 0.22; B.panel(B.glow, hx + Math.cos(t) * 0.255, H + 0.2, hz + Math.sin(t) * 0.255, 0.062, 0.05, t, shade(col(PAL.ore), k === 0 ? 1 : 0.8), 0.008); }
+      for (const sd of [1, -1]) B.sphere(B.glow, hx + ca * 0.25 - sa * sd * 0.09, H + 0.225, hz + sa * 0.25 + ca * sd * 0.09, 0.03, col(PAL.oreGlow), 7, 4); // olhos
+      for (let k = -2; k <= 2; k++) B.panel(B.lit, hx + ca * 0.252 - sa * k * 0.04, H + 0.03, hz + sa * 0.252 + ca * k * 0.04, 0.018, 0.12, a + 0.12, col('#1a120c'), 0.01); // grade da boca
+      for (const sd of [1, -1]) { // orelhas: discos laterais com antena torta
+        const ax = hx - sa * sd * 0.25, az = hz + ca * sd * 0.25;
+        B.tube(B.lit, [[ax + sa * sd * 0.02, H + 0.2, az - ca * sd * 0.02], [ax - sa * sd * 0.05, H + 0.2, az + ca * sd * 0.05]], [0.09, 0.09], 10, rust, { capEnd: true });
+        B.tube(B.lit, [[ax - sa * sd * 0.04, H + 0.28, az + ca * sd * 0.04], [ax - sa * sd * 0.08, H + 0.48, az + ca * sd * 0.08], [ax - sa * sd * 0.05 - ca * 0.08, H + 0.6, az + ca * sd * 0.05 - sa * 0.08]], [0.012, 0.009, 0.006], 5, col(PAL.post));
+        B.sphere(B.glow, ax - sa * sd * 0.05 - ca * 0.08, H + 0.61, az + ca * sd * 0.05 - sa * 0.08, 0.016, col(PAL.beacon), 5, 3);
+      }
+      // a mão do colosso saindo da areia ao lado, dedos dobrados
+      const mx = x - c2 * 0.3 + px * 0.42, mz = z - sn * 0.3 + pz * 0.42;
+      B.extrude(B.lit, chamfer(mx, mz, 0.16, 0.12, a - 0.5, 0.03), H, 0.12, metal, { sideShade: true });
+      for (let k = 0; k < 4; k++) B.tube(B.lit, [[mx + c2 * 0.06 + px * (k - 1.5) * 0.035, H + 0.1, mz + sn * 0.06 + pz * (k - 1.5) * 0.035], [mx + c2 * 0.12 + px * (k - 1.5) * 0.035, H + 0.2, mz + sn * 0.12 + pz * (k - 1.5) * 0.035], [mx + c2 * 0.17 + px * (k - 1.5) * 0.035, H + 0.16, mz + sn * 0.17 + pz * (k - 1.5) * 0.035]], [0.018, 0.016, 0.013], 6, shade(metal, 1.05));
+      // moradores: tendas encostadas na cabeça e a escada até a boca
+      nomadCamp(B, rng, { x: x - c2 * 0.38 - px * 0.3, z: z - sn * 0.38 - pz * 0.3, a: a + Math.PI });
+      vaporator(B, rng, { x: x + c2 * 0.46 - px * 0.36, z: z + sn * 0.46 - pz * 0.36, a });
+      for (let k = 0; k < 5; k++) B.extrude(B.lit, rect(hx + ca * (0.42 - k * 0.04), hz + sa * (0.42 - k * 0.04), 0.03, 0.12, a + 0.12), H, 0.012 + k * 0.012, col(PAL.woodDark));
+      for (const sd of [1, -1]) brazier(B, x + c2 * 0.45 + px * sd * 0.16, z + sn * 0.45 + pz * sd * 0.16, 1.4);
+      B.anims.push({ type: 'bolt', x0: hx - sa * 0.26 - ca * 0.08, z0: hz + ca * 0.26 - sa * 0.08, x1: hx + sa * 0.26 - ca * 0.08, z1: hz - ca * 0.26 - sa * 0.08, y: H + 0.62, color: '#fff1c8' });
+    } else if (v === 5) { // PIRÂMIDES DE GIZÉ, versão marco: o trio inteiro no miolo da peça (12/10)
+      gizaGroup(B, rng, { x, z, a }, 1.45);
     } else if (v === 2) { // vulcão com cratera de lava e rios de âmbar
       B.frustum(B.lit, x, H, z, 0.46, 0.2, 0.62, 8, shade(c, 0.9), a, { noTop: true });
       B.frustum(B.lit, x, H + 0.5, z, 0.1, 0.205, 0.12, 8, col(PAL.rockDark), a, { inner: true, noTop: true }); // paredes da cratera
@@ -1666,44 +2162,37 @@ function drawLandmark(B, rng, type, x, z, a, sch) {
       for (let k = 0; k < 2; k++) { const ang = a + 1.5 + k * 3.1; palm(B, rng, x + Math.cos(ang) * 0.72, z + Math.sin(ang) * 0.72, 0.9); }
       B.anims.push({ type: 'drone', geo: 'glyph', x, y: y + 0.42, z, r: 0.34, speed: 0.3, color: PAL.lapisGlow });
       B.anims.push({ type: 'drone', geo: 'glyph', x, y: y + 0.6, z, r: 0.2, speed: -0.45, color: PAL.goldGlow });
-    } else { // GRANDE PORTAL DE ISHTAR: duas torres de lápis e a via processional saindo do vão
-      const lap = col(PAL.lapis), gold = col(PAL.gold), lapGlow = shade(col(PAL.lapisGlow), 0.55);
-      const c2 = Math.cos(a), sn = Math.sin(a), px = -sn, pz = c2, d = 0.3, h = 0.6, tw = 0.24;
-      const way = [[x + c2 * 0.14, z + sn * 0.14], [x + c2 * 1.02, z + sn * 1.02]]; // via processional
-      B.ribbon(B.lit, way, 0.33, H + 0.004, col(PAL.brick[3]));
-      for (const sd of [1, -1]) B.ribbon(B.glow, offsetLine(way, sd * 0.148), 0.018, H + 0.007, lapGlow);
-      for (const sd of [1, -1]) for (let k = 0; k < 4; k++) { // leões em relevo ladeando a via
-        const t = 0.32 + k * 0.2, lx = x + c2 * t + px * sd * 0.21, lz = z + sn * t + pz * sd * 0.21;
-        B.extrude(B.lit, rect(lx, lz, 0.11, 0.05, a), H, 0.048, col(PAL.brick[2]), { topCol: col(PAL.brickLight), sideShade: true });
-        B.panel(B.glow, lx - px * sd * 0.026, H + 0.012, lz - pz * sd * 0.026, 0.09, 0.026, a, shade(col(PAL.goldGlow), 0.72), 0.004);
+    } else { // RASTEJADOR DAS AREIAS: fortaleza móvel sobre esteiras, com vela solar e gente no convés
+      // 12/10: entrou no lugar do Grande Portal de Ishtar (o usuário não entendia o portão). Lê de longe
+      // como "máquina do deserto": casco inclinado de sucata, esteiras, chaminés e a vela de painéis.
+      const c2 = Math.cos(a), sn = Math.sin(a), px = -sn, pz = c2, hull = col(PAL.rust[1]), metal = col(PAL.scrap[0]), dark = col('#2a1d14');
+      const P = (u, v) => [x + c2 * u + px * v, z + sn * u + pz * v];
+      for (const sd of [1, -1]) { // esteiras com rodas grandes à mostra: é o que diz "veículo"
+        const [tx, tz] = P(0, sd * 0.31), tread = col('#3a3a44');
+        B.extrude(B.lit, chamfer(tx, tz, 0.9, 0.17, a, 0.08), H, 0.15, tread, { topCol: shade(tread, 1.3), sideShade: true });
+        for (let k = -3; k <= 3; k++) { const [wx, wz] = P(k * 0.12, sd * 0.395); B.tube(B.lit, [[wx - px * sd * 0.01, H + 0.075, wz - pz * sd * 0.01], [wx + px * sd * 0.02, H + 0.075, wz + pz * sd * 0.02]], [0.068, 0.068], 10, metal, { capEnd: true }); B.sphere(B.glow, wx + px * sd * 0.022, H + 0.075, wz + pz * sd * 0.022, 0.014, col(PAL.ore), 5, 2); }
       }
-      for (const sd of [1, -1]) { // torres revestidas de lápis, com fiadas de rosetas e ameias
-        const tx = x + px * sd * d, tz = z + pz * sd * d, body = col(PAL.brick[1]);
-        // Massa de tijolo com o lápis só no embasamento e nos frisos: em brilho cheio e no tamanho
-        // de marco, o azul inteiro fazia a peça ler como Cidade Neon (ver README).
-        B.extrude(B.lit, rect(tx, tz, tw, tw, a), H, h * 0.26, lap, { topCol: shade(lap, 1.5), sideShade: true });
-        B.extrude(B.lit, rect(tx, tz, tw - 0.014, tw - 0.014, a), H + h * 0.26, h * 0.74, body, { topCol: shade(body, 1.2), sideShade: true });
-        for (let k = 0; k < 4; k++) for (const fs of [1, -1]) B.sphere(B.glow, tx + c2 * fs * (tw / 2 - 0.004), H + h * (0.36 + k * 0.16), tz + sn * fs * (tw / 2 - 0.004), 0.019, gold, 6, 3);
-        for (let k = 0; k < 3; k++) B.extrude(B.glow, rect(tx, tz, tw - 0.002, tw - 0.002, a), H + h * (0.33 + k * 0.21), 0.008, lapGlow); // frisos horizontais
-        B.extrude(B.lit, rect(tx, tz, tw + 0.04, tw + 0.04, a), H + h, 0.036, col(PAL.brickLight), { topCol: gold, sideShade: true });
-        for (let k = -1; k <= 1; k++) for (const fs of [1, -1]) B.extrude(B.lit, rect(tx + c2 * fs * 0.13 + px * k * 0.085, tz + sn * fs * 0.13 + pz * k * 0.085, 0.034, 0.05, a), H + h + 0.036, 0.042, col(PAL.brickLight), { topCol: shade(gold, 1.1) }); // ameias
-        brazier(B, tx + c2 * 0.24, tz + sn * 0.24, 2.0);
-      }
-      B.extrude(B.lit, rect(x - c2 * 0.03, z - sn * 0.03, 0.06, 2 * d - tw, a), H, h * 0.7, col(PAL.brickDark), { topCol: col(PAL.brickDark), sideShade: true }); // fundo do vão
-      B.panel(B.glow, x + c2 * 0.012, H + 0.006, z + sn * 0.012, 2 * d - tw - 0.06, h * 0.56, a, shade(col(PAL.glyph), 0.42), 0.016); // luz saindo do vão, rebaixada
-      B.extrude(B.lit, rect(x, z, 0.2, 2 * d - tw + 0.04, a), H + h * 0.7, 0.11, col(PAL.brickLight), { topCol: gold, sideShade: true }); // lintel
-      B.extrude(B.glow, rect(x, z, 0.21, 2 * d - tw + 0.05, a), H + h * 0.7 + 0.112, 0.008, lapGlow);
-      for (const sd of [1, -1]) { // guardiões alados no pé das torres, voltados para a via
-        const gx = x + c2 * 0.2 + px * sd * (d - 0.04), gz = z + sn * 0.2 + pz * sd * (d - 0.04);
-        B.extrude(B.lit, rect(gx, gz, 0.11, 0.06, a), H, 0.075, col(PAL.brickLight), { topCol: col(PAL.brick[2]), sideShade: true });
-        B.sphere(B.lit, gx + c2 * 0.036, H + 0.102, gz + sn * 0.036, 0.034, col(PAL.brickLight), 7, 4);
-        B.sphere(B.glow, gx + c2 * 0.062, H + 0.106, gz + sn * 0.062, 0.009, col(PAL.glyph), 5, 3);
-        for (const wsd of [1, -1]) B.leaf(B.lit, [gx - c2 * 0.024, H + 0.078, gz - sn * 0.024], a + (Math.PI / 2) * wsd, 0.065, 0.04, gold, { lift: 0.036, droop: 0.008, segs: 2 });
-      }
-      for (let k = 0; k < 3; k++) { const ang = a + 2.2 + k * 0.85; steles(B, rng, { x: x + Math.cos(ang) * 0.66, z: z + Math.sin(ang) * 0.66, a: ang }); }
-      for (let k = 0; k < 2; k++) { const ang = a + 1.7 + k * 2.9; palm(B, rng, x + Math.cos(ang) * 0.74, z + Math.sin(ang) * 0.74, 0.95); }
-      oasis(B, rng, { x: x - c2 * 0.62, z: z - sn * 0.62, a: a + Math.PI });
-      B.anims.push({ type: 'drone', geo: 'glyph', x, y: H + h + 0.3, z, r: 0.42, speed: 0.26, color: PAL.lapisGlow });
+      // casco em degraus que estreita para cima, com a proa inclinada (a silhueta do rastejador)
+      const [bx, bz] = P(-0.02, 0);
+      B.extrude(B.lit, chamfer(bx, bz, 0.84, 0.56, a, 0.08), H + 0.12, 0.16, hull, { topCol: shade(hull, 1.2), sideShade: true });
+      B.extrude(B.lit, chamfer(bx - c2 * 0.06, bz - sn * 0.06, 0.62, 0.46, a, 0.07), H + 0.28, 0.16, shade(hull, 1.08), { topCol: shade(hull, 1.25), sideShade: true });
+      for (let k = -3; k <= 3; k++) { const [hx2, hz2] = P(0.43, k * 0.07); B.extrude(B.glow, rect(hx2, hz2, 0.02, 0.035, a), H + 0.13, 0.03, col(k % 2 ? PAL.hazard : '#1a1a22')); } // faixa de perigo na proa
+      const [sx2, sz2] = P(0.56, 0); B.extrude(B.lit, rect(sx2, sz2, 0.08, 0.6, a), H, 0.05, metal, { topCol: shade(metal, 1.2), sideShade: true }); // pá dianteira raspando a areia
+      tiltPanel(B, x + c2 * 0.42, z + sn * 0.42, 0.14, 0.5, a + Math.PI, H + 0.12, 0.16, col(PAL.rust[2]), null); // proa em rampa
+      B.extrude(B.glow, chamfer(bx, bz, 0.845, 0.565, a, 0.08), H + 0.2, 0.007, shade(col(PAL.ore), 0.7)); // vigias em fita
+      for (let k = -2; k <= 2; k++) { const [wx, wz] = P(0.34, k * 0.07); B.panel(B.glow, wx, H + 0.4, wz, 0.05, 0.04, a, col(PAL.lantern), 0.006); } // janelas da ponte de comando
+      for (const sd of [1, -1]) { const [cx2, cz2] = P(-0.3, sd * 0.13); B.frustum(B.lit, cx2, H + 0.44, cz2, 0.04, 0.032, 0.2, 8, dark); B.annulus(B.glow, cx2, H + 0.6, cz2, 0.03, 0.04, 8, col(PAL.oreGlow)); } // chaminés
+      // mastro com a vela solar de painéis
+      const [mx, mz] = P(-0.12, 0);
+      B.extrude(B.lit, ngon(mx, mz, 0.014, 6), H + 0.44, 0.5, col(PAL.woodDark));
+      tiltPanel(B, mx + c2 * 0.02, mz + sn * 0.02, 0.24, 0.36, a + Math.PI / 2, H + 0.68, 0.08, col(PAL.panel), shade(col(PAL.panelGlow), 0.8));
+      B.sphere(B.glow, mx, H + 0.96, mz, 0.02, col(PAL.beacon), 6, 3);
+      for (let k = 0; k < 3; k++) { const [gx, gz] = P(0.1 + k * 0.06, (k - 1) * 0.12); B.frustum(B.lit, gx, H + 0.44, gz, 0.022, 0.022, 0.04, 7, col(rng.pick(PAL.cloth))); } // carga no convés
+      // rastro de esteira na areia atrás e a duna empurrada na frente
+      for (const sd of [1, -1]) B.ribbon(B.lit, [P(-0.45, sd * 0.3), P(-0.95, sd * 0.3)], 0.14, H + 0.003, col(PAL.sandTrailDark));
+      const [dx, dz] = P(0.58, 0); B.sphere(B.lit, dx, H - 0.02, dz, 0.2, col(PAL.sandTrail), 10, 3, { dome: true, sy: 0.4 });
+      for (let k = 0; k < 2; k++) { const ang = a + 1.9 + k * 2.5; palm(B, rng, x + Math.cos(ang) * 0.72, z + Math.sin(ang) * 0.72, 0.9); }
+      B.anims.push({ type: 'drone', x: mx, y: H + 1.1, z: mz, r: 0.36, speed: 0.4, color: PAL.goldGlow });
     }
   } else if (type === 'plain') { // geleira com estação de pesquisa, ou cânion de gelo com cascata congelada
     const v = rng.int(3), c = col(PAL.iceRock[1]);
@@ -1733,11 +2222,11 @@ function drawLandmark(B, rng, type, x, z, a, sch) {
       B.extrude(B.lit, rect(x, z, 0.06, 0.6, a), H + 0.46, 0.012, col(PAL.sleeper)); // passarela entre as paredes
       for (let k = -1; k <= 1; k++) { B.extrude(B.lit, ngon(x + px * k * 0.2, z + pz * k * 0.2, 0.006, 5), H + 0.47, 0.06, col(PAL.post)); B.sphere(B.glow, x + px * k * 0.2, H + 0.54, z + pz * k * 0.2, 0.011, col(PAL.lampWarm), 6, 3); }
       for (let k = 0; k < 4; k++) { const ang = a + k * 1.2 - 0.6, rr = 0.5; const q = { x: x + Math.cos(ang) * rr, z: z + Math.sin(ang) * rr, a: ang }; if (k % 2) icePeak(B, rng, q, 0.7); else B.sphere(B.lit, q.x, H, q.z, rng.range(0.03, 0.05), col(PAL.snow), 6, 3, { dome: true, sy: 0.7 }); }
-    } else { // ACAMPAMENTO SOB A AURORA: iglus grandes, inuksuk monumental e a cortina inteira
+    } else { // ACAMPAMENTO SOB A AURORA: o grande iglu, inuksuk monumental e a cortina inteira
       const snow = col(PAL.snow);
       B.extrude(B.lit, ngon(x, z, 0.62, 13, a), H, 0.02, shade(snow, 0.94), { topCol: snow, sideShade: true }); // platô de neve pisada
       B.annulus(B.glow, x, H + 0.022, z, 0.6, 0.64, 16, shade(col(PAL.crystalGlow), 0.7));
-      for (let k = 0; k < 4; k++) { const ang = a + 0.8 + k * 1.35, d = k === 0 ? 0 : 0.34; igloo(B, rng, { x: x + Math.cos(ang) * d, z: z + Math.sin(ang) * d, a: ang }, k === 0 ? 1.9 : rng.range(0.9, 1.25)); }
+      igloo(B, rng, { x, z, a: a + 0.8 }, 1.75); // 12/10 (7ª): um iglu GRANDE só, nada de iglus pequenos espalhados
       const fx = x + Math.cos(a) * 0.3, fz = z + Math.sin(a) * 0.3; // fogueira central
       B.annulus(B.lit, fx, H + 0.023, fz, 0.05, 0.085, 12, shade(snow, 0.8));
       for (let k = 0; k < 6; k++) { const ang = (k / 6) * PI2; B.tube(B.lit, [[fx + Math.cos(ang) * 0.04, H + 0.02, fz + Math.sin(ang) * 0.04], [fx, H + 0.085, fz]], [0.008, 0.005], 4, col(PAL.woodDark)); }
@@ -1772,11 +2261,11 @@ function groundDetail(B, rng, g, i, polys, centerR = 0, keep, iris) {
     for (let k = 0; k < 3; k++) { const [x, z] = pt(rng.range(0.25, 0.8), rng.range(-0.22, 0.22)); if (!clear(x, z)) continue; if (k === 0) wildFlower(B, rng, x, z, col(iris)); else B.cone(B.lit, x, H, z, 0.014, rng.range(0.03, 0.05), col(rng.pick(PAL.tuft)), 4, rng.float() * 6); } // flor solta e capim
   } else if (g === 'solar') {
     const [px0, pz0] = pt(0.18, 0), [px1, pz1] = pt(0.8, 0);
-    if (clear(px0, pz0) && clear(px1, pz1)) { // caminho de lajotas de estuque
+    if (clear(px0, pz0) && clear(px1, pz1) && rng.chance(0.3)) { // caminho de lajotas de estuque (12/10: raro — lia como entulho branco)
       for (let k = 0; k < 6; k++) { const t = 0.2 + k * 0.11, [x, z] = pt(t, rng.range(-0.01, 0.01)); B.extrude(B.lit, chamfer(x, z, 0.07, 0.06, a + rng.range(-0.2, 0.2), 0.012), H, 0.004, col(rng.pick(PAL.stucco))); }
     }
-    for (let k = 0; k < 3; k++) { const [x, z] = pt(rng.range(0.25, 0.78), rng.range(-0.2, 0.2)); if (!clear(x, z)) continue; B.extrude(B.lit, ngon(x, z, rng.range(0.04, 0.075), 7, rng.float() * 6), H, 0.004, col(rng.pick(PAL.lawn))); } // gramado mais claro
-    for (let k = 0; k < 12; k++) { const [x, z] = pt(rng.range(0.22, 0.82), rng.range(-0.24, 0.24)); if (!clear(x, z)) continue; B.sphere(B.glow, x, H + 0.014, z, rng.range(0.009, 0.016), col(rng.pick(PAL.meadow)), 6, 3); } // campina florida
+    for (let k = 0; k < 1; k++) { const [x, z] = pt(rng.range(0.25, 0.78), rng.range(-0.2, 0.2)); if (!clear(x, z)) continue; B.extrude(B.lit, ngon(x, z, rng.range(0.04, 0.075), 7, rng.float() * 6), H, 0.004, col(rng.pick(PAL.lawn))); } // gramado mais claro
+    for (let k = 0; k < 4; k++) { const [x, z] = pt(rng.range(0.22, 0.82), rng.range(-0.24, 0.24)); if (!clear(x, z)) continue; B.sphere(B.glow, x, H + 0.014, z, rng.range(0.009, 0.016), col(rng.pick(PAL.meadow)), 6, 3); } // campina florida
   } else if (g === 'cyber') {
     const [x0, z0] = pt(0.2, 0), [x1, z1] = pt(0.78, 0);
     if (clear(x0, z0) && clear(x1, z1)) B.extrude(B.glow, rect((x0 + x1) / 2, (z0 + z1) / 2, 0.58, 0.006, a), H, 0.002, col('#1d5a78'));
@@ -1785,6 +2274,28 @@ function groundDetail(B, rng, g, i, polys, centerR = 0, keep, iris) {
     for (let k = 0; k < 2; k++) { const [x, z] = pt(rng.range(0.25, 0.7), rng.range(-0.15, 0.15)); if (!clear(x, z)) continue; B.extrude(B.glow, rect(x, z, rng.range(0.12, 0.28), 0.006, a + rng.range(-0.9, 0.9)), H, 0.002, shade(col(PAL.crack), 0.9)); }
     const [x, z] = pt(rng.range(0.3, 0.7), rng.range(-0.15, 0.15)); if (clear(x, z)) B.extrude(B.lit, ngon(x, z, rng.range(0.05, 0.1), 8, rng.float() * 6), H, 0.004, col(PAL.iceDark));
     for (let k = 0; k < 2; k++) { const [x2, z2] = pt(rng.range(0.25, 0.78), rng.range(-0.2, 0.2)); if (!clear(x2, z2)) continue; B.sphere(B.lit, x2, H - 0.03, z2, rng.range(0.06, 0.12), col(PAL.snow), 8, 3, { dome: true, sy: 0.35 }); } // dunas de neve
+  }
+}
+// ---------- TEXTURA DE CHÃO DO BALDIO E DA CIDADE ----------
+// 12/10: o usuário pediu textura por bioma, depois mandou tirar todas menos a do Baldio ("sujou demais
+// os outros biomas") e em seguida pediu a da cidade de volta. Neve, areia e capim ficam sem. Grade com
+// jitter rente ao chão, RNG próprio da peça (não mexe no sorteio do layout).
+function groundTexture(B, tile, polys, sch) {
+  if (!tile.ground.includes('grass') && !tile.ground.includes('cyber')) return;
+  const rng = new RNG(((tile.seed ^ 0x7e27c0) >>> 0) || 17), wind = rng.float() * Math.PI;
+  const sp = 0.085, lim = APO * SCALE * 0.9, edges = [0, 1, 2, 3, 4, 5].map((i) => [Math.cos(edgeAngle(i)), Math.sin(edgeAngle(i))]);
+  for (let row = -13; row <= 13; row++) for (let colI = -13; colI <= 13; colI++) {
+    const x = (colI + (row & 1) * 0.5) * sp + rng.range(-0.3, 0.3) * sp, z = row * sp * 0.866 + rng.range(-0.3, 0.3) * sp;
+    if (edges.some(([ex, ez]) => x * ex + z * ez > lim)) continue;
+    const i = Math.floor((((Math.atan2(z, x) % PI2) + PI2) % PI2) / (Math.PI / 3)) % 6, g = tile.ground[i], r = rng.float();
+    if (g === 'pool' || (polys && distToPolys(polys, x, z) < 0.14)) continue;
+    if (g === 'grass') { // Baldio: estuque gasto — placas levemente mais claras/escuras e pedrisco
+      if (r < 0.3) B.extrude(B.lit, chamfer(x, z, sp * 0.8, sp * 0.8, wind, 0.01), H, 0.0012, shade(col(PAL.ground.grass), rng.chance(0.5) ? 1.06 : 0.94));
+      else if (r < 0.42) B.extrude(B.lit, ngon(x, z, 0.006, 5, rng.float() * 6), H, 0.004, col(PAL.stuccoShade));
+    } else if (g === 'cyber') { // Cidade: asfalto molhado — tampas de bueiro e poças com reflexo neon
+      if (r < 0.05) { B.extrude(B.lit, ngon(x, z, 0.022, 10), H, 0.003, col('#2a2d44')); B.annulus(B.lit, x, H + 0.0032, z, 0.012, 0.016, 10, col('#3a3f5c')); }
+      else if (r < 0.1) B.extrude(B.glow, ngon(x, z, rng.range(0.02, 0.04), 8, rng.float() * 6), H, 0.003, shade(col(rng.chance(0.6) ? sch.key : sch.accent), 0.18));
+    }
   }
 }
 function drawFlag(B, x, z, a, color) {
@@ -1814,15 +2325,21 @@ export function buildTile(tile) {
     const k = 0.965, ki = 0.945, rim = shade(col(PAL.rim[g]), 0.55);
     B.quad(B.glow, [vi[0] * k, H + 0.003, vi[1] * k], [vj[0] * k, H + 0.003, vj[1] * k], [vj[0] * ki, H + 0.003, vj[1] * ki], [vi[0] * ki, H + 0.003, vi[1] * ki], rim, [0, 1, 0]);
   }
-  const occupied = [];
+  const occupied = [], thin = new RNG(((tile.seed ^ 0x7417) >>> 0) || 19);
   let lay = null, polys = null, routes = null;
-  if (tile.conn) {
+  const texPolys = tile.hub ? hubLayout(tile).polys : tile.conn ? connectorLayout(tile.conn).polys.concat(tile.conn2 ? connectorLayout(tile.conn2).polys : []) : null;
+  groundTexture(B, tile, texPolys, cyberSch);
+  if (tile.hub) {
+    const hl = hubLayout(tile); drawHub(B, rng, hl);
+    polys = hl.polys; routes = hl.routes;
+    occupied.push({ x: 0, z: 0, r: 0.46 });
+  } else if (tile.conn) {
     lay = connectorLayout(tile.conn); polys = lay.polys; lay.dual = !!tile.conn2;
     if (tile.conn.type === 'sewage') drawSewage(B, rng, lay); else if (tile.conn.type === 'rail') drawRail(B, rng, lay); else drawRoad(B, rng, lay);
     if (lay.kind !== 'line') occupied.push({ x: 0, z: 0, r: lay.kind === 'end' ? 0.5 : 0.42 }); // junção/terminal ocupa o centro
     routes = lay.routes.map((r) => ({ ...r, type: tile.conn.type, stop: tile.conn.type === 'sewage' ? B.boatStop || 0 : 0 }));
   }
-  if (tile.conn2) { // cruzamento: o segundo meio passa por cima
+  if (tile.conn2 && !tile.hub) { // cruzamento: o segundo meio passa por cima
     const lay2 = connectorLayout(tile.conn2), e = tile.conn2.exits[0], axis = [Math.cos(edgeAngle(e)), Math.sin(edgeAngle(e))];
     drawBridge(B, rng, tile.conn2.type, lay2); // (a rodovia, quando existe, é sempre a de cima: os carros moram nela)
     polys = polys.concat(lay2.polys);
@@ -1844,6 +2361,25 @@ export function buildTile(tile) {
     const m = Math.hypot(sx, sz), off = domCount === 6 ? 0 : 0.18;
     landmark = { x: m > 1e-6 ? (sx / m) * off : 0, z: m > 1e-6 ? (sz / m) * off : 0, a: Math.atan2(sz, sx), type: domType };
     occupied.push({ x: landmark.x, z: landmark.z, r: 0.4 });
+    B.hero[domType] = true; // o marco é o herói do bioma nesta peça
+  }
+  const solarIdx = tile.ground.map((g, i) => (g === 'solar' ? i : -1)).filter((i) => i >= 0);
+  if (!landmark && !tile.conn && solarIdx.length >= 3 && new RNG(((tile.seed ^ 0xba0ba) >>> 0) || 23).float() < 0.4) { // baobá: herói do Solarpunk
+    let sx = 0, sz = 0;
+    for (const i of solarIdx) { sx += Math.cos(edgeAngle(i)); sz += Math.sin(edgeAngle(i)); }
+    const m = Math.hypot(sx, sz), off = solarIdx.length === 6 ? 0 : solarIdx.length >= 4 ? 0.18 : 0.28;
+    landmark = { x: m > 1e-6 ? (sx / m) * off : 0, z: m > 1e-6 ? (sz / m) * off : 0, a: Math.atan2(sz, sx), type: 'baobab' };
+    occupied.push({ x: landmark.x, z: landmark.z, r: 0.4 });
+    B.hero.solar = 'baobab';
+  }
+  const plainIdx = tile.ground.map((g, i) => (g === 'plain' ? i : -1)).filter((i) => i >= 0);
+  if (!landmark && !tile.conn && plainIdx.length >= 2) { // grande iglu: o herói do Snowpunk
+    let sx = 0, sz = 0;
+    for (const i of plainIdx) { sx += Math.cos(edgeAngle(i)); sz += Math.sin(edgeAngle(i)); }
+    const m = Math.hypot(sx, sz), off = plainIdx.length === 6 ? 0 : plainIdx.length >= 4 ? 0.16 : 0.24;
+    landmark = { x: m > 1e-6 ? (sx / m) * off : 0, z: m > 1e-6 ? (sz / m) * off : 0, a: Math.atan2(sz, sx), type: 'igloo' };
+    occupied.push({ x: landmark.x, z: landmark.z, r: 0.38 });
+    B.hero.plain = true;
   }
   // Trilhas de fauna: um setor é caminhável quando a ARESTA é do bioma (numa peça com conector,
   // os lados de saída não são). O marco e o entroncamento empurram a rota para o anel.
@@ -1851,15 +2387,49 @@ export function buildTile(tile) {
   const hub = landmark || tile.conn ? HUB_R : 0;
   const keep = walkTrails(B, rng, tile, walk, hub, !tile.conn);
   const iris = PAL.iris[new RNG(((tile.seed ^ 0x1215) >>> 0) || 3).int(PAL.iris.length)]; // cor das flores do Baldio desta peça
-  for (let i = 0; i < 6; i++) groundDetail(B, rng, tile.ground[i], i, polys, lay && lay.kind !== 'line' ? (lay.kind === 'end' ? 0.52 : 0.46) : 0, keep, iris);
+  for (let i = 0; i < 6; i++) groundDetail(B, rng, tile.ground[i], i, polys, tile.hub ? 0.5 : lay && lay.kind !== 'line' ? (lay.kind === 'end' ? 0.52 : 0.46) : 0, keep, iris);
   for (let i = 0; i < 6; i++) {
     const g = tile.ground[i];
-    const n = g === 'cyber' ? 2 + rng.int(2) : g === 'solar' ? 3 + rng.int(2) : g === 'rock' ? 2 + rng.int(2) : g === 'pool' ? rng.int(2) : g === 'grass' ? 1 + rng.int(2) : 2 + rng.int(2);
+    let n = g === 'cyber' ? 2 + rng.int(2) : g === 'solar' ? (B.hero.solar ? rng.int(2) : 1 + rng.int(2)) : g === 'rock' ? 1 + rng.int(2) : g === 'pool' ? rng.int(2) : g === 'grass' ? 1 + rng.int(2) : 1 + rng.int(2);
+    // 12/10 (usuário: "amenizar UM POUQUINHO a quantidade de coisas... o jogo está um pouco crowded"): um item
+    // a menos em ~30% dos setores de Solarpunk, Sandpunk e Snowpunk (2ª passada: 40%, e o Solarpunk ainda começa
+    // de 3 em vez de 4). A cidade não entra: a missão conta prédios.
+    if ((g === 'solar' || g === 'rock' || g === 'plain') && n > 1 && thin.chance(0.4)) n--;
     const pts = sectorPoints(rng, i, n, occupied, polys, g === 'solar' ? 0.19 : 0.17, keep);
     if (g === 'cyber') drawCyber(B, rng, pts, i, cyberSch); else if (g === 'solar') drawSolar(B, rng, pts); else if (g === 'rock') drawRock(B, rng, pts); else if (g === 'pool') drawPool(B, rng, pts); else if (g === 'grass') drawGrass(B, rng, pts, iris); else drawIce(B, rng, pts);
   }
-  if (landmark) drawLandmark(B, rng, landmark.type, landmark.x, landmark.z, landmark.a, cyberSch);
+  if (landmark) drawLandmark(B, rng, landmark.type, landmark.x, landmark.z, landmark.a, cyberSch, domCount);
   if (landmark && landmark.type === 'cyber') B.buildings++;
+  // Sub-bosque do Solarpunk: um segundo passe, mais apertado, preenche as sobras de cada setor verde.
+  // Vem depois de tudo (prédios e marco) para não mexer no sorteio do resto da peça.
+  // Dossel e outdoors de LED (12/10) saem de um RNG próprio da peça, como o marco: não deslocam o
+  // sorteio dos prédios (a missão de cidade conta prédios) nem do resto do layout.
+  const extra = new RNG(((tile.seed ^ 0x1ed5a7) >>> 0) || 13);
+  const solarN = tile.ground.filter((g) => g === 'solar').length; // árvore gigante é o herói do Solarpunk: 1 por peça (2 se a mata for grande)
+  for (let i = 0, giants = 0, maxG = B.hero.solar ? 0 : solarN >= 4 ? 2 : solarN ? 1 : 0; i < 6 && giants < maxG; i++) if (tile.ground[i] === 'solar' && extra.chance(0.6)) { const pts = sectorPoints(extra, i, 1, occupied, polys, 0.12, keep); drawCanopy(B, extra, pts); giants += pts.length; }
+  let leds = 0;
+  for (let i = 0; i < 6 && leds < 1; i++) if (tile.ground[i] === 'cyber' && extra.chance(0.35)) {
+    const [p] = sectorPoints(extra, i, 1, occupied, polys, 0.2, keep);
+    if (p) { ledBillboard(B, extra, p, cyberSch); leds++; }
+  }
+  for (const R of B.roofs) if (leds < 1 && extra.chance(0.3)) { roofBillboard(B, extra, R, cyberSch); leds++; }
+  for (let i = 0; i < 6; i++) if (tile.ground[i] === 'plain' && extra.chance(0.18)) { // bonecos de neve, às vezes em dupla
+    const [p] = sectorPoints(extra, i, 1, occupied, polys, 0.1, keep);
+    if (p) { snowman(B, extra, p.x, p.z, p.a + Math.PI + extra.range(-0.6, 0.6), extra.range(1, 1.3)); if (extra.chance(0.3)) snowman(B, extra, p.x + extra.range(-0.07, 0.07), p.z + extra.range(-0.07, 0.07), p.a + Math.PI + extra.range(-0.8, 0.8), 0.7); }
+  }
+  const rockN = tile.ground.filter((g) => g === 'rock').length;
+  if (rockN >= 3 && !landmark && !B.hero.rock && extra.chance(0.28)) { // um conjunto de pirâmides por peça, no maior trecho de areia
+    const i = tile.ground.findIndex((g, k) => g === 'rock' && tile.ground[(k + 1) % 6] === 'rock');
+    const [p] = i >= 0 ? sectorPoints(extra, i, 1, occupied, polys, 0.2, keep) : [];
+    if (p) { gizaGroup(B, extra, p); B.hero.rock = true; }
+  }
+  const grassN = tile.ground.filter((g) => g === 'grass').length;
+  const millMax = grassN >= 2 && extra.chance(0.35) ? (grassN >= 5 && extra.chance(0.3) ? 2 : 1) : 0; // raro: um moinho a cada ~3 peças de Baldio
+  for (let i = 0, mills = 0; i < 6 && mills < millMax; i++) if (tile.ground[i] === 'grass' && extra.chance(0.5)) {
+    const [p] = sectorPoints(extra, i, 1, occupied, polys, 0.17, keep);
+    if (p) { windmill(B, extra, p); mills++; }
+  }
+  for (let i = 0; i < 6; i++) if (tile.ground[i] === 'solar') drawUnderstory(B, rng, sectorPoints(rng, i, B.hero.solar === 'baobab' ? 2 + rng.int(2) : B.hero.solar ? rng.int(2) : 1 + rng.int(2), occupied, polys, 0.09, keep)); // em volta do baobá a mata baixa é mais cheia
   // A bandeira vem DEPOIS de tudo, num ponto livre, sem reservar espaço nem sortear nada: antes ela
   // entrava em `occupied` antes dos prédios e re-sorteava o layout — a mesma peça mudava de 8 para 4
   // prédios ao ganhar a missão (e a missão de cidade conta prédios). Também não pisa mais na pista.
@@ -1873,8 +2443,8 @@ export function buildTile(tile) {
 // missão de conector, ao lado da pista dele; o ponto com mais folga em relação a prédios, marco e pista.
 // Determinístico e sem RNG: não altera nada do resto da peça.
 function flagSpot(tile, occupied, polys) {
-  const grp = tile.quest.group, cn = [tile.conn, tile.conn2].find((c) => c && GROUPS[c.type] === grp);
-  const exits = new Set([...(tile.conn ? tile.conn.exits : []), ...(tile.conn2 ? tile.conn2.exits : [])]);
+  const conns = [tile.conn, tile.conn2, tile.conn3].filter(Boolean), grp = tile.quest.group, cn = conns.find((c) => GROUPS[c.type] === grp);
+  const exits = new Set(conns.flatMap((c) => c.exits));
   let sectors = [0, 1, 2, 3, 4, 5].filter((i) => !cn && GROUPS[tile.ground[i]] === grp);
   const free = sectors.filter((i) => !exits.has(i)); if (free.length) sectors = free;
   if (!sectors.length) sectors = [0, 1, 2, 3, 4, 5];
@@ -1902,7 +2472,7 @@ export function buildHighlight(tile, group) {
     const vi = [Math.cos(vertexAngle(i)) * k, Math.sin(vertexAngle(i)) * k], vj = [Math.cos(vertexAngle(i + 1)) * k, Math.sin(vertexAngle(i + 1)) * k];
     B.tri(B.lit, [0, 0, 0], [vi[0], 0, vi[1]], [vj[0], 0, vj[1]], c, [0, 1, 0]);
   }
-  for (const cn of [tile.conn, tile.conn2]) if (cn && GROUPS[cn.type] === group) {
+  for (const cn of [tile.conn, tile.conn2, tile.conn3]) if (cn && GROUPS[cn.type] === group) {
     const lay = connectorLayout(cn);
     for (const p of lay.polys) B.ribbon(B.lit, p, 0.5, 0.003, c);
     if (lay.kind !== 'line') { const r = lay.kind === 'end' ? 0.46 : 0.42; for (let i = 0; i < 12; i++) { const a0 = (i / 12) * PI2, a1 = ((i + 1) / 12) * PI2; B.tri(B.lit, [0, 0.003, 0], [Math.cos(a0) * r, 0.003, Math.sin(a0) * r], [Math.cos(a1) * r, 0.003, Math.sin(a1) * r], c, [0, 1, 0]); } }
@@ -1920,6 +2490,19 @@ export function buildRotorGeometry() {
     B.tri(B.lit, m1, m2, tip, c, [1, 0, 0]); B.tri(B.lit, m1, m2, tip, shade(c, 0.85), [-1, 0, 0]);
   }
   B.sphere(B.lit, 0, 0, 0, 0.026, shade(c, 0.9), 8, 4);
+  return B.build().lit;
+}
+// Velas de moinho: quatro braços de madeira com a treliça e o pano creme presos de um lado só.
+export function buildMillRotorGeometry() {
+  const B = new Builder(), wood = col(PAL.woodDark), cloth = col('#efe4c8'), L = 0.2, W = 0.045;
+  for (let k = 0; k < 4; k++) {
+    const ang = (k * Math.PI) / 2, dy = Math.sin(ang), dz = Math.cos(ang), py = Math.cos(ang), pz = -Math.sin(ang), P = (u, v) => [0.004, dy * u + py * v, dz * u + pz * v];
+    B.tube(B.lit, [[0, 0, 0], [0, dy * L, dz * L]], [0.006, 0.004], 4, wood);
+    B.quad(B.lit, P(0.04, 0.006), P(L, 0.006), P(L, W), P(0.04, W), cloth, [1, 0, 0]); B.quad(B.lit, P(0.04, 0.006), P(L, 0.006), P(L, W), P(0.04, W), shade(cloth, 0.8), [-1, 0, 0]);
+    for (let j = 1; j <= 4; j++) { const u = 0.04 + ((L - 0.04) * j) / 4; B.tube(B.lit, [P(u, 0), P(u, W + 0.004)], [0.0025, 0.0025], 3, wood); } // treliça
+    B.tube(B.lit, [P(0.04, W), P(L, W)], [0.0025, 0.0025], 3, wood);
+  }
+  B.sphere(B.lit, 0.006, 0, 0, 0.018, col(PAL.gold), 8, 4);
   return B.build().lit;
 }
 export function buildVaxRotorGeometry() {
@@ -1965,6 +2548,19 @@ export function buildDroneGeometry(color) {
   B.sphere(B.glow, 0.036, 0.004, 0, 0.008, col('#ff3b5c'), 6, 3);
   return B.build();
 }
+// Ficha de cassino gigante, em pé (eixo em x): gira no telhado do cassino como um drone de raio zero.
+export function buildChipGeometry(color) {
+  const B = new Builder(), c = col(color), R = 0.13, T = 0.022;
+  B.tube(B.lit, [[-T, 0, 0], [T, 0, 0]], [R, R], 16, shade(c, 0.8), { capEnd: true });
+  B.tube(B.lit, [[T, 0, 0], [-T, 0, 0]], [R, R], 16, shade(c, 0.8), { capEnd: true });
+  for (const sd of [1, -1]) {
+    const ring = []; for (let k = 0; k <= 16; k++) { const t = (k / 16) * PI2; ring.push([sd * (T + 0.002), Math.sin(t) * R * 0.62, Math.cos(t) * R * 0.62]); }
+    B.tube(B.glow, ring, [0.012], 5, col('#ffffff'));
+    B.tube(B.glow, [[sd * (T + 0.002), 0, 0], [sd * (T + 0.004), 0, 0]], [R * 0.4, R * 0.4], 10, col(PAL.goldGlow), { capEnd: true });
+  }
+  for (let k = 0; k < 8; k++) { const t = (k / 8) * PI2; B.tube(B.glow, [[-T - 0.002, Math.sin(t) * R, Math.cos(t) * R], [T + 0.002, Math.sin(t) * R, Math.cos(t) * R]], [0.016], 4, col('#ffffff')); } // listras da borda
+  return B.build();
+}
 export function buildSlotRing() {
   const B = new Builder(), ro = 0.97, ri = 0.88, c = col('#ffffff');
   for (let i = 0; i < 6; i++) { const a0 = vertexAngle(i), a1 = vertexAngle(i + 1); B.quad(B.lit, [Math.cos(a0) * ro, 0, Math.sin(a0) * ro], [Math.cos(a1) * ro, 0, Math.sin(a1) * ro], [Math.cos(a1) * ri, 0, Math.sin(a1) * ri], [Math.cos(a0) * ri, 0, Math.sin(a0) * ri], c, [0, 1, 0]); }
@@ -1988,7 +2584,7 @@ export function buildSlab(tile, h = 0.11) {
     const k = 0.965, ki = 0.945;
     B.quad(B.glow, [vi[0] * k, h + 0.003, vi[1] * k], [vj[0] * k, h + 0.003, vj[1] * k], [vj[0] * ki, h + 0.003, vj[1] * ki], [vi[0] * ki, h + 0.003, vi[1] * ki], shade(col(PAL.rim[g]), 0.55), [0, 1, 0]);
   }
-  for (const cn of [tile.conn, tile.conn2]) if (cn) {
+  for (const cn of [tile.conn, tile.conn2, tile.conn3]) if (cn) {
     const lay = connectorLayout(cn), t = cn.type, base = col(t === 'sewage' ? PAL.concrete : t === 'rail' ? PAL.ballast : PAL.asphalt);
     const paths = lay.kind === 'fork' ? lay.exits.map((e) => radial(e, 1, 0.3)) : lay.polys;
     if (lay.kind !== 'line') B.extrude(B.lit, ngon(0, 0, lay.kind === 'end' ? 0.34 : 0.4, 10), h, 0.0015, base);
@@ -1997,9 +2593,10 @@ export function buildSlab(tile, h = 0.11) {
       else if (t === 'rail') { B.ribbon(B.lit, path, 0.3, h + 0.002, base); for (const s of [1, -1]) B.ribbon(B.lit, offsetLine(path, s * 0.065), 0.024, h + 0.006, col(PAL.railSteel)); }
       else { B.ribbon(B.lit, path, 0.34, h + 0.002, base); B.ribbon(B.glow, path, 0.02, h + 0.006, col(PAL.dash)); }
     }
-    if (lay.kind === 'end') B.annulus(B.glow, 0, h + 0.007, 0, 0.16, 0.2, 10, col(t === 'sewage' ? '#1fb08a' : t === 'rail' ? '#ff3b5c' : PAL.dash));
+    if (lay.kind === 'end' && !tile.hub) B.annulus(B.glow, 0, h + 0.007, 0, 0.16, 0.2, 10, col(t === 'sewage' ? '#1fb08a' : t === 'rail' ? '#ff3b5c' : PAL.dash));
     else if (lay.kind === 'fork') B.annulus(B.glow, 0, h + 0.007, 0, 0.07, 0.1, 10, col(t === 'sewage' ? '#1fb08a' : t === 'rail' ? PAL.catenary : '#22f3ff'));
   }
+  if (tile.hub) { B.extrude(B.lit, ngon(0, 0, 0.16, 10), h, 0.06, col('#1d2238')); ['rail', 'sewage', 'road'].forEach((t, k) => B.annulus(B.glow, 0, h + 0.062, 0, 0.06 + k * 0.035, 0.08 + k * 0.035, 10, col(HUB_COL[t]))); }
   if (tile.quest) B.sphere(B.glow, 0, h + 0.03, 0, 0.05, col(tile.quest.color), 8, 4);
   return B.build();
 }
@@ -2136,6 +2733,30 @@ export function buildGlyphGeometry(color) {
   const B = new Builder(), c = col(color);
   B.extrude(B.lit, rect(0, 0, 0.012, 0.03, 0), -0.022, 0.044, col(PAL.brickDark), { topCol: col(PAL.brick[0]), sideShade: true });
   for (const sd of [1, -1]) B.panel(B.glow, sd * 0.008, -0.014, 0, 0.02, 0.03, 0, c, 0.004);
+  return B.build();
+}
+
+// ---------- MONSTRO DO ESGOTO (Nessie) ----------
+// Três peças que main.js encadeia no rastro, como vagões: 'head' (pescoço longo saindo d'água com a
+// cabeça), 'hump' (corcova) e 'tail' (rabo). Verde-musgo com pintas radioativas acesas — é do esgoto.
+export function buildNessieGeometry(part) {
+  const B = new Builder(), skin = col('#2f7a52'), belly = col('#7fc49a'), spot = col(PAL.algae);
+  if (part === 'head') {
+    const neck = [[-0.03, -0.01, 0], [0.0, 0.05, 0], [0.012, 0.11, 0], [0.03, 0.15, 0]];
+    B.tube(B.lit, neck, [0.024, 0.02, 0.016, 0.014], 8, skin, { under: 0.4 });
+    B.sphere(B.lit, 0.048, 0.158, 0, 0.026, skin, 9, 5, { sy: 0.75, under: 0.4 }); // cabeça
+    B.sphere(B.lit, 0.072, 0.152, 0, 0.016, shade(skin, 1.1), 7, 4, { sy: 0.7 });   // focinho
+    for (const sd of [1, -1]) { B.sphere(B.glow, 0.058, 0.172, sd * 0.016, 0.0065, col('#e9ff5c'), 5, 3); B.cone(B.lit, 0.035, 0.175, sd * 0.01, 0.006, 0.022, shade(skin, 0.8), 4); } // olhos e chifrinhos
+    for (let k = 0; k < 4; k++) B.sphere(B.glow, -0.008 + k * 0.012, 0.03 + k * 0.035, 0.012, 0.005, spot, 4, 2);
+    B.sphere(B.lit, -0.03, -0.01, 0, 0.034, skin, 8, 4, { dome: true, sy: 0.5 }); // onde o pescoço sai da água
+  } else if (part === 'hump') {
+    B.sphere(B.lit, 0, -0.01, 0, 0.04, skin, 10, 5, { dome: true, sy: 0.85 });
+    for (let k = -1; k <= 1; k++) B.cone(B.glow, k * 0.016, 0.022 - Math.abs(k) * 0.008, 0, 0.007, 0.018, spot, 4); // cristas acesas
+    B.sphere(B.lit, 0, -0.012, 0, 0.042, belly, 8, 2, { dome: true, sy: 0.12 });
+  } else {
+    B.tube(B.lit, [[0.02, -0.01, 0], [-0.02, 0.012, 0], [-0.05, 0.03, 0], [-0.065, 0.045, 0]], [0.022, 0.016, 0.01, 0.004], 6, skin, { capEnd: true });
+    B.sphere(B.glow, -0.03, 0.026, 0, 0.005, spot, 4, 2);
+  }
   return B.build();
 }
 

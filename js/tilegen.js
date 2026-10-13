@@ -1,4 +1,4 @@
-import { RNG } from './rng.js?v=20261012s';
+import { RNG } from './rng.js?v=20261012z';
 
 // Terrenos. Cada bioma é uma vertente -punk da mesma proposta estética (é daí que vem o nome
 // do jogo): Cyberpunk, Solarpunk, Sandpunk e Snowpunk. Regiões preenchem setores; conectores atravessam a peça de uma
@@ -62,7 +62,7 @@ let tileCounter = 0;
 // Saídas do conector: 2 (reta/curva), 3 (bifurcação), 4 (cruzamento) ou 1 (ponto final)
 function connectorExits(rng, opts) {
   const a = rng.int(6);
-  const kind = rng.weighted([['line', opts.forkChance != null ? 1 - opts.forkChance - (opts.endChance || 0) : 0.74], ['fork', opts.forkChance ?? 0.15], ['end', opts.endChance ?? 0.11]]);
+  const kind = rng.weighted([['line', opts.forkChance != null ? 1 - opts.forkChance - (opts.endChance || 0) : 0.82], ['fork', opts.forkChance ?? 0.07], ['end', opts.endChance ?? 0.11]]);
   if (kind === 'end') return [a];
   if (kind === 'fork') {
     if (rng.chance(opts.crossChance ?? 0)) { // cruzamento: uma via se abre em três (4 saídas)
@@ -130,7 +130,7 @@ export function genTile(rng, opts = {}) {
     // Esgoto bifurca bem menos e nunca vira cruzamento de 4 saídas: canal que se abre em tudo
     // quanto é lado enchia o tabuleiro de pontas de esgoto impossíveis de fechar.
     const sew = type === 'sewage';
-    const exits = connectorExits(rng, { forkChance: sew ? (opts.forkChance ?? 0.15) * 0.45 : opts.forkChance, endChance: opts.endChance, crossChance: sew ? 0 : opts.crossChance });
+    const exits = connectorExits(rng, { forkChance: sew ? (opts.forkChance ?? 0.07) * 0.45 : opts.forkChance, endChance: opts.endChance, crossChance: sew ? 0 : opts.crossChance });
     for (const e of exits) edges[e] = type;
     conn = { type, exits };
   }
@@ -147,14 +147,17 @@ export function starterTile(rng) {
 }
 
 export const DUAL_CHANCE = 0.02; // das peças com conector: ~1 cruzamento a cada ~120 peças (era 0.07; o usuário quer raro de verdade)
-export const HUB_CHANCE = 0.08;  // das peças com conector: ~1 estação intermodal a cada ~45 peças (quase toda partida vê uma)
+export const HUB_CHANCE = 0.06;  // das peças com conector: ~1 estação intermodal a cada ~60 peças
 // 12/10: um pouco menos de trilho/rodovia/esgoto (pedido do usuário: "o jogo está muito baseado" neles,
 // "só um pouco mesmo"): 40% → 35% das peças (no começo, 25% → 22%); o empurrão da pilha também caiu.
-export const CONN_CHANCE = 0.35;
+// 12/10 (6ª): "economize BASTANTE nas bifurcações" e "reduza um pouco a frequência dos conectores — o mapa fica
+// todo em função deles": 35% → 27% (começo 22% → 18%); bifurcação 17% → 7% das peças de conector (cruzamento
+// de 4 saídas 30% → 15% delas); estação 8% → 6%. Medido com o bot: tabuleiro 43% → ~33% conector.
+export const CONN_CHANCE = 0.27;
 export function makeStack(rng, n) {
   const out = [];
   // primeiras peças simples; bifurcações e pontos finais só depois que o jogador já viu conectores comuns
-  for (let i = 0; i < n; i++) out.push(genTile(rng, { simple: i < 4, connChance: i < 8 ? 0.22 : CONN_CHANCE, forkChance: i < 10 ? 0 : 0.17, endChance: i < 12 ? 0 : 0.14, crossChance: i < 14 ? 0 : 0.3, dualChance: i < 16 ? 0 : DUAL_CHANCE, hubChance: i < 16 ? 0 : HUB_CHANCE }));
+  for (let i = 0; i < n; i++) out.push(genTile(rng, { simple: i < 4, connChance: i < 8 ? 0.18 : CONN_CHANCE, forkChance: i < 10 ? 0 : 0.07, endChance: i < 12 ? 0 : 0.15, crossChance: i < 14 ? 0 : 0.15, dualChance: i < 16 ? 0 : DUAL_CHANCE, hubChance: i < 16 ? 0 : HUB_CHANCE }));
   return out;
 }
 
@@ -162,7 +165,7 @@ export function makeStack(rng, n) {
 // (às vezes bifurca), nunca ponto final — sem isso as redes de trilho/rodovia ficavam em
 // pedaços de uma peça só e o trem nem tinha por onde andar. `ground` é o bioma ao redor da ponta.
 export function continuationTile(rng, type, ground) {
-  const fork = type === 'sewage' ? 0.05 : 0.13; // 11/10: um pouco menos de bifurcação (pedido do usuário)
+  const fork = type === 'sewage' ? 0.02 : 0.04; // 11/10: um pouco menos de bifurcação; 12/10 (6ª): bem menos (0.13 → 0.04)
   return genTile(rng, { forceConn: type, ground: ground && ground !== 'pool' ? ground : undefined, forkChance: fork, endChance: 0, crossChance: 0 });
 }
 
@@ -196,10 +199,53 @@ export const questLevel = (placed) => Math.floor(placed / QUEST_LEVEL_EVERY);
 // (a escada anterior, 3/5/7/9/+1, ficou fácil: bot com 73 peças e 11 missões por partida)
 const CONNECTOR_GROUPS = ['toxic', 'rail', 'road'];
 export const BIOME_QUEST_START = 5;
-export function questTarget(group, step) {
-  let t = group === 'cyber' ? 6 : CONNECTOR_GROUPS.includes(group) ? 3 : BIOME_QUEST_START;
-  for (let i = 1; i <= step; i++) t += group === 'cyber' ? 5 + i : CONNECTOR_GROUPS.includes(group) ? 2 : 3 + Math.floor(i / 2);
+// 12/10 (7ª, usuário: "a progressão está sempre idêntica... um bioma aleatório cresce de 4, 8, 12 enquanto outros
+// vão de 3, 5, 7, 9 — coloque às vezes um número fora do lugar"): cada grupo sorteia, no começo da partida, um
+// RITMO (start + lista de saltos; sem `cycle` o último salto se repete, com `cycle` a lista inteira gira) e ~1 a cada 4 degraus sai ±1 do ritmo. Os ritmos de cada
+// família têm dificuldade média parecida com a escada antiga (a de `classic`), então o balanço não muda.
+export const LADDERS = {
+  biome: {
+    classic: { start: 5, jumps: [3, 4, 4, 5, 5, 6] },          // 5, 8, 12, 16, 21, 26, 32…
+    fours:   { start: 4, jumps: [4] },                          // 4, 8, 12, 16, 20…
+    odds:    { start: 3, jumps: [2, 2, 3, 3, 4, 4, 5] },        // 3, 5, 7, 10, 13, 17, 21…
+    leap:    { start: 5, jumps: [2, 5, 2, 6, 3, 6] },           // 5, 7, 12, 14, 20, 23, 29…
+    steady:  { start: 6, jumps: [3, 4, 5] },                    // 6, 9, 13, 18, 23, 28…
+  },
+  conn: {
+    classic: { start: 3, jumps: [2] },                          // 3, 5, 7, 9…
+    evens:   { start: 2, jumps: [2, 3], cycle: true },          // 2, 4, 7, 9, 12…
+    zigzag:  { start: 3, jumps: [1, 3], cycle: true },          // 3, 4, 7, 8, 11…
+    long:    { start: 4, jumps: [2, 2, 3] },                    // 4, 6, 8, 11…
+  },
+  cyber: {
+    classic: { start: 6, jumps: [6, 7, 8, 9, 10] },             // 6, 12, 19, 27, 36…
+    fives:   { start: 5, jumps: [5, 6, 7, 8, 9, 10] },          // 5, 10, 16, 23, 31…
+    leap:    { start: 7, jumps: [5, 9, 6, 10, 8, 12] },         // 7, 12, 21, 27, 37…
+  },
+};
+const ladderFamily = (group) => (group === 'cyber' ? 'cyber' : CONNECTOR_GROUPS.includes(group) ? 'conn' : 'biome');
+// sorteia o ritmo de cada grupo para uma partida (RNG próprio: não mexe na pilha)
+export function pickLadders(rng) {
+  const out = {};
+  for (const g of ['plain', 'grass', 'cyber', 'solar', 'rock', 'toxic', 'rail', 'road']) {
+    const fam = LADDERS[ladderFamily(g)], keys = Object.keys(fam);
+    out[g] = { kind: keys[rng.int(keys.length)], salt: rng.int(2 ** 30) };
+  }
+  return out;
+}
+function ladderBase(L, step) {
+  let t = L.start;
+  for (let i = 1; i <= step; i++) t += L.jumps[L.cycle ? (i - 1) % L.jumps.length : Math.min(i - 1, L.jumps.length - 1)];
   return t;
+}
+export function questTarget(group, step, ladder) {
+  const fam = LADDERS[ladderFamily(group)], L = fam[(ladder && fam[ladder.kind]) ? ladder.kind : 'classic'];
+  let t = ladderBase(L, step);
+  if (ladder && step > 0) { // número fora do lugar: determinístico por (partida, grupo, degrau) — desfazer não re-sorteia
+    const h = Math.imul((ladder.salt ^ (step * 2654435761)) >>> 0, 2246822519) >>> 0, d = (h >>> 3) % 2 ? 1 : -1;
+    if (h % 4 === 0 && t + d > ladderBase(L, step - 1) + 1 && t + d < ladderBase(L, step + 1) - 1) t += d; // nunca empata nem passa o vizinho
+  }
+  return Math.max(2, t);
 }
 // prêmio em peças pelo tamanho do alvo, entre 2 e QUEST_REWARD_MAX (biomas: 3–6 → 2, 10+ → 3).
 // 11/10: teto 3 (pedido do usuário: com teto 5 "a recompensa ficou muito forte"; +5 é só do encaixe perfeito)
@@ -225,7 +271,7 @@ export function makeQuest(rng, tile, buildings = 0, weights = null, ctx = null) 
 }
 function makeQuestFor(group, buildings, ctx) {
   const L = ctx.level, mult = 1 + 0.2 * L; // pontos sobem com o nível
-  const step = Math.max((ctx.seq && ctx.seq[group]) || 0, L), target = questTarget(group, step);
+  const step = Math.max((ctx.seq && ctx.seq[group]) || 0, L), target = questTarget(group, step, ctx.ladders && ctx.ladders[group]);
   const reward = { tiles: questReward(group, target), points: Math.round((group === 'cyber' ? target * 4 : target * 12) * mult) };
   if (group === 'cyber') return { kind: 'city', exact: false, group, step, target, progress: buildings, reward };
   return { kind: 'region', exact: false, group, step, target, progress: 1, reward };

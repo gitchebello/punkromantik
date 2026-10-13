@@ -1,5 +1,5 @@
 // Desenho 2D de uma peça (para o HUD e a fila de próximas peças)
-import { edgeAngle, vertexAngle, groundAt, APO } from './hex.js?v=20261012a';
+import { edgeAngle, vertexAngle, groundAt, APO } from './hex.js?v=20261012z';
 
 const G2D = { plain: '#a9c7dd', grass: '#cdb68c', cyber: '#14162e', solar: '#4fc43f', rock: '#9a6538', pool: '#0d5a4c' }; // acompanha PAL.ground de tilemesh.js
 
@@ -20,7 +20,7 @@ export function drawTilePreview(canvas, tile, rot = 0, opts = {}) {
     ctx.fillStyle = G2D[g]; ctx.fill();
     drawGlyphs(ctx, g, cx, cy, R, i);
   }
-  for (const cn of [tile.conn, tile.conn2]) if (cn) { // conector (2 saídas: curva; 1 ou 3: ramos até o centro); no cruzamento o de cima vem por último
+  for (const cn of [tile.conn, tile.conn2, tile.conn3]) if (cn) { // conector (2 saídas: curva; 1 ou 3: ramos até o centro); no cruzamento o de cima vem por último
     const ex = cn.exits.map((e) => (e + rot) % 6), P = (e) => [cx + Math.cos(edgeAngle(e)) * R * APO, cy + Math.sin(edgeAngle(e)) * R * APO];
     const stroke = (color, w, dash) => {
       ctx.beginPath();
@@ -31,6 +31,10 @@ export function drawTilePreview(canvas, tile, rot = 0, opts = {}) {
     if (cn.type === 'sewage') { stroke('#3b3f52', R * 0.3); stroke('#0c5a4a', R * 0.18); stroke('#2dffb8', R * 0.05, [R * 0.1, R * 0.08]); }
     else if (cn.type === 'rail') { stroke('#7a7d8f', R * 0.26); stroke('#d5d9e6', R * 0.16, [R * 0.06, R * 0.06]); }
     else { stroke('#2b2e42', R * 0.28); stroke('#ffe36a', R * 0.03, [R * 0.08, R * 0.06]); }
+  }
+  if (tile.hub) { // estação intermodal: praça com os três anéis
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.24, 0, Math.PI * 2); ctx.fillStyle = '#1d2238'; ctx.fill();
+    ['#22f3ff', '#38ff9b', '#ffe36a'].forEach((c, k) => { ctx.beginPath(); ctx.arc(cx, cy, R * (0.08 + k * 0.06), 0, Math.PI * 2); ctx.strokeStyle = c; ctx.lineWidth = R * 0.03; ctx.stroke(); });
   }
   ctx.beginPath(); // contorno
   for (let i = 0; i < 6; i++) i ? ctx.lineTo(vx(i), vy(i)) : ctx.moveTo(vx(i), vy(i));

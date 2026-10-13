@@ -1,9 +1,9 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261012s';
-import { RNG } from './rng.js?v=20261012s';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel, connsOf } from './tilegen.js?v=20261012s';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildMillRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildChipGeometry, buildNessieGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261012s';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261012s';
-import { CameraRig, attachInput } from './controls.js?v=20261012s';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261012z';
+import { RNG } from './rng.js?v=20261012z';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel, connsOf, pickLadders } from './tilegen.js?v=20261012z';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildMillRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildChipGeometry, buildNessieGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261012z';
+import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261012z';
+import { CameraRig, attachInput } from './controls.js?v=20261012z';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -894,17 +894,21 @@ function frontier() {
 // Às vezes troca a 3ª peça da pilha (ainda escondida: só as duas primeiras aparecem) por uma que
 // continua uma ponta aberta de trilho/rodovia/esgoto. Sem isso as redes ficavam em pedaços de uma
 // peça e as missões de conector empacavam com progresso 1.
-const STEER_CHANCE = 0.33; // 12/10: era 0.38 — menos conector na pilha (pedido do usuário)
+// 12/10 (6ª): o empurrão era a maior fonte de conector — trocava peça de BIOMA por conector em 1/3 das jogadas
+// e o tabuleiro chegava a 43% de trilho/rodovia/esgoto com só 35% no sorteio. Agora ele prefere REDIRECIONAR
+// um conector que já viria (vira a continuação de uma ponta aberta: mesma quantidade, rede mais inteira) e só
+// raramente transforma peça de bioma em conector.
+const STEER_RETARGET = 0.5, STEER_CONVERT = 0.08;
 function steerStack() {
-  const t = S.stack[2]; if (!t || t.quest || t._steered) return;
-  const { ends } = frontier(); if (!ends.length || !S.rng.chance(STEER_CHANCE)) return;
+  const t = S.stack[2]; if (!t || t.quest || t._steered || t.hub) return;
+  const { ends } = frontier(); if (!ends.length || !S.rng.chance(t.conn ? STEER_RETARGET : STEER_CONVERT)) return;
   const e = S.rng.pick(ends), nt = continuationTile(S.rng, e.type, e.ground); nt._steered = true;
   if (S.undo) S.undo.steer = { from: S.stack[2], to: nt }; // o desfazer devolve a peça original
   S.stack[2] = nt;
 }
 
 // O alvo sai da escada de cada grupo (ver questTarget em tilegen.js): nível + missões já sorteadas.
-const questContext = () => ({ level: questLevel(S.placed), seq: S.questSeq });
+const questContext = () => ({ level: questLevel(S.placed), seq: S.questSeq, ladders: S.ladders });
 // Progresso de uma missão sobre um conjunto de casas: cidade conta PRÉDIOS (soma por peça), o resto conta peças.
 const sumBuildings = (keys) => { let n = 0; for (const k of keys) n += buildingsOf(S.tiles.get(k).tile); return n; };
 const questProgress = (qst, keys) => (qst.kind === 'city' ? sumBuildings(keys) : keys.size);
@@ -1348,6 +1352,7 @@ function newGame(seed, daily = null) {
   if (daily) seed = dailySeed(daily);
   S.rng = new RNG(seed != null ? seed >>> 0 : (Date.now() ^ (Math.random() * 1e9)) >>> 0);
   S.stack = makeStack(S.rng, STACK_SIZE);
+  S.ladders = pickLadders(new RNG((S.rng.state ^ 0x1add3) >>> 0 || 5)); // ritmo das missões de cada grupo nesta partida
   S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null; S.gains = {}; S.questSeq = {};
   updateHintButton(); updateUndoButton();
   addTile(0, 0, starterTile(S.rng), 0, false);
