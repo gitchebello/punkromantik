@@ -6,12 +6,12 @@
 export const UNLOCK = { yeti: true, relic: true, nessie: true, hub: true, mega: true, giza: true };
 // `xp` = pontos acumulados. Uma partida de bot rende ~1300–2600: tudo liberado em ~10 partidas.
 export const UNLOCKS = [
-  { id: 'yeti',   xp: 1000,  icon: '👣', name: 'Iéti',               desc: 'o abominável homem das neves passeia pelo Snowpunk' },
-  { id: 'relic',  xp: 3000,  icon: '✦',  name: 'Achados distantes',  desc: 'peças apagadas surgem longe do tabuleiro' },
-  { id: 'nessie', xp: 6000,  icon: '🦕', name: 'Nessie',             desc: 'um monstro nada pelos canais de esgoto' },
-  { id: 'hub',    xp: 10000, icon: '🚉', name: 'Estação intermodal', desc: 'peça que junta trem, rodovia e esgoto' },
-  { id: 'mega',   xp: 15000, icon: '🎰', name: 'Megaestruturas',     desc: 'cassino, hotel e shopping no Cyberpunk' },
-  { id: 'giza',   xp: 22000, icon: '🔺', name: 'Pirâmides de Gizé',  desc: 'o trio de pirâmides no Sandpunk' },
+  { id: 'yeti',   xp: 1000, name: 'Iéti',               desc: 'o abominável homem das neves passeia pelo Snowpunk' },
+  { id: 'relic',  xp: 3000, name: 'Achados distantes',  desc: 'peças apagadas surgem longe do tabuleiro' },
+  { id: 'nessie', xp: 6000, name: 'Nessie',             desc: 'um monstro nada pelos canais de esgoto' },
+  { id: 'hub',    xp: 10000, name: 'Estação intermodal', desc: 'peça que junta trem, rodovia e esgoto' },
+  { id: 'mega',   xp: 15000, name: 'Megaestruturas',     desc: 'cassino, hotel e shopping no Cyberpunk' },
+  { id: 'giza',   xp: 22000, name: 'Pirâmides de Gizé',  desc: 'o trio de pirâmides no Sandpunk' },
 ];
 export function applyUnlocks(xp, all = false) { for (const u of UNLOCKS) UNLOCK[u.id] = all || xp >= u.xp; }
 export const nextUnlock = (xp) => UNLOCKS.find((u) => xp < u.xp) || null;
