@@ -1,9 +1,10 @@
-import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261013a';
-import { RNG } from './rng.js?v=20261013a';
-import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel, connsOf, pickLadders } from './tilegen.js?v=20261013a';
-import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildMillRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildChipGeometry, buildNessieGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261013a';
-import { initAudio, play, setMuted, isMuted } from './audio.js?v=20261013a';
-import { CameraRig, attachInput } from './controls.js?v=20261013a';
+import { key, opp, DIRS, toWorld, fromWorld, edgeAt, groundAt, edgeAngle } from './hex.js?v=20261014o';
+import { RNG } from './rng.js?v=20261014o';
+import { TERRAIN, GROUP_INFO, isConnector, compatible, groupOf, sideGroups, genTile, starterTile, makeStack, makeQuest, isTerminal, questGoal, continuationTile, questLevel, connsOf, pickLadders, bumpTileId } from './tilegen.js?v=20261014o';
+import { buildTile, buildSlab, buildSlotRing, buildHexDisc, buildRotorGeometry, buildVaxRotorGeometry, buildMillRotorGeometry, buildVehicleGeometry, buildTrainCarGeometry, buildDroneGeometry, buildGlyphGeometry, buildChipGeometry, buildNessieGeometry, buildCamelGeometry, buildBearGeometry, buildYetiGeometry, buildBirdGeometry, buildBirdWingGeometry, buildHighlight, buildAuroraGeometry, buildBoatGeometry, routeLift, walkRoute, pathLength, pointAt, TILE_H } from './tilemesh.js?v=20261014o';
+import { initAudio, play, setSfx, setMusic, sfxEnabled, musicEnabled, music, audioRunning } from './audio.js?v=20261014o';
+import { CameraRig, attachInput } from './controls.js?v=20261014o';
+import { UNLOCK, UNLOCKS, applyUnlocks, nextUnlock } from './unlocks.js?v=20261014o';
 
 const THREE = window.THREE;
 const STACK_SIZE = 40;
@@ -31,6 +32,8 @@ const ICON_PATHS = {
   undo: '<path d="M9 5L3 11l6 6v-4h5a4 4 0 0 1 0 8h-3v3h3a7 7 0 0 0 0-14H9z"/>',
   x: '<path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>',
   check: '<path d="M4 12l5 5L20 6" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+  swap: '<path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4z"/>', // duas setas que se completam num círculo (14/10)
+  camera: '<path d="M8.5 4 7 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3l-1.5-2zM12 8.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2.2a2.3 2.3 0 1 0 0 4.6 2.3 2.3 0 0 0 0-4.6z"/>',
   trophy: '<path d="M6 3h12v2h3v3a5 5 0 0 1-4.3 4.95A6 6 0 0 1 13 16.9V19h4v2H7v-2h4v-2.1a6 6 0 0 1-3.7-3.95A5 5 0 0 1 3 8V5h3zm-1 4v1a3 3 0 0 0 1.2 2.4A6 6 0 0 1 6 9V7zm14 0h-1v2c0 .5 0 1-.2 1.4A3 3 0 0 0 19 8z"/>',
 };
 const icon = (name, size = 18, color = 'currentColor', cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="${color}" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`;
@@ -449,7 +452,7 @@ function refreshCurrentPreview() {
 }
 function viewportOf(el) { const r = el.getBoundingClientRect(); return { x: r.left, y: window.innerHeight - r.bottom, w: r.width, h: r.height }; }
 function renderUI() {
-  if (!S.started || $('hud').classList.contains('hidden')) return;
+  if (!S.started || S.photo || $('hud').classList.contains('hidden')) return;
   const W = window.innerWidth, Hh = window.innerHeight;
   renderer.autoClear = false; renderer.clearDepth(); renderer.setScissorTest(true);
   const draw = (el, cam, fovSmall, fovLarge) => {
@@ -483,14 +486,40 @@ function renderBiomeThumbs() {
     if (conn) { edges[1] = edges[4] = t; }
     const tile = { id: -1, ground: g6, edges, conn: conn ? { type: t, exits: [1, 4] } : null, quest: null, seed: rng.int(2 ** 31) };
     const grp = makeTileGroup(tile, litMat, glowMat, false); sc.add(grp);
-    renderer.setRenderTarget(rt); renderer.clear(); renderer.render(sc, cam);
-    renderer.readRenderTargetPixels(rt, 0, 0, N, N, px);
+    snapThumb(sc, cam, rt, px, fig.querySelector('canvas'));
     sc.remove(grp);
-    const tmp = document.createElement('canvas'); tmp.width = tmp.height = N;
-    const img = tmp.getContext('2d').createImageData(N, N);
-    for (let y = 0; y < N; y++) img.data.set(px.subarray((N - 1 - y) * N * 4, (N - y) * N * 4), y * N * 4); // GL lê de baixo para cima
-    tmp.getContext('2d').putImageData(img, 0, 0);
-    const cv = fig.querySelector('canvas'); cv.width = cv.height = 160; cv.getContext('2d').drawImage(tmp, 0, 0, 160, 160);
+  }
+  renderer.setRenderTarget(null); renderer.setClearColor(prevC, prevA); rt.dispose();
+}
+function snapThumb(sc, cam, rt, px, cv) {
+  const N = rt.width;
+  renderer.setRenderTarget(rt); renderer.clear(); renderer.render(sc, cam);
+  renderer.readRenderTargetPixels(rt, 0, 0, N, N, px);
+  const tmp = document.createElement('canvas'); tmp.width = tmp.height = N;
+  const img = tmp.getContext('2d').createImageData(N, N);
+  for (let y = 0; y < N; y++) img.data.set(px.subarray((N - 1 - y) * N * 4, (N - y) * N * 4), y * N * 4); // GL lê de baixo para cima
+  tmp.getContext('2d').putImageData(img, 0, 0);
+  cv.width = cv.height = 160; cv.getContext('2d').drawImage(tmp, 0, 0, 160, 160);
+}
+// Coleção do menu inicial (14/10): cada conquista é a miniatura 3D da própria peça do presente (os emojis
+// soltos não combinavam com o resto). Ainda trancada = silhueta escura (CSS); ganha = carimbo de coração.
+function renderGiftThumbs() {
+  const cvs = document.querySelectorAll('#unlocks canvas[data-gift]'); if (!cvs.length) return;
+  const N = 256, rt = new THREE.WebGLRenderTarget(N, N), px = new Uint8Array(N * N * 4);
+  const sc = new THREE.Scene();
+  sc.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2038, 0.85));
+  const sn = new THREE.DirectionalLight(0xfff1dc, 0.9); sn.position.set(3, 6, 4); sc.add(sn);
+  const fl = new THREE.DirectionalLight(0x4a7dff, 0.3); fl.position.set(-4, 3, -3); sc.add(fl);
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 60);
+  const prevC = renderer.getClearColor(new THREE.Color()), prevA = renderer.getClearAlpha();
+  renderer.setClearColor(0x000000, 0);
+  for (const cv of cvs) {
+    const id = cv.dataset.gift, grp = giftModel(id); sc.add(grp);
+    if (id === 'relic') grp.remove(grp.children[grp.children.length - 1]); // o facho de luz não cabe na miniatura (e inflava o enquadramento)
+    const top = Math.max(0.7, new THREE.Box3().setFromObject(grp).max.y), f = 1 + (top - 0.7) * 0.42; // arranha-céu: recua
+    cam.position.set(2.55 * f, 2.9 * f, 2.55 * f); cam.lookAt(0, 0.28 + (top - 0.7) * 0.4, 0); cam.updateProjectionMatrix();
+    snapThumb(sc, cam, rt, px, cv);
+    sc.remove(grp);
   }
   renderer.setRenderTarget(null); renderer.setClearColor(prevC, prevA); rt.dispose();
 }
@@ -542,9 +571,10 @@ const dust = (() => {
 const S = {
   tiles: new Map(), slots: new Map(), stack: [], current: null, rot: 0, selected: null, ghostSolid: true,
   score: 0, placed: 0, perfects: 0, questsDone: 0, questsLost: 0, quests: [], over: false, started: false, rng: new RNG(Date.now() >>> 0),
-  best: +(localStorage.getItem('pr_best') || 0), tips: new Set(), coached: 0, lowWarned: false, tileList: [], hints: 5, undo: null, sinceQuest: 0, pendingGain: 0, relics: [], sinceRelic: 0, gains: {}, questSeq: {},
+  best: +(localStorage.getItem('pr_best') || 0), mode: 'classic', swaps: 0, last: null, photo: false, tips: new Set(), coached: 0, lowWarned: false, tileList: [], hints: 5, undo: null, sinceQuest: 0, pendingGain: 0, relics: [], sinceRelic: 0, gains: {}, questSeq: {},
 };
-const HINTS_PER_GAME = 5, QUEST_CAP = 4;
+const HINTS_PER_GAME = 5, SWAPS_PER_GAME = 3, QUEST_CAP = 4;
+const creative = () => S.mode === 'creative'; // modo livre: peças sem fim, sem pontos, missões nem fim de jogo
 // no começo menos missões abertas ao mesmo tempo (3 nas primeiras 40 peças, depois 4): o jogador sente que dá conta
 const questCap = () => (questLevel(S.placed) < 2 ? 3 : QUEST_CAP);
 const gain = (src, n = 1) => { S.gains[src] = (S.gains[src] || 0) + n; }; // de onde vêm as peças extras (balanceamento)
@@ -798,7 +828,7 @@ function updateGhost() {
   setSlotMaterials(ev);
   bp.disabled = !ev.legal; // nesta rotação o conector bateria em outra coisa: só gira (o lado ruim fica com friso vermelho baixo)
   const bonus = ev.legal ? previewBonus(S.selected.q, S.selected.r, S.current, S.rot) : { shut: 0, harmony: 0, terminal: 0, relic: 0 }, basePts = ev.matches * 10 + ev.links * LINK_PTS + (ev.perfect ? 60 : 0) + bonus.shut + bonus.harmony + bonus.terminal + bonus.relic;
-  bp.innerHTML = ev.legal ? `Colocar <b>+${basePts}</b>${ev.links ? ' ⇢' : ''}${ev.perfect ? ' ★' : ''}${bonus.shut ? ' ⬢' : ''}${bonus.harmony ? ' ✺' : ''}` : 'Gire a peça';
+  bp.innerHTML = ev.legal ? `Colocar${creative() ? '' : ` <b>+${basePts}</b>`}${ev.links ? ' ⇢' : ''}${ev.perfect ? ' ★' : ''}${bonus.shut ? ' ⬢' : ''}${bonus.harmony ? ' ✺' : ''}` : 'Gire a peça';
   bp.classList.toggle('perfect', ev.legal && ev.perfect);
 }
 // Para a peça na mão: 'blocked' (nenhuma rotação cabe — escurecida + marquinha nas bordas do conflito), 'link' (alguma rotação
@@ -938,13 +968,14 @@ function maybeAssignQuest() {
 // ---------- turno ----------
 function drawNext(from, silentStack) {
   if (!silentStack) liftTopOfStack();
+  if (creative()) while (S.stack.length < 12) S.stack.push(genTile(S.rng)); // modo livre: a pilha nunca acaba
   S.current = S.stack.shift() || null;
   S.rot = 0;
   if (!S.current) { setGhost(null); refreshCurrentPreview(); rebuildStack(); updateHUD(); gameOver(); return; }
   // extras do saque: se um deles falhar, o turno NÃO pode parar no meio (o fantasma ficava com a
   // peça antiga em cima da recém-colocada e a peça real na mão era outra — 10/10)
-  safely(steerStack); safely(maybeAssignQuest);
-  if (S.started && S.tileList.length) safely(spawnRelic);
+  safely(steerStack); if (!creative()) safely(maybeAssignQuest);
+  if (S.started && S.tileList.length && !creative()) safely(spawnRelic);
   setGhost(S.current); refreshCurrentPreview(); rebuildStack(0, true); updateHUD();
   ghostGroup.rotation.y = 0; if (curTileGroup) curTileGroup.rotation.y = 0;
   autoPreview(from);
@@ -1021,11 +1052,13 @@ function commitPlacement() {
   S.selected = null; S.current = null;
   hideFormation(); sealFormation(q, r, ev);
   refreshSlots();
-  if (S.score > S.best) { S.best = S.score; localStorage.setItem('pr_best', S.best); }
+  if (!creative() && S.score > S.best) { S.best = S.score; localStorage.setItem('pr_best', S.best); }
+  S.last = { q, r };
   drawNext({ q, r });
   if (gained) setTimeout(() => rewardTiles(gained, trayPoint() || screenOf(w) || fromRect), 0); // peças decolam do selo da medalha, se houver
   if (S.tiles.size % 6 === 0) rig.flyTo(w.x, w.z);
   updateUndoButton();
+  saveGame();
 }
 // Bônus de região fechada: uma área de bioma que ficou cercada por completo (não tem mais lado
 // livre para crescer) rende 5 pts por peça e, a partir de 8 peças, +1 peça. Dá um objetivo de
@@ -1184,8 +1217,14 @@ const relicTiles = () => (questLevel(S.placed) < 4 ? 2 : 1); // como as missões
 const hexDist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
 const relicBeamGeo = new THREE.CylinderGeometry(0.06, 0.32, 9, 14, 1, true);
 const relicAt = (k) => S.relics.find((R) => R.k === k);
+function makeRelicBeam(q, r, color, opacity) {
+  const wp = toWorld(q, r), beam = new THREE.Mesh(relicBeamGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  beam.position.set(wp.x, TILE_H + 4.5, wp.z); beam.layers.enable(BLOOM); fxGroup.add(beam);
+  return beam;
+}
 function spawnRelic(force) {
   const waiting = S.relics.filter((R) => !R.claimed).length, since0 = S.sinceRelic;
+  if (!force && !UNLOCK.relic) return false; // desbloqueio (unlocks.js)
   if (!force && (waiting >= RELIC_MAX || S.placed < RELIC_FROM || S.stack.length < 6 || ++S.sinceRelic < 9 || !S.rng.chance(0.25))) return false;
   const list = S.tileList, opts = ['cyber', 'solar', 'rock', 'plain', 'grass'];
   for (let tries = 0; tries < 120; tries++) {
@@ -1200,8 +1239,7 @@ function spawnRelic(force) {
     const tile = genTile(S.rng, { simple: true });
     tile.ground = new Array(6).fill(g); tile.edges = tile.ground.slice(); tile.conn = null; tile.relic = true; tile.hidden = true; tile._geo = null;
     addTile(c.q, c.r, tile, S.rng.int(6), false); refreshSlots();
-    const wp = toWorld(c.q, c.r), beam = new THREE.Mesh(relicBeamGeo, new THREE.MeshBasicMaterial({ color: RELIC_BEAM, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
-    beam.position.set(wp.x, TILE_H + 4.5, wp.z); beam.layers.enable(BLOOM); fxGroup.add(beam);
+    const wp = toWorld(c.q, c.r), beam = makeRelicBeam(c.q, c.r, RELIC_BEAM, 0.32);
     S.relics.push({ k: key(c.q, c.r), q: c.q, r: c.r, g, beam, claimed: false, hidden: true, pulse: 0 });
     if (S.undo && !force) S.undo.spawned = { R: S.relics[S.relics.length - 1], since: since0 }; // o desfazer apaga o achado deste saque
     S.sinceRelic = 0;
@@ -1286,6 +1324,7 @@ function undoLast() {
   refreshSlots();
   S.selected = { q: u.q, r: u.r }; S.ghostSolid = true;
   setGhost(S.current); refreshCurrentPreview(); rebuildStack(); renderQuests(); updateHUD(); updateGhost(); updateUndoButton();
+  saveGame();
 }
 function updateUndoButton() { const b = $('btn-undo'); b.disabled = !S.undo || S.over; }
 // verifica progresso, conclusão e impossibilidade das missões ativas
@@ -1336,7 +1375,9 @@ function gameOver() {
   $('end-score').textContent = S.score;
   $('end-best').textContent = S.best;
   $('end-stats').innerHTML = `<span>${icon('tile', 14)} ${S.tiles.size}</span><span>★ ${S.perfects}</span><span>${icon('flag', 14)} ${S.questsDone}</span>`;
-  setTimeout(() => { showOverlay('overlay-end'); prepareRankForm(); }, 700);
+  const fresh = creative() || NO_SAVE ? [] : (clearSave('classic'), addXP(S.score).fresh);
+  const toEnd = () => { showOverlay('overlay-end'); prepareRankForm(); };
+  setTimeout(() => (fresh.length ? showGift(fresh, toEnd) : toEnd()), fresh.length ? 1100 : 700); // desbloqueou algo: o presente vem antes do placar final
 }
 
 // ---------- novo jogo / demonstração / menu ----------
@@ -1345,16 +1386,17 @@ function gameOver() {
 function todayStr() { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
 function dailySeed(str) { let h = 2166136261; for (const ch of 'punkromantik:' + str) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 const dayLabel = (str) => str.slice(8, 10) + '/' + str.slice(5, 7);
-function newGame(seed, daily = null) {
+function newGame(seed, daily = null, mode = 'classic') {
   clearBoard();
-  S.daily = daily;
+  S.daily = daily; S.mode = mode; S.swaps = mode === 'creative' ? Infinity : SWAPS_PER_GAME; S.last = { q: 0, r: 0 };
+  applyModeUnlocks(); document.body.classList.toggle('creative', mode === 'creative'); syncRestartLabel();
   $('daily-chip').textContent = daily ? `📅 desafio ${dayLabel(daily)}` : ''; $('daily-chip').classList.toggle('hidden', !daily);
   if (daily) seed = dailySeed(daily);
   S.rng = new RNG(seed != null ? seed >>> 0 : (Date.now() ^ (Math.random() * 1e9)) >>> 0);
   S.stack = makeStack(S.rng, STACK_SIZE);
   S.ladders = pickLadders(new RNG((S.rng.state ^ 0x1add3) >>> 0 || 5)); // ritmo das missões de cada grupo nesta partida
-  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.lowWarned = false; S.hints = HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null; S.gains = {}; S.questSeq = {};
-  updateHintButton(); updateUndoButton();
+  S.score = 0; S.placed = 0; S.perfects = 0; S.questsDone = 0; S.questsLost = 0; S.quests = []; S.over = false; S.started = true; S.tips.clear(); S.lowWarned = false; S.hints = mode === 'creative' ? Infinity : HINTS_PER_GAME; S.sinceQuest = 0; S.pendingGain = 0; S.undo = null; S.gains = {}; S.questSeq = {};
+  updateHintButton(); updateUndoButton(); updateSwapButton();
   addTile(0, 0, starterTile(S.rng), 0, false);
   refreshSlots();
   rig.target.set(0, 0, 0); rig.dist = isNarrow() ? 13 : 11; rig.autoOrbit = false; rig.azimuth = -0.9; rig.polar = 0.92;
@@ -1364,6 +1406,7 @@ function newGame(seed, daily = null) {
   rebuildStack();
   stackShown = -1; updateHUD();
   drawNext({ q: 0, r: 0 });
+  saveGame();
 }
 function demoBoard(n) {
   clearBoard();
@@ -1381,9 +1424,10 @@ function demoBoard(n) {
   rig.autoOrbit = true; rig.dist = isNarrow() ? 16 : 13; rig.polar = 0.95;
 }
 function returnToMenu() {
+  saveGame(); S.started = false; refreshStartScreen();
   $('hud').classList.add('hidden'); $('banners').innerHTML = '';
   demoBoard(30);
-  showOverlay('overlay-start');
+  showOverlay('overlay-start'); music('menu');
 }
 const isNarrow = () => window.innerWidth < 720;
 
@@ -1539,6 +1583,7 @@ function spawnFauna(k) {
   let idx = 0;
   for (const kind of Object.keys(FAUNA)) {
     const cfg = FAUNA[kind]; idx++;
+    if (kind === 'yeti' && !UNLOCK.yeti) continue; // desbloqueio (unlocks.js)
     if (fauna.reduce((n, f) => n + (f.kind === kind ? 1 : 0), 0) >= cfg.cap) continue;
     let n = 0;
     for (let i = 0; i < 6; i++) if (walkableEdge(t, i, cfg.group)) n++;
@@ -1668,7 +1713,7 @@ function exitOpen(t, localExit, type) { // a saída `localExit` desta peça não
 let nessieGeos = null;
 function convoyMeshes(type, lit, glow) {
   const geos = [];
-  if (type === 'sewage' && !trains.some((x) => x.nessie) && Math.random() < 0.07) {
+  if (type === 'sewage' && UNLOCK.nessie && !trains.some((x) => x.nessie) && Math.random() < 0.07) {
     nessieGeos = nessieGeos || { head: buildNessieGeometry('head'), hump: buildNessieGeometry('hump'), tail: buildNessieGeometry('tail') };
     geos.push({ geo: nessieGeos.head, scale: 1, nessie: 0 });
     for (let k = 0; k < 3; k++) geos.push({ geo: nessieGeos.hump, scale: 1 - k * 0.16, nessie: k + 1 });
@@ -1948,6 +1993,7 @@ function rewardBurst(w, kind, color, medal, chip, delay = 0, title = '') { // `t
 // Letreiro neon animado com os pontos: letras pulam uma a uma, o letreiro voa até o placar e o número rola
 let scoreShown = 0, scoreRoll = null;
 function scoreSign(pts, cls = '', sub = '', w = null) {
+  if (creative()) return; // modo livre: sem placar
   if (isNarrow()) { // celular: nada no meio da tela — número pequeno sobe da peça (se não houver medalha ali) e o placar rola
     if (w) popup(`+${pts}`, w, cls === 'perfect' ? 'perfect' : cls === 'quest' ? 'pquest' : pts >= 30 ? 'good' : '');
     setTimeout(() => bumpScore(cls), 500);
@@ -2162,19 +2208,18 @@ function setStackCount(n, animate) {
 function updateHUD(animateCount = true) {
   if (!S.started || S.score === 0) { scoreShown = S.score; $('score').textContent = S.score; recordFrom = S.best; syncRecord(); }
   const total = S.stack.length + (S.current ? 1 : 0), shown = Math.max(0, total - S.pendingGain);
-  setStackCount(shown, animateCount);
+  if (creative()) { stackShown = -1; $('stack-count').querySelector('.num').innerHTML = '<span>∞</span>'; } else setStackCount(shown, animateCount);
   $('best').textContent = S.best;
-  const low = S.started && !S.over && total <= 5;
+  const low = S.started && !S.over && !creative() && total <= 5;
   $('stack-area').classList.toggle('low', low);
   if (low && !S.lowWarned) { S.lowWarned = true; play('warn'); } // o contador vermelho piscando já avisa
   if (total > 5) S.lowWarned = false;
 }
 function showOverlay(id) { document.querySelectorAll('.overlay').forEach((o) => o.classList.add('hidden')); if (id) $(id).classList.remove('hidden'); }
+// 14/10 (usuário: "mais ícones e menos texto"): cada ajuste é um botão de ícone; desligado fica apagado e riscado.
 function syncMenuToggles() {
-  $('tg-bloom').textContent = `Brilho neon: ${prefs.bloom ? 'ligado' : 'desligado'}`;
-  $('tg-sound').textContent = `Som: ${isMuted() ? 'desligado' : 'ligado'}`;
-  $('tg-lens').textContent = `Efeito de lente: ${prefs.lens ? 'ligado' : 'desligado'}`;
-  $('tg-grain').textContent = `Granulação: ${prefs.grain ? 'ligada' : 'desligada'}`;
+  const set = (id, on) => { const b = $(id); b.classList.toggle('off', !on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); };
+  set('tg-bloom', prefs.bloom); set('tg-lens', prefs.lens); set('tg-grain', prefs.grain); set('tg-music', musicEnabled()); set('tg-sfx', sfxEnabled()); syncSoundBtn();
   $('grain').classList.toggle('hidden', !prefs.grain);
 }
 
@@ -2243,17 +2288,17 @@ function cellAt(x, y) {
   return S.slots.has(key(c.q, c.r)) ? c : null;
 }
 attachInput(canvas, rig, {
-  onHover(x, y) { const c = cellAt(x, y); if (c) selectSlot(c, true); },
+  onHover(x, y) { if (S.photo) return; const c = cellAt(x, y); if (c) selectSlot(c, true); },
   onTap(x, y) {
-    if (!S.started || S.over) return;
+    if (!S.started || S.over || S.photo) return;
     const c = cellAt(x, y);
     if (!c) return;
     if (S.selected && S.selected.q === c.q && S.selected.r === c.r) playerCommit();
     else selectSlot(c);
   },
-  onRotate(dir) { rotate(dir); },
+  onRotate(dir) { if (!S.photo) rotate(dir); },
   onWheel(e) {
-    if (e.ctrlKey || e.metaKey || e.shiftKey || !S.started || S.over || !S.current) { rig.zoom(Math.exp(e.deltaY * 0.0012)); return; }
+    if (e.ctrlKey || e.metaKey || e.shiftKey || !S.started || S.over || !S.current || S.photo) { rig.zoom(Math.exp(e.deltaY * 0.0012)); return; }
     if (Math.abs(e.deltaY) >= 50) { wheelAcc = 0; rotate(e.deltaY > 0 ? 1 : -1); return; }
     wheelAcc += e.deltaY;
     while (wheelAcc >= 60) { wheelAcc -= 60; rotate(1); }
@@ -2264,11 +2309,15 @@ let wheelAcc = 0;
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
+  if (!$('gift').classList.contains('hidden')) { if (k === ' ' || k === 'enter' || k === 'escape') { e.preventDefault(); giftTap(); } return; }
+  if (S.photo) { if (k === 'escape') exitPhoto(); else if (k === 'p') savePhoto(); return; }
   if (k !== 'escape' && [...document.querySelectorAll('.overlay')].some((o) => !o.classList.contains('hidden'))) return; // menu/ajuda aberto: o jogo fica parado
   if (k === 'r' || k === 'e') rotate(1);
   else if (k === 'q') rotate(-1);
   else if (k === ' ' || k === 'enter') { e.preventDefault(); if (!e.repeat) playerCommit(); }
   else if (k === 'h') hint();
+  else if (k === 'x') swapTile();
+  else if (k === 'p' && S.started) enterPhoto();
   else if (k === 'z' || k === 'u' || k === 'backspace') { e.preventDefault(); undoLast(); }
   else if (k === 'arrowleft' || k === 'a') rig.pan(-40, 0);
   else if (k === 'arrowright' || k === 'd') rig.pan(40, 0);
@@ -2292,13 +2341,225 @@ function hint() {
   if (!S.current || S.over) return;
   if (S.hints <= 0) { play('bad'); return; }
   if (!applyBest()) return;
-  S.hints--; play('select'); updateHintButton();
+  if (!creative()) S.hints--; play('select'); updateHintButton();
 }
 function updateHintButton() {
   const b = $('btn-hint');
-  b.innerHTML = `${icon('bulb', 18)}<b>${S.hints}</b>`;
+  b.innerHTML = `${icon('bulb', 18)}<b>${S.hints === Infinity ? '∞' : S.hints}</b>`;
   b.disabled = S.hints <= 0;
 }
+
+// ---------- trocar a peça (14/10, à la Islanders / Isle of Arrows: uma escolha além de "onde") ----------
+// Troca a peça da mão pela próxima da pilha. Poucas por partida (como a dica); no modo livre, sem limite.
+// Trocar fecha o desfazer: a peça desfeita voltaria para a mão por cima de uma pilha já mexida.
+function swapTile() {
+  if (!S.started || S.over || S.photo || !S.current || !S.stack.length) return;
+  if (S.swaps <= 0) { play('bad'); return; }
+  [S.current, S.stack[0]] = [S.stack[0], S.current];
+  S.swaps--; S.rot = 0; S.undo = null; slotCache = '';
+  play('rotate'); updateUndoButton(); updateSwapButton();
+  setGhost(S.current); refreshCurrentPreview(); rebuildStack(0, true);
+  ghostGroup.rotation.y = 0; if (curTileGroup) curTileGroup.rotation.y = 0;
+  autoPreview(S.last); renderQuests(); updateHUD(false);
+  saveGame();
+}
+function updateSwapButton() {
+  const b = $('btn-swap');
+  b.innerHTML = `${icon('swap', 18)}<b>${S.swaps === Infinity ? '∞' : S.swaps}</b>`;
+  b.disabled = S.swaps <= 0;
+}
+
+// ---------- salvar e continuar (14/10) ----------
+// A partida fica salva no navegador a cada peça (e ao trocar, desfazer, sair): fechar a aba ou o celular
+// descarregar não perde mais o tabuleiro. Um espaço por modo — o modo livre não apaga a partida clássica.
+// Chaves com "_" (geometria em cache, cartão do DOM) ficam de fora.
+// `?play` (testes, bot, demonstração) não grava nada: nem a partida nem os pontos da coleção.
+const SAVE_VER = 1, saveKey = (mode) => `pr_save_${mode}`, NO_SAVE = new URLSearchParams(location.search).has('play');
+function saveGame() {
+  if (!S.started || S.over || NO_SAVE) return;
+  const data = {
+    v: SAVE_VER, mode: S.mode, at: Date.now(),
+    tiles: [...S.tiles.values()].map((t) => ({ q: t.q, r: t.r, rot: t.rot, h: t.harmony || null, tile: t.tile })),
+    stack: S.stack, current: S.current, last: S.last, rng: S.rng.state, ladders: S.ladders,
+    score: S.score, placed: S.placed, perfects: S.perfects, questsDone: S.questsDone, questsLost: S.questsLost, quests: S.quests,
+    hints: S.hints === Infinity ? -1 : S.hints, swaps: S.swaps === Infinity ? -1 : S.swaps, sinceQuest: S.sinceQuest, sinceRelic: S.sinceRelic,
+    gains: S.gains, questSeq: S.questSeq, recordFrom,
+    relics: S.relics.map((R) => ({ k: R.k, q: R.q, r: R.r, g: R.g, claimed: R.claimed, hidden: R.hidden })),
+  };
+  try { localStorage.setItem(saveKey(S.mode), JSON.stringify(data, (k, v) => (k[0] === '_' ? undefined : v))); } catch (e) { /* sem espaço: segue sem salvar */ }
+}
+function loadSave(mode) {
+  try { const d = JSON.parse(localStorage.getItem(saveKey(mode)) || 'null'); return d && d.v === SAVE_VER && d.tiles && d.tiles.length ? d : null; } catch (e) { return null; }
+}
+function clearSave(mode) { try { localStorage.removeItem(saveKey(mode)); } catch (e) { /* ok */ } }
+function resumeGame(mode) {
+  const d = loadSave(mode); if (!d) return false;
+  clearBoard();
+  S.mode = d.mode; S.daily = null; applyModeUnlocks(); document.body.classList.toggle('creative', creative()); syncRestartLabel();
+  S.rng = new RNG(1); S.rng.state = d.rng; S.ladders = d.ladders;
+  Object.assign(S, { score: d.score, placed: d.placed, perfects: d.perfects, questsDone: d.questsDone, questsLost: d.questsLost, sinceQuest: d.sinceQuest, sinceRelic: d.sinceRelic, gains: d.gains || {}, questSeq: d.questSeq || {} });
+  S.hints = d.hints < 0 ? Infinity : d.hints; S.swaps = d.swaps < 0 ? Infinity : d.swaps;
+  S.quests = d.quests || []; S.stack = d.stack || []; S.last = d.last || { q: 0, r: 0 };
+  S.over = false; S.started = true; S.tips.clear(); S.lowWarned = false; S.pendingGain = 0; S.undo = null;
+  let maxId = 0; const seen = (t) => { if (t && t.id > maxId) maxId = t.id; };
+  for (const t of d.tiles) { addTile(t.q, t.r, t.tile, t.rot, false); seen(t.tile); }
+  for (const t of d.tiles) if (t.h) { const k = key(t.q, t.r); S.tiles.get(k).harmony = t.h; addHarmonyFx(k, t.h); }
+  for (const R of d.relics || []) S.relics.push({ ...R, beam: makeRelicBeam(R.q, R.r, R.hidden ? RELIC_BEAM : GROUP_HEX[R.g], R.claimed ? 0 : 0.32), pulse: 0 });
+  S.stack.forEach(seen); seen(d.current); bumpTileId(maxId);
+  refreshSlots();
+  const w = toWorld(S.last.q, S.last.r);
+  rig.target.set(w.x, 0, w.z); rig.dist = isNarrow() ? 13 : 11; rig.autoOrbit = false; rig.azimuth = -0.9; rig.polar = 0.92;
+  $('hud').classList.remove('hidden'); $('banners').innerHTML = '';
+  recordFrom = d.recordFrom ?? S.best; scoreShown = S.score; scoreRoll = null; $('score').textContent = S.score; syncRecord();
+  updateHintButton(); updateUndoButton(); updateSwapButton();
+  S.current = d.current; S.rot = 0;
+  setGhost(S.current); refreshCurrentPreview(); rebuildStack(); stackShown = -1; updateHUD(false);
+  if (S.current) autoPreview(S.last); else gameOver();
+  renderQuests();
+  return true;
+}
+window.addEventListener('pagehide', saveGame);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
+
+// ---------- progressão entre partidas (14/10) ----------
+// Pontos do modo clássico se acumulam e liberam conteúdo (lista em unlocks.js). Modo livre vê tudo e não conta.
+let unlockAll = false;
+const getXP = () => +(localStorage.getItem('pr_xp') || 0);
+function addXP(n) {
+  const before = getXP(), after = before + Math.max(0, n | 0);
+  try { localStorage.setItem('pr_xp', after); } catch (e) { /* ok */ }
+  return { before, after, fresh: UNLOCKS.filter((u) => before < u.xp && after >= u.xp) };
+}
+function applyModeUnlocks() { applyUnlocks(getXP(), unlockAll || creative()); }
+// Carimbo de coração (punkROMANTIK): marca, no menu, cada conquista já ganha
+const HEART_STAMP = '<svg class="ul-stamp" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17.5" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="20" cy="20" r="13.6" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2.2"/><path fill="currentColor" d="M20 29.5c-1-.9-8.6-6.6-8.6-11.6 0-2.7 2-4.6 4.4-4.6 1.8 0 3.3 1 4.2 2.5.9-1.5 2.4-2.5 4.2-2.5 2.4 0 4.4 1.9 4.4 4.6 0 5-7.6 10.7-8.6 11.6z"/></svg>';
+const unlockChip = (u, on) => `<button type="button" class="ul-chip${on ? ' on' : ''}" data-ul="${u.id}" ${on ? `title="${u.name}"` : `disabled title="${u.xp} pontos acumulados"`}><span class="ul-tile"><canvas data-gift="${u.id}"></canvas>${on ? HEART_STAMP : '<b>?</b>'}</span><small>${on ? u.name : u.xp >= 1000 ? `${u.xp / 1000} mil` : u.xp}</small></button>`;
+function progressHTML(xp) {
+  const nx = nextUnlock(xp); if (!nx) return '<p class="ul-all">coleção completa ✦</p>';
+  const prev = [...UNLOCKS].reverse().find((u) => u.xp <= xp), from = prev ? prev.xp : 0, pct = Math.max(0, Math.min(1, (xp - from) / (nx.xp - from)));
+  return `<div class="ul-bar"><i style="width:${(pct * 100).toFixed(1)}%"></i></div><p class="ul-next">próximo: <b>${nx.name}</b> · faltam ${nx.xp - xp} pontos</p>`;
+}
+// Presente (14/10, pedido do usuário): bateu a pontuação de um desbloqueio, a própria peça aparece girando
+// em 3D na frente do jogador, com o fundo desfocado — "quase como um presente recebido". Nada de "faltam N"
+// no fim da partida. Dois toques seguem (os dois pontinhos embaixo enchem); o primeiro dá um giro de alegria.
+// Usa um renderizador próprio num canvas por cima (o tabuleiro continua vivo, só desfocado pelo CSS).
+let giftR = null;
+const gift = { scene: null, cam: null, obj: null, t: 0, taps: 0, spin: 0, queue: [], done: null, raf: 0, last: 0 };
+function giftTile(id) {
+  const all = (g, extra = {}) => ({ id: -10, ground: new Array(6).fill(g), edges: new Array(6).fill(g), conn: null, quest: null, seed: 4242, relic: true, ...extra });
+  if (id === 'yeti') return all('plain', { relic: false, seed: 515 });
+  if (id === 'relic') return all('solar', { seed: 909 });
+  if (id === 'mega') return all('cyber', { force: 'mega', seed: 3131 });
+  if (id === 'giza') return all('rock', { force: 'giza', seed: 77 });
+  if (id === 'nessie') { const t = all('grass', { relic: false, seed: 61 }); t.edges[1] = t.edges[4] = 'sewage'; t.conn = { type: 'sewage', exits: [1, 4] }; return t; }
+  const t = all('cyber', { relic: false, seed: 404, hub: true }); // estação: um raio de cada meio
+  [['rail', 0], ['sewage', 2], ['road', 4]].forEach(([type, e], k) => { t.edges[e] = type; t[['conn', 'conn2', 'conn3'][k]] = { type, exits: [e] }; });
+  return t;
+}
+function giftModel(id) {
+  const g = new THREE.Group(), tile = giftTile(id);
+  g.add(makeTileGroup(tile, litMat, glowMat, true));
+  const add = (geo, x, y, z, s, ry = 0) => { const m = new THREE.Group(); m.add(new THREE.Mesh(geo.lit, litMat), new THREE.Mesh(geo.glow, glowMat)); m.position.set(x, y, z); m.scale.setScalar(s); m.rotation.y = ry; g.add(m); return m; };
+  if (id === 'yeti') add(buildYetiGeometry(), 0.1, TILE_H, 0.15, 2.2, -0.6);
+  if (id === 'nessie') { // a família inteira no canal: cabeça, três corcovas e rabo enfileirados
+    nessieGeos = nessieGeos || { head: buildNessieGeometry('head'), hump: buildNessieGeometry('hump'), tail: buildNessieGeometry('tail') };
+    const a = edgeAngle(1), dx = Math.cos(a), dz = Math.sin(a), k = CONVOY.sewage.scale * 1.25;
+    [[nessieGeos.head, 0.2, 1], [nessieGeos.hump, 0.05, 1], [nessieGeos.hump, -0.08, 0.84], [nessieGeos.hump, -0.2, 0.68], [nessieGeos.tail, -0.33, 0.9]]
+      .forEach(([geo, d, s]) => add(geo, dx * d, TILE_H - 0.008, dz * d, k * s, -a));
+  }
+  if (id === 'relic') { const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.3, 3, 14, 1, true), new THREE.MeshBasicMaterial({ color: GROUP_HEX.solar, transparent: true, opacity: 0.28, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })); beam.position.y = TILE_H + 1.5; g.add(beam); }
+  return g;
+}
+function showGift(list, done, view = false) {
+  gift.queue = list.slice(); gift.done = done; gift.view = view; // view: rever uma conquista pelo menu (sem confete, um toque fecha)
+  if (!giftR) {
+    giftR = new THREE.WebGLRenderer({ canvas: $('gift-cv'), antialias: true, alpha: true }); giftR.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2038, 0.85));
+    const sn = new THREE.DirectionalLight(0xfff1dc, 0.95); sn.position.set(3, 6, 4); sc.add(sn);
+    const fl = new THREE.DirectionalLight(0x4a7dff, 0.35); fl.position.set(-4, 3, -3); sc.add(fl);
+    gift.scene = sc; gift.cam = new THREE.PerspectiveCamera(30, 1, 0.1, 60);
+  }
+  nextGift();
+}
+function nextGift() {
+  const u = gift.queue.shift();
+  if (!u) { $('gift').classList.add('hidden'); cancelAnimationFrame(gift.raf); if (gift.obj) gift.scene.remove(gift.obj); gift.obj = null; const d = gift.done; gift.done = null; if (d) d(); return; }
+  if (gift.obj) gift.scene.remove(gift.obj);
+  gift.obj = giftModel(u.id); gift.scene.add(gift.obj);
+  gift.top = new THREE.Box3().setFromObject(gift.obj).max.y; // peça com arranha-céu: câmera recua para caber
+  gift.t = 0; gift.taps = 0; gift.spin = 0; gift.at = performance.now();
+  const el = $('gift'); el.querySelector('.gift-name b').textContent = u.name; el.classList.toggle('view', gift.view); el.querySelector('.gift-name small').textContent = u.desc;
+  el.querySelectorAll('.gift-taps i').forEach((i) => i.classList.remove('on'));
+  el.classList.remove('hidden'); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+  if (gift.view) { gift.at = performance.now() - 400; play('appear'); } else { play('relic'); setTimeout(() => confettiBurst(1), 350); }
+  cancelAnimationFrame(gift.raf); gift.last = performance.now(); gift.raf = requestAnimationFrame(giftLoop);
+}
+function giftLoop(now) {
+  const dt = Math.max(0, Math.min(0.05, (now - gift.last) / 1000)); gift.last = now; gift.t += dt; // o carimbo do rAF pode vir antes do performance.now() de quem abriu
+  const W = innerWidth, Hh = innerHeight; if (gift.w !== W || gift.h !== Hh) { gift.w = W; gift.h = Hh; giftR.setSize(W, Hh, false); } gift.cam.aspect = W / Hh; // redimensionar a cada quadro realocava o buffer
+  const fit = 1.3 * (W / Hh < 0.8 ? 2.5 : 1) * (1 + Math.max(0, gift.top - 0.7) * 0.45); // 1.3: a peça um pouco menor na tela (pedido do usuário) // celular em pé: afasta para caber na largura
+  gift.cam.position.set(0, 2.15 * fit, 3.3 * fit); gift.cam.lookAt(0, 0.3 + Math.max(0, gift.top - 0.7) * 0.35, 0); gift.cam.updateProjectionMatrix();
+  const p = Math.min(1, gift.t / 0.8), o = gift.obj;
+  gift.spin *= Math.pow(0.04, dt);
+  o.rotation.y += dt * (0.7 + gift.spin);
+  o.scale.setScalar(Math.max(0.01, easeOutBack(p)));
+  o.position.y = (1 - p) * 0.8 + Math.sin(gift.t * 1.6) * 0.04;
+  o.rotation.x = 0.12 * Math.sin(gift.t * 0.9);
+  for (const g of o.children) for (const r of (g.userData && g.userData.rotors) || []) r.rotation.x += r.userData.speed * dt;
+  giftR.render(gift.scene, gift.cam);
+  gift.raf = requestAnimationFrame(giftLoop);
+}
+function giftTap() {
+  if (performance.now() - gift.at < 700) return; // o toque que encerrou a partida não pula o presente
+  if (gift.view) { nextGift(); return; }
+  gift.taps++;
+  $('gift').querySelectorAll('.gift-taps i').forEach((i, k) => i.classList.toggle('on', k < gift.taps));
+  if (gift.taps === 1) { gift.spin = 9; play('appear'); return; }
+  nextGift();
+}
+function refreshStartScreen() {
+  const has = !!loadSave('classic');
+  $('btn-continue').classList.toggle('hidden', !has);
+  $('btn-start').textContent = has ? 'Nova partida' : 'Jogar';
+  $('btn-free').textContent = loadSave('creative') ? '🌱 Voltar ao modo livre' : '🌱 Modo livre';
+  const xp = getXP();
+  $('unlocks').innerHTML = `<div class="ul-row">${UNLOCKS.map((u) => unlockChip(u, xp >= u.xp)).join('')}</div>${progressHTML(xp)}`;
+  renderGiftThumbs();
+}
+function syncRestartLabel() { $('menu-restart').textContent = creative() ? 'Nova paisagem (modo livre)' : 'Reiniciar partida'; }
+
+// ---------- modo foto (14/10, à la Townscaper / Tiny Glade) ----------
+// Esconde HUD, casas e peça na mão; a câmera continua livre (arrastar, pinça, giro automático opcional) e
+// "Salvar foto" baixa um PNG do quadro com a marca do jogo no canto.
+function enterPhoto() {
+  if (!S.tileList.length) return;
+  S.photo = true; showOverlay(null); document.body.classList.add('photo');
+  slotGroup.visible = false; hideFormation(); $('ph-orbit').classList.toggle('on', rig.autoOrbit);
+}
+function exitPhoto() {
+  if (!S.photo) return;
+  S.photo = false; document.body.classList.remove('photo'); rig.autoOrbit = false;
+  slotGroup.visible = true; updateGhost();
+  if (S.over) showOverlay('overlay-end');
+}
+function savePhoto() {
+  renderFrame(); // o quadro precisa estar no buffer no mesmo instante da leitura (sem preserveDrawingBuffer)
+  const W = canvas.width, Hh = canvas.height, out = document.createElement('canvas'); out.width = W; out.height = Hh;
+  const c2 = out.getContext('2d'); c2.drawImage(canvas, 0, 0);
+  const fs = Math.round(Math.max(14, W * 0.018)); c2.font = `800 ${fs}px Orbitron, sans-serif`; c2.textBaseline = 'bottom';
+  const x = Math.round(fs * 1.1), y = Hh - Math.round(fs * 0.9), w1 = c2.measureText('PUNK').width;
+  c2.shadowBlur = fs * 0.6; c2.shadowColor = '#ff2bd6'; c2.fillStyle = '#ffffff'; c2.fillText('PUNK', x, y);
+  c2.shadowColor = '#22f3ff'; c2.fillStyle = '#22f3ff'; c2.fillText('ROMANTIK', x + w1, y);
+  const d = new Date(), pad = (n) => String(n).padStart(2, '0');
+  out.toBlob((blob) => {
+    if (!blob) return;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `punkromantik-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.png`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }, 'image/png');
+  const fl = $('photo-flash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go'); play('appear');
+}
+
 
 $('rot-l').addEventListener('click', () => rotate(-1));
 $('current-area').addEventListener('click', () => rotate(1));
@@ -2313,8 +2574,20 @@ $('btn-hint').addEventListener('click', hint);
 $('btn-undo').addEventListener('click', undoLast);
 $('btn-help').addEventListener('click', () => showOverlay('overlay-help'));
 $('btn-menu').addEventListener('click', () => { syncMenuToggles(); showOverlay('overlay-menu'); });
-$('btn-sound').addEventListener('click', () => { setMuted(!isMuted()); $('btn-sound').textContent = isMuted() ? '🔇' : '🔊'; });
-$('btn-start').addEventListener('click', () => { initAudio(); showOverlay(null); newGame(); });
+// 🔊 do HUD: atalho que cala ou liga os dois juntos; no menu de ajustes, Música e Efeitos são separados
+const syncSoundBtn = () => { $('btn-sound').textContent = musicEnabled() || sfxEnabled() ? '🔊' : '🔇'; };
+$('btn-sound').addEventListener('click', () => { const on = !(musicEnabled() || sfxEnabled()); setMusic(on); setSfx(on); syncSoundBtn(); });
+$('btn-start').addEventListener('click', () => { initAudio(); music('menu'); showOverlay(null); newGame(); });
+$('btn-continue').addEventListener('click', () => { initAudio(); music('menu'); showOverlay(null); if (!resumeGame('classic')) newGame(); });
+$('btn-free').addEventListener('click', () => { initAudio(); music('menu'); showOverlay(null); if (!resumeGame('creative')) newGame(null, null, 'creative'); }); // o modo livre é um jardim só: volta de onde parou
+$('btn-swap').addEventListener('click', swapTile);
+$('gift').addEventListener('pointerdown', (e) => { e.preventDefault(); giftTap(); });
+$('unlocks').addEventListener('click', (e) => { const b = e.target.closest('.ul-chip.on'); const u = b && UNLOCKS.find((x) => x.id === b.dataset.ul); if (u) showGift([u], null, true); });
+$('btn-photo').addEventListener('click', enterPhoto);
+$('btn-photo-end').addEventListener('click', enterPhoto);
+$('ph-save').addEventListener('click', savePhoto);
+$('ph-orbit').addEventListener('click', () => { rig.autoOrbit = !rig.autoOrbit; $('ph-orbit').classList.toggle('on', rig.autoOrbit); });
+$('ph-exit').addEventListener('click', exitPhoto);
 $('btn-rank').addEventListener('click', openRanking);
 // 12/10: desafio diário removido a pedido do usuário (botão, aba "Hoje" do ranking e ?daily). O resto do
 // código de `S.daily` ficou dormente — sempre null.
@@ -2323,13 +2596,14 @@ $('btn-restart').addEventListener('click', () => { showOverlay(null); newGame(nu
 $('btn-look').addEventListener('click', () => showOverlay(null));
 $('rank-form').addEventListener('submit', submitScore);
 $('menu-continue').addEventListener('click', () => showOverlay(null));
-$('menu-restart').addEventListener('click', () => { showOverlay(null); newGame(null, S.daily ? todayStr() : null); });
+$('menu-restart').addEventListener('click', () => { showOverlay(null); newGame(null, S.daily ? todayStr() : null, S.mode); });
 $('menu-home').addEventListener('click', () => returnToMenu());
 $('menu-rank').addEventListener('click', openRanking);
 $('tg-bloom').addEventListener('click', () => { prefs.bloom = !prefs.bloom; localStorage.setItem('pr_bloom', prefs.bloom ? '1' : '0'); syncMenuToggles(); });
 $('tg-grain').addEventListener('click', () => { prefs.grain = !prefs.grain; localStorage.setItem('pr_grain', prefs.grain ? '1' : '0'); syncMenuToggles(); });
 $('tg-lens').addEventListener('click', () => { prefs.lens = !prefs.lens; localStorage.setItem('pr_lens', prefs.lens ? '1' : '0'); syncMenuToggles(); });
-$('tg-sound').addEventListener('click', () => { setMuted(!isMuted()); $('btn-sound').textContent = isMuted() ? '🔇' : '🔊'; syncMenuToggles(); });
+$('tg-music').addEventListener('click', () => { setMusic(!musicEnabled()); syncMenuToggles(); });
+$('tg-sfx').addEventListener('click', () => { setSfx(!sfxEnabled()); syncMenuToggles(); });
 document.querySelectorAll('.close-overlay').forEach((b) => b.addEventListener('click', () => showOverlay(null)));
 document.querySelectorAll('.to-start').forEach((b) => b.addEventListener('click', () => showOverlay(S.started ? null : 'overlay-start')));
 document.querySelectorAll('.ic-slot').forEach((el) => { el.innerHTML = icon(el.dataset.icon, +(el.dataset.size || 18)); });
@@ -2351,6 +2625,7 @@ let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   rig.tick(dt);
+  if (S.photo) { ghostGroup.visible = false; ghostShadow.visible = false; seamGhost.group.visible = false; hoverFx.target = 0; }
   scene.fog.near = rig.dist * 1.3; scene.fog.far = rig.dist * 3.8;
   // fantasma: surgimento + flutuação
   if (ghostGroup.visible) {
@@ -2491,17 +2766,25 @@ function loop(now) {
 }
 
 // acesso para testes/automação no console
-window.PR = { S, addHarmonyFx, starBurst, revealAround, setRelicHidden, bumpScore, rig, camera, trains, connNetworks, spawnConvoy, harmonyGroup, spawnRelic, previewBonus, renderQuests, closedRegions, frontier, toWorld, selectSlot, commitPlacement, hint, applyBest, rotate, evalPlacement, bestPlacement, newGame, confettiBurst, banner, rewardBurst, scoreSign, questIcon, icon, vehicles, fauna, fx, hoverFx, kick, undoLast, rewardTiles, checkQuests, regionKeys, buildingsOf, tileGeo, showOverlay, addTile, refreshSlots, genTile, RNG };
+window.PR = { S, showGift, UNLOCKS, gift, saveGame, resumeGame, swapTile, enterPhoto, exitPhoto, savePhoto, addXP, getXP, addHarmonyFx, starBurst, revealAround, setRelicHidden, bumpScore, rig, camera, trains, connNetworks, spawnConvoy, harmonyGroup, spawnRelic, previewBonus, renderQuests, closedRegions, frontier, toWorld, selectSlot, commitPlacement, hint, applyBest, rotate, evalPlacement, bestPlacement, newGame, confettiBurst, banner, rewardBurst, scoreSign, questIcon, icon, vehicles, fauna, fx, hoverFx, kick, undoLast, rewardTiles, checkQuests, regionKeys, buildingsOf, tileGeo, showOverlay, addTile, refreshSlots, genTile, RNG };
 const params = new URLSearchParams(location.search);
 if (params.has('nobloom')) prefs.bloom = false;
 if (params.has('nolens')) prefs.lens = false;
 if (params.has('nograin')) prefs.grain = false;
+if (params.has('unlockall')) unlockAll = true; // testes: tudo liberado sem mexer no progresso salvo
+applyUnlocks(getXP(), unlockAll);
 $('grain').classList.toggle('hidden', !prefs.grain);
 if (params.has('play')) {
-  showOverlay(null); newGame(params.has('seed') ? +params.get('seed') : undefined);
+  showOverlay(null); music('menu'); newGame(params.has('seed') ? +params.get('seed') : undefined, null, params.has('free') ? 'creative' : 'classic');
   if (params.get('zoom')) rig.dist = +params.get('zoom');
   const auto = +(params.get('auto') || 0); // ?play&auto=N joga N peças sozinho (teste/demonstração)
   if (auto > 0) { let n = 0; const iv = setInterval(() => { if (S.over || n++ >= auto) return clearInterval(iv); applyBest(); commitPlacement(); }, 350); }
-} else demoBoard(30);
+} else { demoBoard(30); music('menu'); }
+// Trilha: tenta tocar já ao abrir; se o navegador barrar o autoplay, o primeiro gesto do jogador (toque, clique, tecla) libera
+initAudio();
+const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
+const unlockAudio = () => { initAudio(); if (audioRunning()) GESTURES.forEach((ev) => removeEventListener(ev, unlockAudio, true)); };
+GESTURES.forEach((ev) => addEventListener(ev, unlockAudio, true));
+refreshStartScreen(); syncSoundBtn();
 updateHUD(false);
 requestAnimationFrame(loop);

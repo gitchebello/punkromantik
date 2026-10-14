@@ -1,5 +1,5 @@
 // Desenho 2D de uma peça (para o HUD e a fila de próximas peças)
-import { edgeAngle, vertexAngle, groundAt, APO } from './hex.js?v=20261013a';
+import { edgeAngle, vertexAngle, groundAt, APO } from './hex.js?v=20261014o';
 
 const G2D = { plain: '#a9c7dd', grass: '#cdb68c', cyber: '#14162e', solar: '#4fc43f', rock: '#9a6538', pool: '#0d5a4c' }; // acompanha PAL.ground de tilemesh.js
 

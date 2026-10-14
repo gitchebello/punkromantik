@@ -1,4 +1,5 @@
-import { RNG } from './rng.js?v=20261013a';
+import { RNG } from './rng.js?v=20261014o';
+import { UNLOCK } from './unlocks.js?v=20261014o';
 
 // Terrenos. Cada bioma é uma vertente -punk da mesma proposta estética (é daí que vem o nome
 // do jogo): Cyberpunk, Solarpunk, Sandpunk e Snowpunk. Regiões preenchem setores; conectores atravessam a peça de uma
@@ -58,6 +59,8 @@ function splitSix(rng, n) {
 }
 
 let tileCounter = 0;
+// partida retomada: as peças salvas trazem os ids delas, e as novas não podem repetir
+export function bumpTileId(n) { if (n > tileCounter) tileCounter = n; }
 
 // Saídas do conector: 2 (reta/curva), 3 (bifurcação), 4 (cruzamento) ou 1 (ponto final)
 function connectorExits(rng, opts) {
@@ -118,7 +121,7 @@ export function genTile(rng, opts = {}) {
   // qualquer meio encaixa em qualquer raio e o raio vira o meio do vizinho (`adaptHub` em main.js) — é a
   // peça que junta redes de TIPOS diferentes. O que chega por um raio sai por outro (`convertAtHub`).
   // Não é "ponto final" (não vale o bônus de fechar linha).
-  const hubChance = opts.hubChance ?? HUB_CHANCE;
+  const hubChance = UNLOCK.hub ? (opts.hubChance ?? HUB_CHANCE) : 0; // estação é desbloqueio (unlocks.js)
   if (hasConn && !opts.forceConn && hubChance && rng.chance(hubChance)) {
     const a = rng.int(6), order = rng.pick([['rail', 'sewage', 'road'], ['rail', 'road', 'sewage'], ['sewage', 'rail', 'road'], ['sewage', 'road', 'rail'], ['road', 'rail', 'sewage'], ['road', 'sewage', 'rail']]);
     const [c1, c2, c3] = order.map((type, k) => ({ type, exits: [(a + 2 * k) % 6] }));
