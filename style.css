@@ -207,8 +207,15 @@ body.tray-on .sb-gain { display: none; } /* o selo da medalha já conta a novida
 @keyframes blink { 50% { opacity: 0.35; } }
 .icon.menu { font-size: 18px; }
 .ghost-btn.danger { border-color: rgba(255, 92, 122, 0.6); color: #ffb3c2; }
-.toggles { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-.toggles .ghost-btn { flex: 1 1 45%; font-size: 12px; }
+.toggles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 14px; }
+.tg { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 2px 7px; border-radius: 14px; background: var(--panel); border: 1px solid rgba(34, 243, 255, 0.55); color: var(--cyan); box-shadow: 0 0 12px rgba(34, 243, 255, 0.22); transition: opacity 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s; }
+.tg svg { filter: drop-shadow(0 0 4px rgba(34, 243, 255, 0.6)); }
+.tg small { font-size: 10.5px; font-weight: 800; color: #fff; opacity: 0.85; }
+.tg.off { color: rgba(255, 255, 255, 0.45); border-color: var(--panel-border); box-shadow: none; }
+.tg.off svg { filter: none; }
+.tg.off small { opacity: 0.45; }
+.tg.off::after { content: ''; position: absolute; left: 50%; top: 9px; width: 30px; height: 2.5px; border-radius: 2px; background: #ff5c7a; transform: translateX(-50%) translateY(11px) rotate(-45deg); box-shadow: 0 0 0 1.5px rgba(18, 14, 34, 0.9); }
+.tg:active { transform: scale(0.94); }
 
 .hud-bottom { display: flex; align-items: center; justify-content: center; gap: 26px; position: relative; padding-bottom: 6px; }
 /* pilha 3D (desenhada no canvas atrás desta área): alta o bastante para a peça que paira aparecer inteira */
@@ -250,9 +257,10 @@ body.tray-on .sb-gain { display: none; } /* o selo da medalha já conta a novida
 .quest .qleft.hit { color: var(--acid); }
 .qlabel.hit { background: var(--acid); box-shadow: 0 0 0 2px var(--qc), 0 0 18px var(--acid); } .qlabel.hit::after { background: var(--acid); }
 /* jogada que avança a missão: o número fica, só a forma acende (11/10) */
-.qlabel.near { box-shadow: 0 0 0 2px var(--qc), 0 0 16px var(--qc); animation: qnear 0.9s ease-in-out infinite; }
-.quest .qleft.near { animation: qnear 0.9s ease-in-out infinite; }
-@keyframes qnear { 50% { filter: brightness(1.35); transform: scale(1.08); } }
+/* 12/10: pulso suave igual ao da missão pendente (antes 0.9s, brilho 1.35, escala 1.08 — forte demais) */
+.qlabel.near { box-shadow: 0 0 0 2px var(--qc), 0 0 16px var(--qc); transform-origin: 50% 100%; animation: pendBob 2.2s ease-in-out infinite; }
+.quest .qleft.near { animation: qnear 2.2s ease-in-out infinite; }
+@keyframes qnear { 50% { transform: scale(1.05); } }
 /* hexágonos que voam da recompensa até o contador */
 .flyhex { position: fixed; z-index: 70; pointer-events: none; transform: translate(-50%, -50%); filter: drop-shadow(0 0 10px rgba(196, 255, 42, 0.9)); }
 .tile-controls { display: flex; align-items: center; gap: 8px; }
@@ -421,7 +429,6 @@ kbd { background: rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 0 5px;
   .popup { font-size: 18px; }
   #toast { top: auto; bottom: calc(150px + var(--sab)); font-size: 12px; padding: 7px 12px; }
   .sign { font-size: 28px; padding: 6px 14px 5px; } .sign.good { font-size: 32px; } .sign.perfect { font-size: 36px; }
-  .toggles { flex-direction: column; }
   /* barra inferior em duas linhas: [pilha | ⟲ peça ⟳] / [Colocar | Dica] */
   .hud-bottom { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "stack controls" "actions actions"; align-items: center; gap: 10px 12px; }
   .stack-area { position: relative; left: -4px; bottom: auto; grid-area: stack; width: 132px; height: 180px; }
@@ -457,3 +464,55 @@ kbd { background: rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 0 5px;
 .rank-tab.on { border-color: var(--yellow); color: var(--yellow); box-shadow: 0 0 10px rgba(255, 233, 58, 0.35); }
 .daily-chip { font-family: Orbitron, sans-serif; font-size: 11px; font-weight: 800; color: var(--ink); background: var(--yellow); border-radius: 999px; padding: 4px 10px; margin-left: 10px; align-self: center; box-shadow: 0 0 12px rgba(255, 233, 58, 0.5); white-space: nowrap; }
 .daily-chip.hidden { display: none; }
+
+/* 14/10: continuar, modo livre, troca de peça, modo foto e coleção de desbloqueios */
+#btn-continue:not(.hidden) + #btn-start { background: transparent; border: 1.5px solid var(--magenta); box-shadow: none; padding: 11px; font-size: 15px; }
+.unlocks { margin-top: 14px; }
+.ul-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.ul-chip { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0; margin: 0; border: 0; background: none; color: inherit; font: inherit; cursor: default; -webkit-tap-highlight-color: transparent; }
+.ul-tile { position: relative; width: 100%; aspect-ratio: 1; display: grid; place-items: center; }
+.ul-tile canvas { width: 100%; height: 100%; display: block; filter: brightness(0) drop-shadow(0 0 1px rgba(196, 160, 255, 0.55)); opacity: 0.4; } /* trancada: silhueta */
+.ul-tile b { position: absolute; font-family: Orbitron, sans-serif; font-size: 15px; color: rgba(255, 255, 255, 0.55); }
+.ul-chip small { max-width: 100%; font-size: 9.5px; font-weight: 800; line-height: 1.15; opacity: 0.55; hyphens: auto; overflow-wrap: anywhere; }
+.ul-chip.on { cursor: pointer; }
+.ul-chip.on small { opacity: 0.95; }
+.ul-chip.on canvas { filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.45)); opacity: 1; transition: transform 0.18s; }
+.ul-chip.on:hover canvas, .ul-chip.on:focus-visible canvas { transform: translateY(-3px) scale(1.06); }
+.ul-chip.on:active canvas { transform: scale(0.94); }
+.ul-stamp { position: absolute; right: -6%; top: -6%; width: 40%; color: var(--magenta); transform: rotate(-14deg); filter: drop-shadow(0 0 4px rgba(255, 43, 214, 0.75)); opacity: 0.92; pointer-events: none; }
+.ul-bar { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); margin: 10px 0 5px; overflow: hidden; }
+.ul-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--cyan), var(--acid)); box-shadow: 0 0 10px var(--acid); }
+.ul-next, .ul-all { font-size: 11.5px; margin: 0; opacity: 0.85; }
+@keyframes ulPop { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+body.creative #score-box { visibility: hidden; }
+body.creative .quests-wrap { display: none; }
+.photo-bar { position: fixed; left: 50%; bottom: calc(18px + var(--sab)); transform: translateX(-50%); display: none; gap: 8px; align-items: center; z-index: 30; padding: 8px; border-radius: 18px; background: var(--panel); border: 1px solid var(--panel-border); backdrop-filter: blur(6px); }
+.photo-bar .primary { width: auto; margin: 0; padding: 11px 18px; font-size: 15px; }
+.photo-bar .ghost-btn.on { border-color: var(--cyan); color: var(--cyan); }
+body.photo .photo-bar { display: flex; }
+body.photo #hud, body.photo #qlabels, body.photo #signs, body.photo #popups, body.photo #toast, body.photo #confetti, body.photo #rtray, body.photo .flyhex { display: none !important; }
+#photo-flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 40; }
+#photo-flash.go { animation: phFlash 0.45s ease-out; }
+@keyframes phFlash { from { opacity: 0.7; } to { opacity: 0; } }
+@media (max-width: 520px) { .ul-chip small { font-size: 8.5px; } }
+
+/* presente: peça desbloqueada girando em 3D sobre o jogo desfocado; dois toques seguem */
+.gift { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: calc(9vh + var(--sab));
+  background: radial-gradient(circle at 50% 42%, rgba(196, 255, 42, 0.12), rgba(6, 4, 14, 0.55) 60%); backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15); cursor: pointer; user-select: none; }
+#gift-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.gift-rays { position: absolute; left: 50%; top: 42%; width: 130vmin; height: 130vmin; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+  background: repeating-conic-gradient(rgba(255, 233, 58, 0.13) 0 7deg, transparent 7deg 22deg); -webkit-mask: radial-gradient(circle, #000 12%, transparent 62%); mask: radial-gradient(circle, #000 12%, transparent 62%); animation: giftRays 26s linear infinite; }
+@keyframes giftRays { to { transform: translate(-50%, -50%) rotate(360deg); } }
+.gift-name { position: relative; text-align: center; display: flex; flex-direction: column; gap: 4px; padding: 0 20px; }
+.gift-name b { font-family: Orbitron, sans-serif; font-size: clamp(22px, 5vw, 34px); color: var(--acid); text-shadow: 0 0 18px rgba(196, 255, 42, 0.7); }
+.gift-name small { font-size: 14px; opacity: 0.9; }
+.gift-taps { position: relative; display: flex; gap: 10px; margin-top: 18px; }
+.gift-taps i { width: 11px; height: 11px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.7); transition: background 0.2s, transform 0.2s; animation: giftTapHint 1.6s ease-in-out infinite; }
+.gift-taps i + i { animation-delay: 0.2s; }
+.gift-taps i.on { background: var(--acid); border-color: var(--acid); box-shadow: 0 0 10px var(--acid); animation: none; transform: scale(1.2); }
+.gift.view .gift-taps { visibility: hidden; }
+@keyframes giftTapHint { 50% { transform: scale(1.25); } }
+.gift.pop .gift-name { animation: ulPop 0.7s 0.5s both cubic-bezier(0.3, 1.6, 0.5, 1); }
+.gift.pop { animation: giftIn 0.5s ease-out both; }
+@keyframes giftIn { from { opacity: 0; } }
+#confetti { z-index: 61; } /* confete por cima do presente, nítido */
